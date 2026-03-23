@@ -1,4 +1,4 @@
-const { getSql, getDatabaseUrl } = require("../lib/db");
+const { getSql, getDatabaseUrl } = require("../../lib/db");
 
 function envPresence() {
   const set = (k) => !!(process.env[k] && String(process.env[k]).trim());
@@ -17,6 +17,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: "Method not allowed" });
   }
   const meta = {
+    framework: "nextjs",
     commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
     deployment: process.env.VERCEL_DEPLOYMENT_ID || null,
     env: envPresence(),

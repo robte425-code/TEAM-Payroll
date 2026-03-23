@@ -2,6 +2,8 @@
 
 Parser and web UI for LNI invoice verification spreadsheets, with employee pay rates stored in **Neon Postgres** (same database as TEAM Voc is OK — use a separate `payroll` schema).
 
+The site is a **Next.js** app so **Vercel reliably deploys `/api/*`** (static HTML + JS live under `public/`).
+
 ## What it does now
 
 - Reads `.xlsx` files (e.g. Gardiant / LNI invoice verification).
@@ -43,7 +45,7 @@ Parser and web UI for LNI invoice verification spreadsheets, with employee pay r
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/ping` | **No DB** — confirms Vercel is running this repo’s `api/` routes (`buildTag: team-payroll-v4`) |
+| `GET` | `/api/ping` | **No DB** — confirms API is live (`framework: nextjs`, `buildTag: team-payroll-next-v1`) |
 | `GET` | `/api/build-info` | **No DB** — shows `VERCEL_GIT_COMMIT_SHA` so you can match GitHub |
 | `GET` | `/api/health` | DB connectivity check |
 | `GET` | `/api/employees` | List employees / rates |
@@ -53,14 +55,18 @@ Parser and web UI for LNI invoice verification spreadsheets, with employee pay r
 
 **Note:** These routes are currently **unauthenticated**. Lock them down (e.g. Vercel auth, API key, or session) before storing sensitive payroll data in production.
 
-### Troubleshooting: “`DATABASE_URL is not set`” (old message)
+### Troubleshooting: `/api/*` returns **404 NOT_FOUND**
 
-That message is **not** in current code. If you still see it:
+Use **Framework Preset: Next.js** (this repo includes `next.config.mjs` + `pages/api`). If Vercel was set to “Static” or the **Root Directory** is wrong, `/api` won’t deploy.
 
-1. Open **`/api/ping`** — must return `"buildTag": "team-payroll-v4"`. If you get **404** or an old tag, you’re on the **wrong Vercel project** or **Root Directory** is not the repo root.
-2. Open **`/api/build-info`** — `vercelGitCommit` should match the latest commit on GitHub `main`. If it doesn’t, trigger **Redeploy** (or push a commit).
-3. In Vercel: **Settings → General → Root Directory** must be **empty** (unless this app lives in a monorepo subfolder).
-4. Env vars: add **`DATABASE_URL`** (or **`POSTGRES_URL`**) for **Production** *and* **Preview**, then **Redeploy**.
+1. Open **`/api/ping`** — must include `"framework":"nextjs"` and `"buildTag":"team-payroll-next-v1"`.
+2. Open **`/api/build-info`** — `vercelGitCommit` should match GitHub `main`.
+3. Vercel → **Settings → General → Root Directory** = **empty** (repo root).
+4. Env vars: **`DATABASE_URL`** or **`POSTGRES_URL`** for **Production** / **Preview**, then **Redeploy**.
+
+### Troubleshooting: old **`DATABASE_URL is not set`** text
+
+That string is **not** in current code. If you still see it, you’re hitting a **stale deployment** — compare **`/api/build-info`** commit to GitHub and redeploy.
 
 ## Run locally
 
@@ -83,10 +89,11 @@ npm start -- ./path/to/file.xlsx
 npm install
 cp .env.example .env
 # Set DATABASE_URL in .env, run migration (see above), then:
-npx vercel dev
+npm run dev
+# or: npx vercel dev
 ```
 
-Open the URL Vercel prints (often `http://localhost:3000`).
+Open `http://localhost:3000` (Next.js).
 
 - **Analyze spreadsheet** — upload `.xlsx`, see category totals and hourly rates from the DB.
 - **Employee pay rates** — view/edit rows in `payroll.employees`.

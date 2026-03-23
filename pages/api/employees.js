@@ -1,5 +1,5 @@
 const { buffer } = require("node:stream/consumers");
-const { getSql } = require("../lib/db");
+const { getSql } = require("../../lib/db");
 
 function rowToClient(row) {
   return {

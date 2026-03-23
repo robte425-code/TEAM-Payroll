@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "parse:sample": "node src/index.js ./LniInvoiceVerification.xlsx",
     "vercel:dev": "vercel dev"
   },
@@ -16,6 +18,9 @@
   "description": "",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "next": "^14.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "xlsx": "^0.18.5"
   }
 }

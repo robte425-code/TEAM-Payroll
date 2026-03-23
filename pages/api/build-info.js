@@ -1,5 +1,5 @@
 /**
- * Deployment fingerprint (no secrets). Use to verify Vercel runs latest Git commit.
+ * Deployment fingerprint (no secrets).
  */
 module.exports = (req, res) => {
   res.setHeader("Content-Type", "application/json");
@@ -9,7 +9,8 @@ module.exports = (req, res) => {
   }
   return res.status(200).json({
     project: "TEAM-Payroll",
-    buildTag: "team-payroll-v4",
+    framework: "nextjs",
+    buildTag: "team-payroll-next-v1",
     vercelGitCommit: process.env.VERCEL_GIT_COMMIT_SHA || null,
     vercelDeployment: process.env.VERCEL_DEPLOYMENT_ID || null,
     vercelUrl: process.env.VERCEL_URL || null,

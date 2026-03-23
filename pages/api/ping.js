@@ -1,5 +1,5 @@
 /**
- * No DB, no imports — confirms Vercel is routing /api/* to this repo's functions.
+ * No DB — confirms /api routes are deployed (Next.js).
  */
 module.exports = (req, res) => {
   res.setHeader("Content-Type", "application/json");
@@ -10,7 +10,8 @@ module.exports = (req, res) => {
   return res.status(200).json({
     ok: true,
     route: "ping",
-    buildTag: "team-payroll-v4",
+    framework: "nextjs",
+    buildTag: "team-payroll-next-v1",
     time: new Date().toISOString(),
   });
 };
