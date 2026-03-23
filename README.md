@@ -43,6 +43,8 @@ Parser and web UI for LNI invoice verification spreadsheets, with employee pay r
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/api/ping` | **No DB** — confirms Vercel is running this repo’s `api/` routes (`buildTag: team-payroll-v4`) |
+| `GET` | `/api/build-info` | **No DB** — shows `VERCEL_GIT_COMMIT_SHA` so you can match GitHub |
 | `GET` | `/api/health` | DB connectivity check |
 | `GET` | `/api/employees` | List employees / rates |
 | `POST` | `/api/employees` | Create (`providerId`, `displayName`, `hourlyRate`) |
@@ -50,6 +52,15 @@ Parser and web UI for LNI invoice verification spreadsheets, with employee pay r
 | `DELETE` | `/api/employees?id=<uuid>` | Delete |
 
 **Note:** These routes are currently **unauthenticated**. Lock them down (e.g. Vercel auth, API key, or session) before storing sensitive payroll data in production.
+
+### Troubleshooting: “`DATABASE_URL is not set`” (old message)
+
+That message is **not** in current code. If you still see it:
+
+1. Open **`/api/ping`** — must return `"buildTag": "team-payroll-v4"`. If you get **404** or an old tag, you’re on the **wrong Vercel project** or **Root Directory** is not the repo root.
+2. Open **`/api/build-info`** — `vercelGitCommit` should match the latest commit on GitHub `main`. If it doesn’t, trigger **Redeploy** (or push a commit).
+3. In Vercel: **Settings → General → Root Directory** must be **empty** (unless this app lives in a monorepo subfolder).
+4. Env vars: add **`DATABASE_URL`** (or **`POSTGRES_URL`**) for **Production** *and* **Preview**, then **Redeploy**.
 
 ## Run locally
 
