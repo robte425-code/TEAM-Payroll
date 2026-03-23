@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Employee pay rates — TEAM Payroll</title>
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-title">TEAM Payroll</div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="./index.html">Analyze spreadsheet</a>
+        <a href="./rates.html" aria-current="page">Employee pay rates</a>
+      </nav>
+    </header>
+
+    <h1>Employee pay rates</h1>
+    <p class="muted">
+      Hourly rates are stored in your <strong>Neon Postgres</strong> database (schema
+      <code>payroll</code>). Requires this app to be run with
+      <code>DATABASE_URL</code> (e.g. <code>vercel dev</code> or deployed on Vercel).
+    </p>
+
+    <div class="card">
+      <button type="button" id="addBtn">Add employee</button>
+      <button type="button" id="saveAllBtn">Save all</button>
+      <button type="button" id="exportBtn">Export JSON</button>
+      <label style="display: inline-block; margin-right: 8px">
+        Import JSON
+        <input id="importFile" type="file" accept=".json,application/json" style="margin-left: 4px" />
+      </label>
+      <p id="msg" class="muted" aria-live="polite"></p>
+      <p id="err" class="error"></p>
+    </div>
+
+    <div class="card">
+      <table id="ratesTable">
+        <thead>
+          <tr>
+            <th>Employee name</th>
+            <th>Provider ID</th>
+            <th>Rate ($ / hour)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ratesBody"></tbody>
+      </table>
+    </div>
+
+    <script>
+      const API = "/api/employees";
+      const tbody = document.getElementById("ratesBody");
+      const msg = document.getElementById("msg");
+      const err = document.getElementById("err");
+
+      function flash(text, isError) {
+        msg.textContent = isError ? "" : text;
+        err.textContent = isError ? text : "";
+        if (!isError && text) {
+          setTimeout(() => {
+            if (msg.textContent === text) msg.textContent = "";
+          }, 3500);
+        }
+      }
+
+      async function apiJson(url, options) {
+        const r = await fetch(url, options);
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { error: text || "Invalid response" };
+        }
+        if (!r.ok) {
+          const m = data.error || data.message || text || `HTTP ${r.status}`;
+          throw new Error(m);
+        }
+        return data;
+      }
+
+      function rowTemplate(emp, isNew) {
+        const tr = document.createElement("tr");
+        if (isNew) {
+          tr.dataset.new = "1";
+        } else {
+          tr.dataset.id = emp.id;
+        }
+        tr.innerHTML = `
+          <td><input type="text" class="js-name" /></td>
+          <td><input type="text" class="js-pid" /></td>
+          <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
+          <td>
+            <button type="button" class="js-save">Save</button>
+            <button type="button" class="js-remove">Remove</button>
+          </td>
+        `;
+        tr.querySelector(".js-name").value = emp.displayName || "";
+        tr.querySelector(".js-pid").value = emp.providerId || "";
+        const rate = emp.hourlyRate;
+        tr.querySelector(".js-rate").value =
+          rate === 0 || rate == null ? "" : String(rate);
+
+        tr.querySelector(".js-save").addEventListener("click", () => saveRow(tr));
+        tr.querySelector(".js-remove").addEventListener("click", () => removeRow(tr));
+        return tr;
+      }
+
+      function readRow(tr) {
+        const id = tr.dataset.id || "";
+        const isNew = tr.dataset.new === "1";
+        const displayName = tr.querySelector(".js-name").value.trim();
+        const providerId = tr.querySelector(".js-pid").value.trim();
+        const rateRaw = tr.querySelector(".js-rate").value;
+        const hourlyRate = rateRaw === "" ? 0 : Number(rateRaw);
+        return { id, isNew, displayName, providerId, hourlyRate };
+      }
+
+      async function saveRow(tr) {
+        err.textContent = "";
+        const data = readRow(tr);
+        if (!data.providerId) {
+          flash("Provider ID is required.", true);
+          return;
+        }
+        if (!Number.isFinite(data.hourlyRate) || data.hourlyRate < 0) {
+          flash("Rate must be a valid non-negative number.", true);
+          return;
+        }
+
+        try {
+          if (data.isNew) {
+            const res = await apiJson(API, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                providerId: data.providerId,
+                displayName: data.displayName,
+                hourlyRate: data.hourlyRate,
+              }),
+            });
+            delete tr.dataset.new;
+            tr.dataset.id = res.employee.id;
+            flash("Saved.");
+          } else {
+            await apiJson(API, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id: data.id,
+                providerId: data.providerId,
+                displayName: data.displayName,
+                hourlyRate: data.hourlyRate,
+              }),
+            });
+            flash("Saved.");
+          }
+          await render();
+        } catch (e) {
+          flash(e.message || "Save failed.", true);
+        }
+      }
+
+      async function removeRow(tr) {
+        err.textContent = "";
+        if (tr.dataset.new === "1") {
+          tr.remove();
+          flash("Row discarded.");
+          if (!tbody.querySelector("tr")) await renderEmpty();
+          return;
+        }
+        const id = tr.dataset.id;
+        if (!id) return;
+        if (!confirm("Remove this employee from the database?")) return;
+        try {
+          await apiJson(`${API}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+          flash("Removed.");
+          await render();
+        } catch (e) {
+          flash(e.message || "Remove failed.", true);
+        }
+      }
+
+      async function renderEmpty() {
+        tbody.innerHTML = "";
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td colspan="4" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+        tbody.appendChild(tr);
+      }
+
+      async function render() {
+        err.textContent = "";
+        msg.textContent = "Loading...";
+        try {
+          const data = await apiJson(API, { method: "GET" });
+          const list = data.employees || [];
+          tbody.innerHTML = "";
+          for (const emp of list) {
+            tbody.appendChild(rowTemplate(emp, false));
+          }
+          if (list.length === 0) await renderEmpty();
+          msg.textContent = "";
+        } catch (e) {
+          msg.textContent = "";
+          err.textContent =
+            e.message ||
+            "Could not load employees. Check DATABASE_URL and run the SQL migration.";
+          tbody.innerHTML = "";
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td colspan="4" class="muted">Fix the error above, then refresh.</td>`;
+          tbody.appendChild(tr);
+        }
+      }
+
+      document.getElementById("addBtn").addEventListener("click", () => {
+        if (tbody.querySelector("tr") && tbody.querySelector("td[colspan]")) {
+          tbody.innerHTML = "";
+        }
+        const tr = rowTemplate(
+          { displayName: "", providerId: "", hourlyRate: 0 },
+          true
+        );
+        tbody.appendChild(tr);
+        tr.querySelector(".js-name").focus();
+        flash("New row — enter details and click Save.");
+      });
+
+      document.getElementById("saveAllBtn").addEventListener("click", async () => {
+        err.textContent = "";
+        const rows = Array.from(tbody.querySelectorAll("tr[data-id], tr[data-new]"));
+        if (rows.length === 0) {
+          flash("Nothing to save.", true);
+          return;
+        }
+        try {
+          for (const tr of rows) {
+            if (tr.querySelector("td[colspan]")) continue;
+            const data = readRow(tr);
+            if (!data.providerId) {
+              flash("Each row needs a Provider ID.", true);
+              return;
+            }
+            if (!Number.isFinite(data.hourlyRate) || data.hourlyRate < 0) {
+              flash("Each rate must be a valid non-negative number.", true);
+              return;
+            }
+            if (data.isNew) {
+              await apiJson(API, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  providerId: data.providerId,
+                  displayName: data.displayName,
+                  hourlyRate: data.hourlyRate,
+                }),
+              });
+            } else {
+              await apiJson(API, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: data.id,
+                  providerId: data.providerId,
+                  displayName: data.displayName,
+                  hourlyRate: data.hourlyRate,
+                }),
+              });
+            }
+          }
+          flash("All rows saved.");
+          await render();
+        } catch (e) {
+          flash(e.message || "Save failed.", true);
+        }
+      });
+
+      document.getElementById("exportBtn").addEventListener("click", async () => {
+        try {
+          const data = await apiJson(API, { method: "GET" });
+          const blob = new Blob([JSON.stringify(data.employees || [], null, 2)], {
+            type: "application/json",
+          });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "team-payroll-employees.json";
+          a.click();
+          URL.revokeObjectURL(a.href);
+          flash("Download started.");
+        } catch (e) {
+          flash(e.message || "Export failed.", true);
+        }
+      });
+
+      document.getElementById("importFile").addEventListener("change", (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        ev.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const text = String(reader.result || "");
+            const parsed = JSON.parse(text);
+            const rows = Array.isArray(parsed) ? parsed : parsed.employees || [];
+            let n = 0;
+            for (const raw of rows) {
+              const providerId = String(raw.providerId || raw.provider_id || "").trim();
+              const displayName = String(
+                raw.displayName ?? raw.name ?? ""
+              ).trim();
+              const hourlyRate = Number(raw.hourlyRate ?? raw.ratePerHour ?? 0);
+              if (!providerId) continue;
+              if (!Number.isFinite(hourlyRate) || hourlyRate < 0) continue;
+              try {
+                await apiJson(API, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ providerId, displayName, hourlyRate }),
+                });
+                n += 1;
+              } catch (e) {
+                if (/already exists|409|duplicate/i.test(String(e.message))) {
+                  const list = await apiJson(API, { method: "GET" });
+                  const found = (list.employees || []).find(
+                    (x) => String(x.providerId) === providerId
+                  );
+                  if (found) {
+                    await apiJson(API, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        id: found.id,
+                        providerId,
+                        displayName,
+                        hourlyRate,
+                      }),
+                    });
+                    n += 1;
+                  }
+                } else {
+                  throw e;
+                }
+              }
+            }
+            flash(`Import complete (${n} row(s) upserted).`);
+            await render();
+          } catch (e) {
+            flash(e.message || "Import failed.", true);
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      render();
+    </script>
+  </body>
+</html>

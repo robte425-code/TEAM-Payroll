@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TEAM Payroll Analyzer</title>
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-title">TEAM Payroll</div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="./index.html" aria-current="page">Analyze spreadsheet</a>
+        <a href="./rates.html">Employee pay rates</a>
+      </nav>
+    </header>
+
+    <h1>TEAM Payroll Analyzer</h1>
+    <p class="muted">
+      Upload an LNI invoice spreadsheet (`.xlsx`) from your local computer to analyze payroll totals.
+    </p>
+
+    <div class="card">
+      <input id="fileInput" type="file" accept=".xlsx,.xls" />
+      <button id="analyzeBtn">Analyze Spreadsheet</button>
+      <p id="status" class="muted"></p>
+      <p id="error" class="error"></p>
+    </div>
+
+    <div class="card">
+      <h3>Summary by Employee</h3>
+      <div id="meta" class="muted"></div>
+      <table id="summaryTable">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Provider ID</th>
+            <th>Hourly rate ($)</th>
+            <th>Case Work</th>
+            <th>Travel & Wait</th>
+            <th>Mileage</th>
+            <th>Report</th>
+            <th>Other</th>
+            <th>Rows</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+      const CASE_WORK_RATE_CODES = new Set([
+        "0800V", "0801V", "0802V", "0803V",
+        "0810V", "0811V", "0812V", "0813V",
+        "0821V", "0823V", "0824V", "0830V",
+        "0840V", "0841V", "0842V", "0845V",
+      ]);
+      const TRAVEL_WAIT_RATE_CODES = new Set(["0891V", "0892V"]);
+      const MILEAGE_RATE_CODES = new Set(["0893V", "0894V"]);
+      const REPORT_RATE_CODES = new Set(["0910V"]);
+      const REQUIRED_HEADERS = ["Work Done By", "Provider ID", "Rate Code", "Units", "Adj/ Resub"];
+
+      function getRateCodeCategory(rateCode) {
+        const code = String(rateCode || "").trim().toUpperCase();
+        if (CASE_WORK_RATE_CODES.has(code)) return "case_work";
+        if (TRAVEL_WAIT_RATE_CODES.has(code)) return "travel_wait";
+        if (MILEAGE_RATE_CODES.has(code)) return "mileage";
+        if (REPORT_RATE_CODES.has(code)) return "report";
+        return "other";
+      }
+
+      function normalizeRow(rawRow) {
+        const employeeName = String(rawRow["Work Done By"] || "").trim();
+        const providerId = String(rawRow["Provider ID"] || "").trim();
+        const rateCode = String(rawRow["Rate Code"] || "").trim().toUpperCase();
+        const unitsRaw = Number(rawRow["Units"] || 0);
+
+        return {
+          employeeName,
+          providerId,
+          rateCode,
+          rateCodeCategory: getRateCodeCategory(rateCode),
+          units: Number.isFinite(unitsRaw) ? unitsRaw : 0,
+        };
+      }
+
+      function parseWorkbook(workbook) {
+        const firstSheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[firstSheetName];
+        const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        const headerIndex = allRows.findIndex((row) =>
+          REQUIRED_HEADERS.every((header) => row.includes(header))
+        );
+
+        if (headerIndex === -1) {
+          throw new Error("Could not find expected header row.");
+        }
+
+        const headerRow = allRows[headerIndex];
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          header: headerRow,
+          range: headerIndex + 1,
+          defval: "",
+        });
+
+        return {
+          worksheetName: firstSheetName,
+          rows: rows
+            .map(normalizeRow)
+            .filter((row) => row.employeeName || row.providerId || row.rateCode),
+        };
+      }
+
+      function summarizeByEmployee(rows) {
+        const byEmployee = new Map();
+        for (const row of rows) {
+          const key = `${row.providerId}::${row.employeeName}`;
+          if (!byEmployee.has(key)) {
+            byEmployee.set(key, {
+              employeeName: row.employeeName,
+              providerId: row.providerId,
+              totals: {
+                case_work: 0,
+                travel_wait: 0,
+                mileage: 0,
+                report: 0,
+                other: 0,
+              },
+              rowCount: 0,
+            });
+          }
+          const current = byEmployee.get(key);
+          current.totals[row.rateCodeCategory] += row.units;
+          current.rowCount += 1;
+        }
+
+        return Array.from(byEmployee.values()).sort((a, b) =>
+          a.employeeName.localeCompare(b.employeeName)
+        );
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      async function fetchEmployeeRateMap() {
+        try {
+          const r = await fetch("/api/employees");
+          if (!r.ok) return new Map();
+          const data = await r.json();
+          const m = new Map();
+          for (const e of data.employees || []) {
+            m.set(String(e.providerId), Number(e.hourlyRate));
+          }
+          return m;
+        } catch {
+          return new Map();
+        }
+      }
+
+      function hourlyRateFromMap(rateMap, providerId) {
+        if (!providerId || !rateMap) return null;
+        const v = rateMap.get(String(providerId));
+        return v != null && Number.isFinite(v) ? v : null;
+      }
+
+      function renderSummary(summary, rateMap) {
+        const tbody = document.querySelector("#summaryTable tbody");
+        tbody.innerHTML = "";
+
+        for (const item of summary) {
+          const rate = hourlyRateFromMap(rateMap, item.providerId);
+          const rateCell =
+            rate === null ? '<span class="muted">—</span>' : escapeHtml(rate.toFixed(2));
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(item.employeeName)}</td>
+            <td>${escapeHtml(item.providerId)}</td>
+            <td>${rateCell}</td>
+            <td>${item.totals.case_work}</td>
+            <td>${item.totals.travel_wait}</td>
+            <td>${item.totals.mileage}</td>
+            <td>${item.totals.report}</td>
+            <td>${item.totals.other}</td>
+            <td>${item.rowCount}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function analyzeFile() {
+        const fileInput = document.getElementById("fileInput");
+        const status = document.getElementById("status");
+        const error = document.getElementById("error");
+        const meta = document.getElementById("meta");
+        const file = fileInput.files[0];
+
+        error.textContent = "";
+        meta.textContent = "";
+        status.textContent = "";
+
+        if (!file) {
+          error.textContent = "Select a spreadsheet file first.";
+          return;
+        }
+
+        status.textContent = "Analyzing...";
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: "array" });
+          const parsed = parseWorkbook(workbook);
+          const summary = summarizeByEmployee(parsed.rows);
+          const rateMap = await fetchEmployeeRateMap();
+          renderSummary(summary, rateMap);
+
+          meta.textContent =
+            `File: ${file.name} | Sheet: ${parsed.worksheetName} | ` +
+            `Rows analyzed: ${parsed.rows.length} | Employees: ${summary.length}`;
+          status.textContent = "Analysis complete.";
+        } catch (err) {
+          error.textContent = err.message || "Failed to analyze file.";
+          status.textContent = "";
+        }
+      }
+
+      document.getElementById("analyzeBtn").addEventListener("click", analyzeFile);
+    </script>
+  </body>
+</html>
