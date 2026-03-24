@@ -57,7 +57,8 @@
       <h3>Adjustments &amp; resubmissions (excluded from totals)</h3>
       <p class="muted">
         Rows where <strong>Adj / Resub</strong> is only an <strong>A</strong> and/or <strong>R</strong> flag (e.g. A, R, A/R) are
-        not included in the summary above.
+        not included in the summary above. For <strong>adjustments</strong> (flag includes <strong>A</strong>), enter the correct
+        <strong>Units</strong> once; that value is added to the employee summary and the field locks.
       </p>
       <table id="adjResubTable">
         <thead>
@@ -181,15 +182,24 @@
         };
       }
 
-      function summarizeByEmployee(rows) {
-        const toActualHours = (category, units) => {
-          if (category === "case_work") return units / 10;
-          if (category === "travel_wait") return units / 10;
-          if (category === "report") return units / 2;
-          if (category === "mileage") return units;
-          return units;
-        };
+      function toActualHours(category, units) {
+        if (category === "case_work") return units / 10;
+        if (category === "travel_wait") return units / 10;
+        if (category === "report") return units / 2;
+        if (category === "mileage") return units;
+        return units;
+      }
 
+      /** True if Adj/Resub indicates an adjustment (A), not resubmission-only (R). */
+      function isAdjustmentRow(adjResub) {
+        if (!isAdjustmentOrResubmission(adjResub)) return false;
+        const letters = String(adjResub ?? "")
+          .replace(/[^a-z]/gi, "")
+          .toUpperCase();
+        return letters.includes("A");
+      }
+
+      function summarizeByEmployee(rows) {
         const byEmployee = new Map();
         for (const row of rows) {
           const key = `${row.providerId}::${row.employeeName}`;
@@ -222,6 +232,60 @@
         return Array.from(byEmployee.values()).sort((a, b) =>
           a.employeeName.localeCompare(b.employeeName)
         );
+      }
+
+      function cloneSummaryItem(s) {
+        return {
+          employeeName: s.employeeName,
+          providerId: s.providerId,
+          totals: { ...s.totals },
+          otherCodes: { ...s.otherCodes },
+          rowCount: s.rowCount,
+        };
+      }
+
+      function buildFullSummary() {
+        const base = summarizeByEmployee(sessionCalcRows);
+        const merged = base.map(cloneSummaryItem);
+
+        const getOrCreate = (employeeName, providerId) => {
+          const key = `${providerId}::${employeeName}`;
+          let item = merged.find((s) => `${s.providerId}::${s.employeeName}` === key);
+          if (!item) {
+            item = {
+              employeeName,
+              providerId,
+              totals: {
+                case_work: 0,
+                travel_wait: 0,
+                mileage: 0,
+                report: 0,
+              },
+              otherCodes: {},
+              rowCount: 0,
+            };
+            merged.push(item);
+          }
+          return item;
+        };
+
+        for (const adj of sessionAdjResubRows) {
+          if (!adj.unitsLocked || !isAdjustmentRow(adj.adjResub)) continue;
+          const u = Number(adj.resolvedUnits);
+          if (!Number.isFinite(u)) continue;
+          const item = getOrCreate(adj.employeeName, adj.providerId);
+          const convertedUnits = toActualHours(adj.rateCodeCategory, u);
+          if (adj.rateCodeCategory === "other") {
+            const code = adj.rateCode || "UNKNOWN";
+            const next = Number(item.otherCodes[code] || 0) + convertedUnits;
+            item.otherCodes[code] = Number(next.toFixed(2));
+          } else {
+            item.totals[adj.rateCodeCategory] += convertedUnits;
+          }
+          item.rowCount += 1;
+        }
+
+        return merged.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
       }
 
       function escapeHtml(s) {
@@ -298,6 +362,31 @@
       let sessionCalcRows = [];
       /** Excluded adj/resub rows with source file name (session, until Clear). */
       let sessionAdjResubRows = [];
+      /** Monotonic id for adj rows (editable units). */
+      let nextAdjRowId = 1;
+      /** Last rate map from analyze (for summary refresh after unit edits). */
+      let lastRateMap = new Map();
+
+      async function commitAdjustmentUnits(adjId, inputEl) {
+        const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
+        if (!row || !isAdjustmentRow(row.adjResub)) return;
+        const raw = String(inputEl.value ?? "").trim();
+        const num = parseFloat(raw);
+        if (!Number.isFinite(num)) {
+          inputEl.value = String(row.units);
+          return;
+        }
+        row.resolvedUnits = num;
+        row.unitsLocked = true;
+        renderAdjResubTable(sessionAdjResubRows);
+        try {
+          const rateMap = await fetchEmployeeRateMap();
+          lastRateMap = rateMap;
+          renderSummary(buildFullSummary(), rateMap);
+        } catch {
+          renderSummary(buildFullSummary(), lastRateMap);
+        }
+      }
 
       function renderAdjResubTable(adjRows) {
         const card = document.getElementById("adjResubCard");
@@ -311,7 +400,9 @@
         const sorted = [...adjRows].sort((a, b) => {
           const byName = a.employeeName.localeCompare(b.employeeName);
           if (byName !== 0) return byName;
-          return a.sourceFile.localeCompare(b.sourceFile);
+          const byFile = a.sourceFile.localeCompare(b.sourceFile);
+          if (byFile !== 0) return byFile;
+          return (a._adjId || 0) - (b._adjId || 0);
         });
         for (const r of sorted) {
           const df = r.dateFrom ? escapeHtml(r.dateFrom) : '<span class="muted">—</span>';
@@ -319,6 +410,16 @@
           const ref = r.referralNumber
             ? escapeHtml(r.referralNumber)
             : '<span class="muted">—</span>';
+          let unitsCell;
+          if (isAdjustmentRow(r.adjResub) && !r.unitsLocked) {
+            const id = r._adjId;
+            const val = escapeHtml(String(r.units));
+            unitsCell = `<input type="number" class="adj-units-input" data-adj-id="${id}" step="any" value="${val}" aria-label="Units for adjustment" />`;
+          } else if (isAdjustmentRow(r.adjResub) && r.unitsLocked) {
+            unitsCell = escapeHtml(String(r.resolvedUnits));
+          } else {
+            unitsCell = escapeHtml(String(r.units));
+          }
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(r.sourceFile)}</td>
@@ -328,7 +429,7 @@
             <td>${ref}</td>
             <td>${escapeHtml(r.providerId)}</td>
             <td>${escapeHtml(r.rateCode)}</td>
-            <td>${escapeHtml(String(r.units))}</td>
+            <td>${unitsCell}</td>
             <td>${escapeHtml(r.adjResub)}</td>
           `;
           tbody.appendChild(tr);
@@ -393,19 +494,24 @@
             for (const row of parsed.rows) {
               const withFile = { ...row, sourceFile: file.name };
               if (isAdjustmentOrResubmission(row.adjResub)) {
-                sessionAdjResubRows.push(withFile);
+                sessionAdjResubRows.push({
+                  ...withFile,
+                  _adjId: nextAdjRowId++,
+                  unitsLocked: false,
+                });
               } else {
                 sessionCalcRows.push(withFile);
               }
             }
           }
 
-          const summary = summarizeByEmployee(sessionCalcRows);
+          const summary = buildFullSummary();
           const allRowsForSync = sessionCalcRows.concat(
-            sessionAdjResubRows.map(({ sourceFile, ...rest }) => rest)
+            sessionAdjResubRows.map(({ sourceFile, _adjId, unitsLocked, resolvedUnits, ...rest }) => rest)
           );
           await syncMissingEmployeesFromRows(allRowsForSync);
           const rateMap = await fetchEmployeeRateMap();
+          lastRateMap = rateMap;
           renderSummary(summary, rateMap);
           renderAdjResubTable(sessionAdjResubRows);
 
@@ -427,6 +533,8 @@
       function clearSession() {
         sessionCalcRows = [];
         sessionAdjResubRows = [];
+        nextAdjRowId = 1;
+        lastRateMap = new Map();
         document.getElementById("error").textContent = "";
         document.getElementById("status").textContent = "";
         document.getElementById("meta").textContent = "";
@@ -436,6 +544,27 @@
 
       document.getElementById("analyzeBtn").addEventListener("click", analyzeFiles);
       document.getElementById("clearBtn").addEventListener("click", clearSession);
+
+      document.body.addEventListener(
+        "keydown",
+        (e) => {
+          if (e.target.classList && e.target.classList.contains("adj-units-input") && e.key === "Enter") {
+            e.preventDefault();
+            e.target.blur();
+          }
+        },
+        true
+      );
+      document.body.addEventListener(
+        "blur",
+        (e) => {
+          if (e.target.classList && e.target.classList.contains("adj-units-input")) {
+            const id = Number(e.target.dataset.adjId);
+            if (Number.isFinite(id)) void commitAdjustmentUnits(id, e.target);
+          }
+        },
+        true
+      );
     </script>
   </body>
 </html>

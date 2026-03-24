@@ -118,6 +118,17 @@ tbody tr:nth-child(2n) {
   background: #fafaf9;
 }
 
+input.adj-units-input {
+  width: 6.5rem;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--card);
+  color: var(--text);
+}
+
 .error {
   color: var(--danger);
   font-weight: 600;
