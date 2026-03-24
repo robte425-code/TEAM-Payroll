@@ -17,6 +17,20 @@ function isAdjustmentOrResubmission(adjVal) {
   return /A/i.test(letters) || /R/i.test(letters);
 }
 
+function formatDateCell(val) {
+  if (val == null || val === "") return "";
+  if (Object.prototype.toString.call(val) === "[object Date]" && !isNaN(val)) {
+    return val.toLocaleDateString("en-US");
+  }
+  if (typeof val === "number" && isFinite(val) && val > 20000 && val < 100000) {
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const ms = epoch.getTime() + val * 86400000;
+    const d = new Date(ms);
+    if (!isNaN(d)) return d.toLocaleDateString("en-US");
+  }
+  return String(val).trim();
+}
+
 function normalizeRow(rawRow = {}) {
   const employeeName = String(rawRow["Work Done By"] || "").trim();
   const providerId = String(rawRow["Provider ID"] || "").trim();
@@ -31,6 +45,8 @@ function normalizeRow(rawRow = {}) {
     rateCodeCategory: getRateCodeCategory(rateCode),
     units: Number.isFinite(units) ? units : 0,
     adjustmentOrResubmission,
+    dateFrom: formatDateCell(rawRow["Date From"]),
+    dateTo: formatDateCell(rawRow["Date To"]),
     raw: rawRow,
   };
 }

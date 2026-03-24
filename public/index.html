@@ -64,6 +64,8 @@
           <tr>
             <th>Source file</th>
             <th>Employee</th>
+            <th>Date From</th>
+            <th>Date To</th>
             <th>Provider ID</th>
             <th>Rate Code</th>
             <th>Units</th>
@@ -109,12 +111,31 @@
         return /A/i.test(letters) || /R/i.test(letters);
       }
 
+      /** Display Excel/CSV date values as a readable local date string. */
+      function formatDateCell(val) {
+        if (val == null || val === "") return "";
+        if (Object.prototype.toString.call(val) === "[object Date]" && !isNaN(val)) {
+          return val.toLocaleDateString("en-US");
+        }
+        if (typeof val === "number" && isFinite(val)) {
+          if (val > 20000 && val < 100000) {
+            const epoch = new Date(Date.UTC(1899, 11, 30));
+            const ms = epoch.getTime() + val * 86400000;
+            const d = new Date(ms);
+            if (!isNaN(d)) return d.toLocaleDateString("en-US");
+          }
+        }
+        return String(val).trim();
+      }
+
       function normalizeRow(rawRow) {
         const employeeName = String(rawRow["Work Done By"] || "").trim();
         const providerId = String(rawRow["Provider ID"] || "").trim();
         const rateCode = String(rawRow["Rate Code"] || "").trim().toUpperCase();
         const unitsRaw = Number(rawRow["Units"] || 0);
         const adjResub = String(rawRow["Adj/ Resub"] || "").trim();
+        const dateFromRaw = rawRow["Date From"];
+        const dateToRaw = rawRow["Date To"];
 
         return {
           employeeName,
@@ -123,6 +144,8 @@
           rateCodeCategory: getRateCodeCategory(rateCode),
           units: Number.isFinite(unitsRaw) ? unitsRaw : 0,
           adjResub,
+          dateFrom: formatDateCell(dateFromRaw),
+          dateTo: formatDateCell(dateToRaw),
         };
       }
 
@@ -286,10 +309,14 @@
           return a.sourceFile.localeCompare(b.sourceFile);
         });
         for (const r of sorted) {
+          const df = r.dateFrom ? escapeHtml(r.dateFrom) : '<span class="muted">—</span>';
+          const dt = r.dateTo ? escapeHtml(r.dateTo) : '<span class="muted">—</span>';
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(r.sourceFile)}</td>
             <td>${escapeHtml(r.employeeName)}</td>
+            <td>${df}</td>
+            <td>${dt}</td>
             <td>${escapeHtml(r.providerId)}</td>
             <td>${escapeHtml(r.rateCode)}</td>
             <td>${escapeHtml(String(r.units))}</td>
