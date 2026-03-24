@@ -123,6 +123,7 @@
               <th>Billable pay ($)</th>
               <th>Travel pay ($)</th>
               <th>Mileage pay ($)</th>
+              <th>Holiday pay ($)</th>
               <th>Total ($)</th>
             </tr>
           </thead>
@@ -422,6 +423,7 @@
               hourlyRate: Number(e.hourlyRate) || 0,
               incentivePay: Boolean(e.incentivePay),
               travelRate: Number(e.travelRate) || 0,
+              ptoRate: Number(e.ptoRate) || 0,
             });
           }
           return m;
@@ -726,6 +728,7 @@
         tbody.innerHTML = "";
         let grandTotal = 0;
         const rowsOut = [];
+        const HOLIDAY_PAY_HOURS = 7.5;
 
         for (const item of summary) {
           const caseWork = Number(item.totals.case_work || 0);
@@ -739,6 +742,7 @@
             hourlyRate: 0,
             incentivePay: false,
             travelRate: 0,
+            ptoRate: 0,
           };
 
           let payRate;
@@ -751,7 +755,8 @@
           const billablePay = casePlusReports * payRate;
           const travelPay = travelWait * det.travelRate;
           const mileagePay = mileage * orgRates.mileageRate;
-          const rowTotal = billablePay + travelPay + mileagePay;
+          const holidayPay = HOLIDAY_PAY_HOURS * det.ptoRate;
+          const rowTotal = billablePay + travelPay + mileagePay + holidayPay;
           grandTotal += rowTotal;
 
           rowsOut.push({
@@ -759,6 +764,7 @@
             billablePay,
             travelPay,
             mileagePay,
+            holidayPay,
             total: rowTotal,
           });
 
@@ -768,6 +774,7 @@
             <td>${escapeHtml(money2(billablePay))}</td>
             <td>${escapeHtml(money2(travelPay))}</td>
             <td>${escapeHtml(money2(mileagePay))}</td>
+            <td>${escapeHtml(money2(holidayPay))}</td>
             <td>${escapeHtml(money2(rowTotal))}</td>
           `;
           tbody.appendChild(tr);
@@ -777,13 +784,14 @@
         trTotal.style.fontWeight = "700";
         trTotal.innerHTML = `
           <td>Total</td>
-          <td colspan="3"></td>
+          <td colspan="4"></td>
           <td>${escapeHtml(money2(grandTotal))}</td>
         `;
         tbody.appendChild(trTotal);
 
         document.getElementById("payroll10Meta").textContent =
           `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
+          `Holiday pay: ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
           `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit`;
         document.getElementById("payroll10ResultsWrap").hidden = false;
         lastPayroll10Results = {
@@ -832,6 +840,7 @@
           "Billable pay ($)",
           "Travel pay ($)",
           "Mileage pay ($)",
+          "Holiday pay ($)",
           "Total ($)",
         ];
 
@@ -848,6 +857,7 @@
               money2(row.billablePay),
               money2(row.travelPay),
               money2(row.mileagePay),
+              money2(row.holidayPay),
               money2(row.total),
             ]
               .map(csvEscape)
@@ -856,7 +866,7 @@
         }
 
         lines.push(
-          ["Total", "", "", "", money2(lastPayroll10Results.grandTotal)]
+          ["Total", "", "", "", "", money2(lastPayroll10Results.grandTotal)]
             .map(csvEscape)
             .join(",")
         );
