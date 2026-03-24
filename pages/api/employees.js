@@ -11,6 +11,7 @@ function rowToClient(row) {
     travelRate: row.travel_rate != null ? Number(row.travel_rate) : 0,
     ptoRate: row.pto_rate != null ? Number(row.pto_rate) : 0,
     eduRate: row.edu_rate != null ? Number(row.edu_rate) : 0,
+    minWageRate: row.min_wage_rate != null ? Number(row.min_wage_rate) : 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -96,7 +97,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const result = await pool.query(
         `SELECT id, provider_id, display_name, hourly_rate, incentive_pay,
-                travel_rate, pto_rate, edu_rate, created_at, updated_at
+                travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
       );
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
       const travelRate = toNonNegativeNumber(body.travelRate, 0);
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
+      const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -122,10 +124,10 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, travelRate, ptoRate, eduRate]
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, min_wage_rate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, travelRate, ptoRate, eduRate, minWageRate]
       );
       const row = inserted && inserted.rows && inserted.rows[0];
       if (!row) {
@@ -146,6 +148,7 @@ export default async function handler(req, res) {
       const travelRate = toNonNegativeNumber(body.travelRate, 0);
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
+      const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -163,10 +166,11 @@ export default async function handler(req, res) {
              travel_rate = $5,
              pto_rate = $6,
              edu_rate = $7,
+             min_wage_rate = $8,
              updated_at = now()
-         WHERE id = $8::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, travelRate, ptoRate, eduRate, id]
+         WHERE id = $9::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, travelRate, ptoRate, eduRate, minWageRate, id]
       );
       if (!updated.rows.length) {
         return res.status(404).json({ error: "Employee not found" });

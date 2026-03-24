@@ -79,6 +79,7 @@
           <tr>
             <th>Employee name</th>
             <th>Rate ($ / hour)</th>
+            <th>Min wage ($ / hr)</th>
             <th>Incentive Pay</th>
             <th>Travel rate ($)</th>
             <th>PTO rate ($)</th>
@@ -136,6 +137,7 @@
         tr.innerHTML = `
           <td>${pidField}</td>
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
+          <td><input type="number" class="js-min-wage-rate rate-input" min="0" step="0.01" title="Minimum wage rate" /></td>
           <td><input type="checkbox" class="js-incentive" /></td>
           <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
           <td><input type="number" class="js-pto-rate rate-input" min="0" step="0.01" title="PTO rate" /></td>
@@ -150,6 +152,9 @@
         const rate = emp.hourlyRate;
         tr.querySelector(".js-rate").value =
           rate === 0 || rate == null ? "" : String(rate);
+        const mwr = emp.minWageRate;
+        tr.querySelector(".js-min-wage-rate").value =
+          mwr === 0 || mwr == null ? "" : String(mwr);
         tr.querySelector(".js-incentive").checked = Boolean(emp.incentivePay);
         const trt = emp.travelRate;
         tr.querySelector(".js-travel-rate").value =
@@ -173,6 +178,8 @@
         const providerId = tr.querySelector(".js-pid").value.trim();
         const rateRaw = tr.querySelector(".js-rate").value;
         const hourlyRate = rateRaw === "" ? 0 : Number(rateRaw);
+        const minWageRaw = tr.querySelector(".js-min-wage-rate").value;
+        const minWageRate = minWageRaw === "" ? 0 : Number(minWageRaw);
         const incentivePay = tr.querySelector(".js-incentive").checked;
         const trRaw = tr.querySelector(".js-travel-rate").value;
         const travelRate = trRaw === "" ? 0 : Number(trRaw);
@@ -190,6 +197,7 @@
           travelRate,
           ptoRate,
           eduRate,
+          minWageRate,
         };
       }
 
@@ -202,6 +210,10 @@
         }
         if (!Number.isFinite(data.hourlyRate) || data.hourlyRate < 0) {
           flash("Rate must be a valid non-negative number.", true);
+          return;
+        }
+        if (!Number.isFinite(data.minWageRate) || data.minWageRate < 0) {
+          flash("Min wage rate must be a valid non-negative number.", true);
           return;
         }
         if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
@@ -230,6 +242,7 @@
                 travelRate: data.travelRate,
                 ptoRate: data.ptoRate,
                 eduRate: data.eduRate,
+                minWageRate: data.minWageRate,
               }),
             });
             delete tr.dataset.new;
@@ -248,6 +261,7 @@
                 travelRate: data.travelRate,
                 ptoRate: data.ptoRate,
                 eduRate: data.eduRate,
+                minWageRate: data.minWageRate,
               }),
             });
             flash("Saved.");
@@ -282,7 +296,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="7" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="8" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -325,7 +339,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="7" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="8" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -343,6 +357,7 @@
             travelRate: 0,
             ptoRate: 0,
             eduRate: 0,
+            minWageRate: 0,
           },
           true
         );
@@ -370,6 +385,10 @@
               flash("Each rate must be a valid non-negative number.", true);
               return;
             }
+            if (!Number.isFinite(data.minWageRate) || data.minWageRate < 0) {
+              flash("Each min wage rate must be a valid non-negative number.", true);
+              return;
+            }
             if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
               flash("Each travel rate must be a valid non-negative number.", true);
               return;
@@ -394,6 +413,7 @@
                   travelRate: data.travelRate,
                   ptoRate: data.ptoRate,
                   eduRate: data.eduRate,
+                  minWageRate: data.minWageRate,
                 }),
               });
             } else {
@@ -409,6 +429,7 @@
                   travelRate: data.travelRate,
                   ptoRate: data.ptoRate,
                   eduRate: data.eduRate,
+                  minWageRate: data.minWageRate,
                 }),
               });
             }
@@ -516,8 +537,12 @@
               const travelRate = Number(raw.travelRate ?? raw.travel_rate ?? 0);
               const ptoRate = Number(raw.ptoRate ?? raw.pto_rate ?? 0);
               const eduRate = Number(raw.eduRate ?? raw.edu_rate ?? 0);
+              const minWageRate = Number(
+                raw.minWageRate ?? raw.min_wage_rate ?? 0
+              );
               if (!providerId) continue;
               if (!Number.isFinite(hourlyRate) || hourlyRate < 0) continue;
+              if (!Number.isFinite(minWageRate) || minWageRate < 0) continue;
               if (!Number.isFinite(travelRate) || travelRate < 0) continue;
               if (!Number.isFinite(ptoRate) || ptoRate < 0) continue;
               if (!Number.isFinite(eduRate) || eduRate < 0) continue;
@@ -533,6 +558,7 @@
                     travelRate,
                     ptoRate,
                     eduRate,
+                    minWageRate,
                   }),
                 });
                 n += 1;
@@ -555,6 +581,7 @@
                         travelRate,
                         ptoRate,
                         eduRate,
+                        minWageRate,
                       }),
                     });
                     n += 1;
