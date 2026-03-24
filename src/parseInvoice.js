@@ -77,16 +77,22 @@ function summarizeByEmployeeAndCategory(normalizedRows = []) {
           travel_wait: 0,
           mileage: 0,
           report: 0,
-          other: 0,
         },
+        otherCodes: {},
         rowCount: 0,
       });
     }
 
     const current = summaryMap.get(key);
-    current.totals[row.rateCodeCategory] = round2(
-      current.totals[row.rateCodeCategory] + toActualHours(row.rateCodeCategory, row.units)
-    );
+    const convertedUnits = toActualHours(row.rateCodeCategory, row.units);
+    if (row.rateCodeCategory === "other") {
+      const code = row.rateCode || "UNKNOWN";
+      current.otherCodes[code] = round2((current.otherCodes[code] || 0) + convertedUnits);
+    } else {
+      current.totals[row.rateCodeCategory] = round2(
+        current.totals[row.rateCodeCategory] + convertedUnits
+      );
+    }
     current.rowCount += 1;
   }
 

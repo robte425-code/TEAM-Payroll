@@ -44,7 +44,7 @@
             <th>Travel & Wait</th>
             <th>Mileage</th>
             <th>Report</th>
-            <th>Other</th>
+            <th>Unmapped Codes</th>
             <th>Rows</th>
           </tr>
         </thead>
@@ -137,13 +137,20 @@
                 travel_wait: 0,
                 mileage: 0,
                 report: 0,
-                other: 0,
               },
+              otherCodes: {},
               rowCount: 0,
             });
           }
           const current = byEmployee.get(key);
-          current.totals[row.rateCodeCategory] += toActualHours(row.rateCodeCategory, row.units);
+          const convertedUnits = toActualHours(row.rateCodeCategory, row.units);
+          if (row.rateCodeCategory === "other") {
+            const code = row.rateCode || "UNKNOWN";
+            const next = Number(current.otherCodes[code] || 0) + convertedUnits;
+            current.otherCodes[code] = Number(next.toFixed(2));
+          } else {
+            current.totals[row.rateCodeCategory] += convertedUnits;
+          }
           current.rowCount += 1;
         }
 
@@ -183,6 +190,14 @@
 
       function renderSummary(summary, rateMap) {
         const fmt = (n) => Number(n || 0).toFixed(2);
+        const renderOtherCodes = (otherCodes) => {
+          const entries = Object.entries(otherCodes || {});
+          if (!entries.length) return '<span class="muted">—</span>';
+          return entries
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([code, value]) => `${escapeHtml(code)}: ${fmt(value)}`)
+            .join("<br/>");
+        };
         const tbody = document.querySelector("#summaryTable tbody");
         tbody.innerHTML = "";
 
@@ -199,7 +214,7 @@
             <td>${fmt(item.totals.travel_wait)}</td>
             <td>${fmt(item.totals.mileage)}</td>
             <td>${fmt(item.totals.report)}</td>
-            <td>${fmt(item.totals.other)}</td>
+            <td>${renderOtherCodes(item.otherCodes)}</td>
             <td>${item.rowCount}</td>
           `;
           tbody.appendChild(tr);
