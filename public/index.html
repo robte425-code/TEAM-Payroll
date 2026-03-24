@@ -133,6 +133,70 @@
       </div>
     </div>
 
+    <div class="card" id="payroll20Card" hidden>
+      <h3>Payroll 2.0</h3>
+      <p class="muted" id="payroll20Intro">
+        After Payroll 1.0 is generated, upload the <strong>non-bill time</strong> spreadsheet. Only rows whose
+        <strong>Activity Type</strong> starts with <strong>NB</strong> or <strong>Z</strong> are used (see below).
+        Employee names in <strong>Timekeeper VRC</strong> are matched to Payroll 1.0 employees (same spelling,
+        spacing ignored).
+      </p>
+      <p class="muted" style="margin-top: 8px">
+        <strong>NB time</strong> — sum of <strong>Prof. Hours</strong> where activity starts with NB.
+        <strong>PTO time</strong> — activity <strong>Z PTO</strong>.
+        <strong>Sick time</strong> — activity <strong>Z Sick time</strong>.
+      </p>
+      <div
+        class="payroll10-controls"
+        style="margin: 12px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center"
+      >
+        <label for="nonBillFileInput">Non-bill spreadsheet (.xlsx)</label>
+        <input id="nonBillFileInput" type="file" accept=".xlsx,.xls" />
+        <label for="generalReimbursementInput">General reimbursement ($)</label>
+        <input
+          type="number"
+          id="generalReimbursementInput"
+          min="0"
+          step="0.01"
+          class="rate-input"
+          style="width: 7rem"
+          value="0"
+        />
+        <button type="button" id="generatePayroll20Btn">Generate Payroll 2.0</button>
+        <button type="button" id="exportPayroll20CsvBtn" hidden disabled>Export CSV</button>
+        <button type="button" id="printPayroll20Btn" hidden disabled>Print</button>
+      </div>
+      <p id="payroll20Error" class="error"></p>
+      <div id="payroll20ResultsWrap" hidden>
+        <h4 style="margin: 14px 0 8px; font-size: 1rem">Results</h4>
+        <p class="muted" id="payroll20Meta"></p>
+        <div class="payroll20-table-scroll">
+          <table id="payroll20Table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>NB time (hr)</th>
+                <th>PTO time (hr)</th>
+                <th>Sick time (hr)</th>
+                <th>Total hrs worked</th>
+                <th>Overtime (hr)</th>
+                <th>Regular pay ($)</th>
+                <th>Overtime pay ($)</th>
+                <th>Travel &amp; Wait pay ($)</th>
+                <th>PTO pay ($)</th>
+                <th>Sick pay ($)</th>
+                <th>Holiday pay ($)</th>
+                <th>Mileage ($)</th>
+                <th>General reim. ($)</th>
+                <th>Non-discretionary bonus ($)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
       const CASE_WORK_RATE_CODES = new Set([
@@ -146,6 +210,7 @@
       const MILEAGE_RATE_CODES = new Set(["0893V", "0894V"]);
       const REPORT_RATE_CODES = new Set(["0910V"]);
       const REQUIRED_HEADERS = ["Work Done By", "Provider ID", "Rate Code", "Units", "Adj/ Resub"];
+      const NONBILL_HEADERS = ["Timekeeper VRC", "Prof. Hours", "Activity Type"];
 
       function getRateCodeCategory(rateCode) {
         const code = String(rateCode || "").trim().toUpperCase();
@@ -208,6 +273,82 @@
           dateTo: formatDateCell(dateToRaw),
           referralNumber,
         };
+      }
+
+      function normalizeEmployeeName(s) {
+        return String(s || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase();
+      }
+
+      /**
+       * Non-bill rows: only NB* and Z* activity types; bucket NB, Z PTO, Z Sick time.
+       * @returns {"nb"|"pto"|"sick"|null}
+       */
+      function nonBillActivityBucket(activityRaw) {
+        const a = String(activityRaw || "").trim();
+        if (!a) return null;
+        const au = a.toUpperCase();
+        if (au.startsWith("NB")) return "nb";
+        if (!au.startsWith("Z")) return null;
+        const norm = a.toLowerCase().replace(/\s+/g, " ").trim();
+        if (norm === "z pto") return "pto";
+        if (norm === "z sick time") return "sick";
+        return null;
+      }
+
+      function parseNonBillWorkbook(workbook) {
+        const firstSheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[firstSheetName];
+        const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        const headerIndex = allRows.findIndex((row) => {
+          const cells = row.map((c) => String(c).trim());
+          return NONBILL_HEADERS.every((h) => cells.includes(h));
+        });
+        if (headerIndex === -1) {
+          throw new Error(
+            "Non-bill spreadsheet: could not find a header row containing Timekeeper VRC, Prof. Hours, and Activity Type."
+          );
+        }
+        const headerRow = allRows[headerIndex].map((c) => String(c).trim());
+        const idxVrc = headerRow.indexOf("Timekeeper VRC");
+        const idxHours = headerRow.indexOf("Prof. Hours");
+        const idxAct = headerRow.indexOf("Activity Type");
+        const out = [];
+        for (let r = headerIndex + 1; r < allRows.length; r++) {
+          const row = allRows[r];
+          const timekeeper = String(row[idxVrc] ?? "").trim();
+          const hoursRaw = row[idxHours];
+          const activity = String(row[idxAct] ?? "").trim();
+          const hours = Number(hoursRaw);
+          if (!timekeeper && !activity) continue;
+          const bucket = nonBillActivityBucket(activity);
+          if (bucket == null) continue;
+          out.push({
+            timekeeper,
+            profHours: Number.isFinite(hours) ? hours : 0,
+            activityType: activity,
+            bucket,
+          });
+        }
+        return { worksheetName: firstSheetName, rows: out };
+      }
+
+      function aggregateNonBillByEmployee(parsedRows) {
+        const map = new Map();
+        for (const row of parsedRows) {
+          const key = normalizeEmployeeName(row.timekeeper);
+          if (!key) continue;
+          if (!map.has(key)) {
+            map.set(key, { nb: 0, pto: 0, sick: 0 });
+          }
+          const cur = map.get(key);
+          if (row.bucket === "nb") cur.nb += row.profHours;
+          else if (row.bucket === "pto") cur.pto += row.profHours;
+          else if (row.bucket === "sick") cur.sick += row.profHours;
+        }
+        return map;
       }
 
       function parseWorkbook(workbook) {
@@ -422,6 +563,7 @@
           for (const e of data.employees || []) {
             m.set(String(e.providerId), {
               hourlyRate: Number(e.hourlyRate) || 0,
+              minWageRate: Number(e.minWageRate) || 0,
               incentivePay: Boolean(e.incentivePay),
               travelRate: Number(e.travelRate) || 0,
               ptoRate: Number(e.ptoRate) || 0,
@@ -472,6 +614,12 @@
         if (err) err.textContent = "";
         lastPayroll10Results = null;
         setPayroll10ExtrasEnabled(false);
+        clearPayroll20Results();
+        const nbIn = document.getElementById("nonBillFileInput");
+        if (nbIn) nbIn.value = "";
+        const grIn = document.getElementById("generalReimbursementInput");
+        if (grIn) grIn.value = "0";
+        updatePayroll20Visibility();
       }
 
       function updatePayroll10Visibility() {
@@ -501,6 +649,8 @@
       let lastRateMap = new Map();
       /** Last generated payroll 1.0 numbers (used for CSV/Print). */
       let lastPayroll10Results = null;
+      /** Last payroll 2.0 export snapshot. */
+      let lastPayroll20Results = null;
 
       function setPayroll10ExtrasEnabled(enabled) {
         const exportBtn = document.getElementById("exportPayroll10CsvBtn");
@@ -512,6 +662,41 @@
         if (printBtn) {
           printBtn.hidden = !enabled;
           printBtn.disabled = !enabled;
+        }
+      }
+
+      function setPayroll20ExtrasEnabled(enabled) {
+        const exportBtn = document.getElementById("exportPayroll20CsvBtn");
+        const printBtn = document.getElementById("printPayroll20Btn");
+        if (exportBtn) {
+          exportBtn.hidden = !enabled;
+          exportBtn.disabled = !enabled;
+        }
+        if (printBtn) {
+          printBtn.hidden = !enabled;
+          printBtn.disabled = !enabled;
+        }
+      }
+
+      function clearPayroll20Results() {
+        const wrap = document.getElementById("payroll20ResultsWrap");
+        if (wrap) wrap.hidden = true;
+        const tbody = document.querySelector("#payroll20Table tbody");
+        if (tbody) tbody.innerHTML = "";
+        const meta = document.getElementById("payroll20Meta");
+        if (meta) meta.textContent = "";
+        const err = document.getElementById("payroll20Error");
+        if (err) err.textContent = "";
+        lastPayroll20Results = null;
+        setPayroll20ExtrasEnabled(false);
+      }
+
+      function updatePayroll20Visibility() {
+        const card = document.getElementById("payroll20Card");
+        if (!card) return;
+        card.hidden = !lastPayroll10Results;
+        if (!lastPayroll10Results) {
+          clearPayroll20Results();
         }
       }
 
@@ -700,6 +885,7 @@
       document.getElementById("generatePayroll10Btn").addEventListener("click", async () => {
         const errEl = document.getElementById("payroll10Error");
         errEl.textContent = "";
+        clearPayroll20Results();
         const wdRaw = document.getElementById("workingDaysInput").value;
         const wd = parseInt(String(wdRaw).trim(), 10);
         if (!Number.isFinite(wd) || wd < 1) {
@@ -750,6 +936,7 @@
           const pid = String(item.providerId || "").trim();
           const det = detailMap.get(pid) || {
             hourlyRate: 0,
+            minWageRate: 0,
             incentivePay: false,
             travelRate: 0,
             ptoRate: 0,
@@ -770,12 +957,17 @@
           grandTotal += rowTotal;
 
           rowsOut.push({
+            providerId: pid,
             employeeName: item.employeeName,
             billablePay,
             travelPay,
             mileagePay,
             holidayPay,
             total: rowTotal,
+            caseWork,
+            report,
+            travelWait,
+            mileage,
           });
 
           const tr = document.createElement("tr");
@@ -823,6 +1015,7 @@
           grandTotal,
         };
         setPayroll10ExtrasEnabled(true);
+        updatePayroll20Visibility();
       });
 
       function csvEscape(value) {
@@ -956,6 +1149,318 @@
                   ? `<div class="muted" style="margin-top:10px;font-weight:600;">${escapeHtml(heatherText)}</div>`
                   : ""
               }
+              ${tableHtml}
+              <script>
+                window.onload = function () { window.focus(); window.print(); };
+              <\/script>
+            </body>
+          </html>`);
+        w.document.close();
+      });
+
+      document.getElementById("generatePayroll20Btn").addEventListener("click", async () => {
+        const errEl = document.getElementById("payroll20Error");
+        errEl.textContent = "";
+        if (!lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) {
+          errEl.textContent = "Generate Payroll 1.0 first.";
+          return;
+        }
+        const fileInput = document.getElementById("nonBillFileInput");
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+          errEl.textContent = "Select the non-bill time spreadsheet.";
+          return;
+        }
+        const grRaw = document.getElementById("generalReimbursementInput").value;
+        const grTrim = String(grRaw).trim();
+        const generalReimbursement = grTrim === "" ? 0 : parseFloat(grTrim);
+        if (!Number.isFinite(generalReimbursement) || generalReimbursement < 0) {
+          errEl.textContent = "Enter a valid general reimbursement amount (0 or more).";
+          return;
+        }
+
+        try {
+          const file = fileInput.files[0];
+          const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+          const parsed = parseNonBillWorkbook(workbook);
+          const nbMap = aggregateNonBillByEmployee(parsed.rows);
+          const detailMap = await fetchEmployeeDetailMap();
+          const incentiveThreshold = Number(lastPayroll10Results.incentiveThreshold) || 0;
+          const p1Keys = new Set(
+            lastPayroll10Results.rows.map((r) => normalizeEmployeeName(r.employeeName))
+          );
+          const unmatchedLabels = [];
+          const seenU = new Set();
+          for (const row of parsed.rows) {
+            const k = normalizeEmployeeName(row.timekeeper);
+            if (!k || p1Keys.has(k)) continue;
+            if (!seenU.has(k)) {
+              seenU.add(k);
+              unmatchedLabels.push(String(row.timekeeper).trim());
+            }
+          }
+
+          const tbody = document.querySelector("#payroll20Table tbody");
+          tbody.innerHTML = "";
+          const rows20 = [];
+          let sumRegular = 0;
+          let sumOt = 0;
+          let sumTravel = 0;
+          let sumPto = 0;
+          let sumSick = 0;
+          let sumHoliday = 0;
+          let sumMileage = 0;
+          let sumGenReim = 0;
+          let sumBonus = 0;
+
+          for (const r of lastPayroll10Results.rows) {
+            const nameKey = normalizeEmployeeName(r.employeeName);
+            const nbh = nbMap.get(nameKey) || { nb: 0, pto: 0, sick: 0 };
+            const caseWork = Number(r.caseWork) || 0;
+            const report = Number(r.report) || 0;
+            const travelWait = Number(r.travelWait) || 0;
+            const totalForOT = nbh.nb + caseWork + report + travelWait;
+            let totalHoursWorked;
+            let overtimeHours;
+            if (totalForOT > incentiveThreshold) {
+              totalHoursWorked = incentiveThreshold;
+              overtimeHours = totalForOT - incentiveThreshold;
+            } else {
+              totalHoursWorked = totalForOT;
+              overtimeHours = 0;
+            }
+
+            const pid = String(r.providerId || "").trim();
+            const det = detailMap.get(pid) || {
+              hourlyRate: 0,
+              minWageRate: 0,
+              travelRate: 0,
+              ptoRate: 0,
+            };
+            const minW = Number(det.minWageRate) || 0;
+            const regularPay = totalHoursWorked * minW;
+            const overtimePay = overtimeHours * minW * 1.5;
+            const travelWaitPay = travelWait * (Number(det.travelRate) || 0);
+            const ptoPay = nbh.pto * (Number(det.ptoRate) || 0);
+            const sickPay = nbh.sick * (Number(det.hourlyRate) || 0);
+            const holidayPay = Number(r.holidayPay) || 0;
+            const mileageReimb = Number(r.mileagePay) || 0;
+            const nonDiscBonus = Number(r.billablePay) - regularPay - overtimePay;
+
+            sumRegular += regularPay;
+            sumOt += overtimePay;
+            sumTravel += travelWaitPay;
+            sumPto += ptoPay;
+            sumSick += sickPay;
+            sumHoliday += holidayPay;
+            sumMileage += mileageReimb;
+            sumGenReim += generalReimbursement;
+            sumBonus += nonDiscBonus;
+
+            const rowObj = {
+              employeeName: r.employeeName,
+              nbTime: nbh.nb,
+              ptoTime: nbh.pto,
+              sickTime: nbh.sick,
+              totalHoursWorked,
+              overtimeHours,
+              regularPay,
+              overtimePay,
+              travelWaitPay,
+              ptoPay,
+              sickPay,
+              holidayPay,
+              mileageReimb,
+              generalReimbursement,
+              nonDiscBonus,
+            };
+            rows20.push(rowObj);
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${escapeHtml(r.employeeName)}</td>
+              <td>${escapeHtml(money2(nbh.nb))}</td>
+              <td>${escapeHtml(money2(nbh.pto))}</td>
+              <td>${escapeHtml(money2(nbh.sick))}</td>
+              <td>${escapeHtml(money2(totalHoursWorked))}</td>
+              <td>${escapeHtml(money2(overtimeHours))}</td>
+              <td>${escapeHtml(money2(regularPay))}</td>
+              <td>${escapeHtml(money2(overtimePay))}</td>
+              <td>${escapeHtml(money2(travelWaitPay))}</td>
+              <td>${escapeHtml(money2(ptoPay))}</td>
+              <td>${escapeHtml(money2(sickPay))}</td>
+              <td>${escapeHtml(money2(holidayPay))}</td>
+              <td>${escapeHtml(money2(mileageReimb))}</td>
+              <td>${escapeHtml(money2(generalReimbursement))}</td>
+              <td>${escapeHtml(money2(nonDiscBonus))}</td>
+            `;
+            tbody.appendChild(tr);
+          }
+
+          const trTotal = document.createElement("tr");
+          trTotal.style.fontWeight = "700";
+          trTotal.innerHTML = `
+            <td>Total</td>
+            <td colspan="5"></td>
+            <td>${escapeHtml(money2(sumRegular))}</td>
+            <td>${escapeHtml(money2(sumOt))}</td>
+            <td>${escapeHtml(money2(sumTravel))}</td>
+            <td>${escapeHtml(money2(sumPto))}</td>
+            <td>${escapeHtml(money2(sumSick))}</td>
+            <td>${escapeHtml(money2(sumHoliday))}</td>
+            <td>${escapeHtml(money2(sumMileage))}</td>
+            <td>${escapeHtml(money2(sumGenReim))}</td>
+            <td>${escapeHtml(money2(sumBonus))}</td>
+          `;
+          tbody.appendChild(trTotal);
+
+          let metaText =
+            `Non-bill file: ${file.name} · Incentive threshold (from Payroll 1.0): ${money2(incentiveThreshold)} hr · General reimbursement: $${money2(generalReimbursement)} per employee`;
+          if (unmatchedLabels.length) {
+            metaText += ` · Note: non-bill rows for names not in Payroll 1.0 (${unmatchedLabels.length}): ${unmatchedLabels.join("; ")}`;
+          }
+          document.getElementById("payroll20Meta").textContent = metaText;
+          document.getElementById("payroll20ResultsWrap").hidden = false;
+
+          lastPayroll20Results = {
+            fileName: file.name,
+            generalReimbursement,
+            incentiveThreshold,
+            unmatchedNonBillNames: unmatchedLabels,
+            rows: rows20,
+            sums: {
+              regularPay: sumRegular,
+              overtimePay: sumOt,
+              travelWaitPay: sumTravel,
+              ptoPay: sumPto,
+              sickPay: sumSick,
+              holidayPay: sumHoliday,
+              mileage: sumMileage,
+              generalReimbursement: sumGenReim,
+              nonDiscBonus: sumBonus,
+            },
+          };
+          setPayroll20ExtrasEnabled(true);
+        } catch (e) {
+          errEl.textContent = e.message || "Failed to read non-bill spreadsheet.";
+        }
+      });
+
+      document.getElementById("exportPayroll20CsvBtn").addEventListener("click", () => {
+        const errEl = document.getElementById("payroll20Error");
+        errEl.textContent = "";
+        if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.rows)) {
+          errEl.textContent = "Generate Payroll 2.0 before exporting.";
+          return;
+        }
+        const headers = [
+          "Employee",
+          "NB time (hr)",
+          "PTO time (hr)",
+          "Sick time (hr)",
+          "Total hrs worked",
+          "Overtime (hr)",
+          "Regular pay ($)",
+          "Overtime pay ($)",
+          "Travel & Wait pay ($)",
+          "PTO pay ($)",
+          "Sick pay ($)",
+          "Holiday pay ($)",
+          "Mileage ($)",
+          "General reim. ($)",
+          "Non-discretionary bonus ($)",
+        ];
+        const lines = [
+          ["Payroll 2.0", "Non-bill file", lastPayroll20Results.fileName, "General reim. / employee", money2(lastPayroll20Results.generalReimbursement)]
+            .map(csvEscape)
+            .join(","),
+          headers.map(csvEscape).join(","),
+        ];
+        for (const row of lastPayroll20Results.rows) {
+          lines.push(
+            [
+              row.employeeName,
+              money2(row.nbTime),
+              money2(row.ptoTime),
+              money2(row.sickTime),
+              money2(row.totalHoursWorked),
+              money2(row.overtimeHours),
+              money2(row.regularPay),
+              money2(row.overtimePay),
+              money2(row.travelWaitPay),
+              money2(row.ptoPay),
+              money2(row.sickPay),
+              money2(row.holidayPay),
+              money2(row.mileageReimb),
+              money2(row.generalReimbursement),
+              money2(row.nonDiscBonus),
+            ]
+              .map(csvEscape)
+              .join(",")
+          );
+        }
+        const s = lastPayroll20Results.sums;
+        lines.push(
+          [
+            "Total",
+            "",
+            "",
+            "",
+            "",
+            "",
+            money2(s.regularPay),
+            money2(s.overtimePay),
+            money2(s.travelWaitPay),
+            money2(s.ptoPay),
+            money2(s.sickPay),
+            money2(s.holidayPay),
+            money2(s.mileage),
+            money2(s.generalReimbursement),
+            money2(s.nonDiscBonus),
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        downloadTextFile(`Payroll2.0_${yyyy}-${mm}-${dd}.csv`, "text/csv;charset=utf-8", lines.join("\n"));
+      });
+
+      document.getElementById("printPayroll20Btn").addEventListener("click", () => {
+        const errEl = document.getElementById("payroll20Error");
+        errEl.textContent = "";
+        if (!lastPayroll20Results) {
+          errEl.textContent = "Generate Payroll 2.0 before printing.";
+          return;
+        }
+        const metaText = document.getElementById("payroll20Meta").textContent || "";
+        const tableHtml = document.getElementById("payroll20Table").outerHTML;
+        const w = window.open("", "_blank");
+        if (!w) {
+          errEl.textContent = "Pop-up blocked. Please allow pop-ups to print.";
+          return;
+        }
+        w.document.write(`<!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>Payroll 2.0</title>
+              <style>
+                body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+                h2 { margin: 0 0 6px; }
+                .muted { color: #666; }
+                table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 11px; }
+                th, td { border: 1px solid #ccc; padding: 4px 6px; }
+                th { background: #f6f6f6; text-align: right; }
+                td { text-align: right; }
+                th:first-child, td:first-child { text-align: left; }
+              </style>
+            </head>
+            <body>
+              <h2>Payroll 2.0</h2>
+              <div class="muted">${escapeHtml(metaText)}</div>
               ${tableHtml}
               <script>
                 window.onload = function () { window.focus(); window.print(); };
