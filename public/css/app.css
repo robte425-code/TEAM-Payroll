@@ -82,6 +82,17 @@ button:active {
   transform: translateY(0);
 }
 
+button.btn-secondary {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+button.btn-secondary:hover {
+  background: #fafaf9;
+  border-color: #d6d3d1;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

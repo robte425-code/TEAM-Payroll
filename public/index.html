@@ -22,12 +22,14 @@
 
     <h1>TEAM Payroll Analyzer</h1>
     <p class="muted page-subtitle">
-      Upload an LNI invoice spreadsheet (`.xlsx`) from your local computer to analyze payroll totals.
+      Upload one or more LNI invoice spreadsheets (`.xlsx`). Each time you click <strong>Analyze</strong>, the
+      selected files are merged into this session&rsquo;s totals. Use <strong>Clear session</strong> to start over.
     </p>
 
     <div class="card">
-      <input id="fileInput" type="file" accept=".xlsx,.xls" />
-      <button id="analyzeBtn">Analyze Spreadsheet</button>
+      <input id="fileInput" type="file" accept=".xlsx,.xls" multiple />
+      <button type="button" id="analyzeBtn">Analyze</button>
+      <button type="button" id="clearBtn" class="btn-secondary">Clear session</button>
       <p id="status" class="muted"></p>
       <p id="error" class="error"></p>
     </div>
@@ -229,6 +231,9 @@
         return v != null && Number.isFinite(v) ? v : null;
       }
 
+      /** Rows from all spreadsheets analyzed in this browser session (until Clear). */
+      let sessionRows = [];
+
       function renderSummary(summary, rateMap) {
         const fmt = (n) => Number(n || 0).toFixed(2);
         const tbody = document.querySelector("#summaryTable tbody");
@@ -255,36 +260,50 @@
         }
       }
 
-      async function analyzeFile() {
+      async function analyzeFiles() {
         const fileInput = document.getElementById("fileInput");
         const status = document.getElementById("status");
         const error = document.getElementById("error");
         const meta = document.getElementById("meta");
-        const file = fileInput.files[0];
+        const files = fileInput.files;
 
         error.textContent = "";
         meta.textContent = "";
         status.textContent = "";
 
-        if (!file) {
-          error.textContent = "Select a spreadsheet file first.";
+        if (!files || files.length === 0) {
+          error.textContent = "Select one or more spreadsheet files first.";
           return;
         }
 
         status.textContent = "Analyzing...";
 
         try {
-          const arrayBuffer = await file.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer, { type: "array" });
-          const parsed = parseWorkbook(workbook);
-          const summary = summarizeByEmployee(parsed.rows);
-          await syncMissingEmployeesFromRows(parsed.rows);
+          const runNames = [];
+          let runRowCount = 0;
+
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: "array" });
+            const parsed = parseWorkbook(workbook);
+            sessionRows.push(...parsed.rows);
+            runNames.push(file.name);
+            runRowCount += parsed.rows.length;
+          }
+
+          const summary = summarizeByEmployee(sessionRows);
+          await syncMissingEmployeesFromRows(sessionRows);
           const rateMap = await fetchEmployeeRateMap();
           renderSummary(summary, rateMap);
 
+          const fileList =
+            runNames.length <= 3
+              ? runNames.join(", ")
+              : `${runNames.slice(0, 3).join(", ")} (+${runNames.length - 3} more)`;
           meta.textContent =
-            `File: ${file.name} | Sheet: ${parsed.worksheetName} | ` +
-            `Rows analyzed: ${parsed.rows.length} | Employees: ${summary.length}`;
+            `This run: ${fileList} (${runRowCount} rows) · ` +
+            `Session: ${sessionRows.length} rows total · Employees in summary: ${summary.length}`;
           status.textContent = "Analysis complete.";
         } catch (err) {
           error.textContent = err.message || "Failed to analyze file.";
@@ -292,7 +311,16 @@
         }
       }
 
-      document.getElementById("analyzeBtn").addEventListener("click", analyzeFile);
+      function clearSession() {
+        sessionRows = [];
+        document.getElementById("error").textContent = "";
+        document.getElementById("status").textContent = "";
+        document.getElementById("meta").textContent = "";
+        document.querySelector("#summaryTable tbody").innerHTML = "";
+      }
+
+      document.getElementById("analyzeBtn").addEventListener("click", analyzeFiles);
+      document.getElementById("clearBtn").addEventListener("click", clearSession);
     </script>
   </body>
 </html>
