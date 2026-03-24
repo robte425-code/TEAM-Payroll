@@ -110,7 +110,6 @@
           <thead>
             <tr>
               <th>Employee</th>
-              <th>Pay rate ($/hr)</th>
               <th>Billable pay ($)</th>
               <th>Travel pay ($)</th>
               <th>Mileage pay ($)</th>
@@ -739,7 +738,6 @@
 
           rowsOut.push({
             employeeName: item.employeeName,
-            payRate,
             billablePay,
             travelPay,
             mileagePay,
@@ -749,7 +747,6 @@
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(item.employeeName)}</td>
-            <td>${escapeHtml(money2(payRate))}</td>
             <td>${escapeHtml(money2(billablePay))}</td>
             <td>${escapeHtml(money2(travelPay))}</td>
             <td>${escapeHtml(money2(mileagePay))}</td>
@@ -762,7 +759,6 @@
         trTotal.style.fontWeight = "700";
         trTotal.innerHTML = `
           <td>Total</td>
-          <td>—</td>
           <td colspan="3"></td>
           <td>${escapeHtml(money2(grandTotal))}</td>
         `;
@@ -814,7 +810,6 @@
 
         const headers = [
           "Employee",
-          "Pay rate ($/hr)",
           "Billable pay ($)",
           "Travel pay ($)",
           "Mileage pay ($)",
@@ -826,7 +821,6 @@
           lines.push(
             [
               row.employeeName,
-              money2(row.payRate),
               money2(row.billablePay),
               money2(row.travelPay),
               money2(row.mileagePay),
@@ -838,7 +832,7 @@
         }
 
         lines.push(
-          ["Total", "", "", "", "", money2(lastPayroll10Results.grandTotal)]
+          ["Total", "", "", "", money2(lastPayroll10Results.grandTotal)]
             .map(csvEscape)
             .join(",")
         );
