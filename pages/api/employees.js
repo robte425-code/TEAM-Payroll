@@ -10,6 +10,7 @@ function rowToClient(row) {
     incentivePay: Boolean(row.incentive_pay),
     incentivePayRate: row.incentive_pay_rate != null ? Number(row.incentive_pay_rate) : 0,
     mileageRate: row.mileage_rate != null ? Number(row.mileage_rate) : 0,
+    travelRate: row.travel_rate != null ? Number(row.travel_rate) : 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const result = await pool.query(
         `SELECT id, provider_id, display_name, hourly_rate, incentive_pay,
-                incentive_pay_rate, mileage_rate, created_at, updated_at
+                incentive_pay_rate, mileage_rate, travel_rate, created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
       );
@@ -111,6 +112,7 @@ export default async function handler(req, res) {
       const incentivePay = toBool(body.incentivePay);
       const incentivePayRate = toNonNegativeNumber(body.incentivePayRate, 0);
       const mileageRate = toNonNegativeNumber(body.mileageRate, 0);
+      const travelRate = toNonNegativeNumber(body.travelRate, 0);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -121,11 +123,11 @@ export default async function handler(req, res) {
 
       const inserted = await pool.query(
         `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay,
-                                        incentive_pay_rate, mileage_rate)
-         VALUES ($1, $2, $3, $4, $5, $6)
+                                        incentive_pay_rate, mileage_rate, travel_rate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, provider_id, display_name, hourly_rate, incentive_pay,
-                   incentive_pay_rate, mileage_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, incentivePayRate, mileageRate]
+                   incentive_pay_rate, mileage_rate, travel_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, incentivePayRate, mileageRate, travelRate]
       );
       const row = inserted && inserted.rows && inserted.rows[0];
       if (!row) {
@@ -145,6 +147,7 @@ export default async function handler(req, res) {
       const incentivePay = toBool(body.incentivePay);
       const incentivePayRate = toNonNegativeNumber(body.incentivePayRate, 0);
       const mileageRate = toNonNegativeNumber(body.mileageRate, 0);
+      const travelRate = toNonNegativeNumber(body.travelRate, 0);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -161,11 +164,12 @@ export default async function handler(req, res) {
              incentive_pay = $4,
              incentive_pay_rate = $5,
              mileage_rate = $6,
+             travel_rate = $7,
              updated_at = now()
-         WHERE id = $7::uuid
+         WHERE id = $8::uuid
          RETURNING id, provider_id, display_name, hourly_rate, incentive_pay,
-                   incentive_pay_rate, mileage_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, incentivePayRate, mileageRate, id]
+                   incentive_pay_rate, mileage_rate, travel_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, incentivePayRate, mileageRate, travelRate, id]
       );
       if (!updated.rows.length) {
         return res.status(404).json({ error: "Employee not found" });

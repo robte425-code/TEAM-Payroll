@@ -49,6 +49,7 @@
             <th>Incentive Pay</th>
             <th>Incentive Pay rate ($)</th>
             <th>Mileage rate ($)</th>
+            <th>Travel rate ($)</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -102,6 +103,7 @@
           <td><input type="checkbox" class="js-incentive" /></td>
           <td><input type="number" class="js-incentive-rate rate-input" min="0" step="0.01" title="Incentive pay rate" /></td>
           <td><input type="number" class="js-mileage-rate rate-input" min="0" step="0.01" title="Mileage rate (e.g. per mile)" /></td>
+          <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
           <td>
             <button type="button" class="js-save">Save</button>
             <button type="button" class="js-remove">Remove</button>
@@ -119,6 +121,9 @@
         const mr = emp.mileageRate;
         tr.querySelector(".js-mileage-rate").value =
           mr === 0 || mr == null ? "" : String(mr);
+        const trt = emp.travelRate;
+        tr.querySelector(".js-travel-rate").value =
+          trt === 0 || trt == null ? "" : String(trt);
 
         tr.querySelector(".js-save").addEventListener("click", () => saveRow(tr));
         tr.querySelector(".js-remove").addEventListener("click", () => removeRow(tr));
@@ -137,7 +142,19 @@
         const incentivePayRate = iprRaw === "" ? 0 : Number(iprRaw);
         const mrRaw = tr.querySelector(".js-mileage-rate").value;
         const mileageRate = mrRaw === "" ? 0 : Number(mrRaw);
-        return { id, isNew, displayName, providerId, hourlyRate, incentivePay, incentivePayRate, mileageRate };
+        const trRaw = tr.querySelector(".js-travel-rate").value;
+        const travelRate = trRaw === "" ? 0 : Number(trRaw);
+        return {
+          id,
+          isNew,
+          displayName,
+          providerId,
+          hourlyRate,
+          incentivePay,
+          incentivePayRate,
+          mileageRate,
+          travelRate,
+        };
       }
 
       async function saveRow(tr) {
@@ -159,6 +176,10 @@
           flash("Mileage rate must be a valid non-negative number.", true);
           return;
         }
+        if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
+          flash("Travel rate must be a valid non-negative number.", true);
+          return;
+        }
 
         try {
           if (data.isNew) {
@@ -172,6 +193,7 @@
                 incentivePay: data.incentivePay,
                 incentivePayRate: data.incentivePayRate,
                 mileageRate: data.mileageRate,
+                travelRate: data.travelRate,
               }),
             });
             delete tr.dataset.new;
@@ -189,6 +211,7 @@
                 incentivePay: data.incentivePay,
                 incentivePayRate: data.incentivePayRate,
                 mileageRate: data.mileageRate,
+                travelRate: data.travelRate,
               }),
             });
             flash("Saved.");
@@ -223,7 +246,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="7" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="8" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -246,7 +269,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="7" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="8" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -263,6 +286,7 @@
             incentivePay: false,
             incentivePayRate: 0,
             mileageRate: 0,
+            travelRate: 0,
           },
           true
         );
@@ -298,6 +322,10 @@
               flash("Each mileage rate must be a valid non-negative number.", true);
               return;
             }
+            if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
+              flash("Each travel rate must be a valid non-negative number.", true);
+              return;
+            }
             if (data.isNew) {
               await apiJson(API, {
                 method: "POST",
@@ -309,6 +337,7 @@
                   incentivePay: data.incentivePay,
                   incentivePayRate: data.incentivePayRate,
                   mileageRate: data.mileageRate,
+                  travelRate: data.travelRate,
                 }),
               });
             } else {
@@ -323,6 +352,7 @@
                   incentivePay: data.incentivePay,
                   incentivePayRate: data.incentivePayRate,
                   mileageRate: data.mileageRate,
+                  travelRate: data.travelRate,
                 }),
               });
             }
@@ -375,10 +405,12 @@
                 raw.incentivePayRate ?? raw.incentive_pay_rate ?? 0
               );
               const mileageRate = Number(raw.mileageRate ?? raw.mileage_rate ?? 0);
+              const travelRate = Number(raw.travelRate ?? raw.travel_rate ?? 0);
               if (!providerId) continue;
               if (!Number.isFinite(hourlyRate) || hourlyRate < 0) continue;
               if (!Number.isFinite(incentivePayRate) || incentivePayRate < 0) continue;
               if (!Number.isFinite(mileageRate) || mileageRate < 0) continue;
+              if (!Number.isFinite(travelRate) || travelRate < 0) continue;
               try {
                 await apiJson(API, {
                   method: "POST",
@@ -390,6 +422,7 @@
                     incentivePay,
                     incentivePayRate,
                     mileageRate,
+                    travelRate,
                   }),
                 });
                 n += 1;
@@ -411,6 +444,7 @@
                         incentivePay,
                         incentivePayRate,
                         mileageRate,
+                        travelRate,
                       }),
                     });
                     n += 1;
