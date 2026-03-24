@@ -10,7 +10,7 @@ function envPresence() {
   };
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") {
@@ -38,4 +38,4 @@ module.exports = async (req, res) => {
       ...meta,
     });
   }
-};
+}

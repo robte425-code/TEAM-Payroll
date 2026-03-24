@@ -55,7 +55,7 @@ async function readJsonBody(req) {
   }
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
   if (req.method === "OPTIONS") {
@@ -164,4 +164,4 @@ module.exports = async (req, res) => {
     }
     return res.status(500).json({ error: msg });
   }
-};
+}

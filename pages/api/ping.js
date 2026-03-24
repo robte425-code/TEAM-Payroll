@@ -1,7 +1,7 @@
 /**
  * No DB — confirms /api routes are deployed (Next.js).
  */
-module.exports = (req, res) => {
+export default function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") {
@@ -14,4 +14,4 @@ module.exports = (req, res) => {
     buildTag: "team-payroll-next-v1",
     time: new Date().toISOString(),
   });
-};
+}

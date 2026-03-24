@@ -1,7 +1,7 @@
 /**
  * Deployment fingerprint (no secrets).
  */
-module.exports = (req, res) => {
+export default function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") {
@@ -15,4 +15,4 @@ module.exports = (req, res) => {
     vercelDeployment: process.env.VERCEL_DEPLOYMENT_ID || null,
     vercelUrl: process.env.VERCEL_URL || null,
   });
-};
+}
