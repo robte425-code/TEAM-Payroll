@@ -99,8 +99,8 @@
           style="width: 6.5rem"
         />
         <button type="button" id="generatePayroll10Btn">Generate Payroll 1.0</button>
-        <button type="button" id="exportPayroll10CsvBtn" disabled>Export CSV</button>
-        <button type="button" id="printPayroll10Btn" disabled>Print</button>
+        <button type="button" id="exportPayroll10CsvBtn" hidden disabled>Export CSV</button>
+        <button type="button" id="printPayroll10Btn" hidden disabled>Print</button>
       </div>
       <p id="payroll10Error" class="error"></p>
       <div id="payroll10ResultsWrap" hidden>
@@ -488,8 +488,14 @@
       function setPayroll10ExtrasEnabled(enabled) {
         const exportBtn = document.getElementById("exportPayroll10CsvBtn");
         const printBtn = document.getElementById("printPayroll10Btn");
-        if (exportBtn) exportBtn.disabled = !enabled;
-        if (printBtn) printBtn.disabled = !enabled;
+        if (exportBtn) {
+          exportBtn.hidden = !enabled;
+          exportBtn.disabled = !enabled;
+        }
+        if (printBtn) {
+          printBtn.hidden = !enabled;
+          printBtn.disabled = !enabled;
+        }
       }
 
       async function commitAdjustmentUnits(adjId, inputEl) {
