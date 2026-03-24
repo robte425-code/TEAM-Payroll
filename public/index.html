@@ -78,6 +78,50 @@
       </table>
     </div>
 
+    <div class="card" id="payroll10Card" hidden>
+      <h3>Payroll 1.0</h3>
+      <p class="muted" id="payroll10Intro">
+        Incentive threshold = working days × 8 (hours). Pay rates come from
+        <a href="./rates.html">Employee pay rates</a> (hourly, incentive flag, travel rate) and organization-wide
+        incentive and mileage rates on that page.
+      </p>
+      <div
+        class="payroll10-controls"
+        style="margin: 12px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center"
+      >
+        <label for="workingDaysInput">Number of working days in this pay period</label>
+        <input
+          type="number"
+          id="workingDaysInput"
+          min="1"
+          step="1"
+          class="rate-input"
+          style="width: 6.5rem"
+        />
+        <button type="button" id="generatePayroll10Btn">Generate Payroll 1.0</button>
+        <button type="button" id="exportPayroll10CsvBtn" disabled>Export CSV</button>
+        <button type="button" id="printPayroll10Btn" disabled>Print</button>
+      </div>
+      <p id="payroll10Error" class="error"></p>
+      <div id="payroll10ResultsWrap" hidden>
+        <h4 style="margin: 14px 0 8px; font-size: 1rem">Results</h4>
+        <p class="muted" id="payroll10Meta"></p>
+        <table id="payroll10Table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Pay rate ($/hr)</th>
+              <th>Billable pay ($)</th>
+              <th>Travel pay ($)</th>
+              <th>Mileage pay ($)</th>
+              <th>Total ($)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
       const CASE_WORK_RATE_CODES = new Set([
@@ -358,6 +402,78 @@
         return v != null && Number.isFinite(v) ? v : null;
       }
 
+      async function fetchEmployeeDetailMap() {
+        try {
+          const r = await fetch("/api/employees");
+          if (!r.ok) return new Map();
+          const data = await r.json();
+          const m = new Map();
+          for (const e of data.employees || []) {
+            m.set(String(e.providerId), {
+              hourlyRate: Number(e.hourlyRate) || 0,
+              incentivePay: Boolean(e.incentivePay),
+              travelRate: Number(e.travelRate) || 0,
+            });
+          }
+          return m;
+        } catch {
+          return new Map();
+        }
+      }
+
+      async function fetchOrgRates() {
+        try {
+          const r = await fetch("/api/settings");
+          if (!r.ok) return { incentivePayRate: 0, mileageRate: 0 };
+          const d = await r.json();
+          return {
+            incentivePayRate: Number(d.incentivePayRate) || 0,
+            mileageRate: Number(d.mileageRate) || 0,
+          };
+        } catch {
+          return { incentivePayRate: 0, mileageRate: 0 };
+        }
+      }
+
+      function allAdjustmentsResolved() {
+        for (const adj of sessionAdjResubRows) {
+          if (isAdjustmentRow(adj.adjResub) && !adj.unitsLocked) return false;
+        }
+        return true;
+      }
+
+      function clearPayroll10Results() {
+        const wd = document.getElementById("workingDaysInput");
+        if (wd) wd.value = "";
+        const wrap = document.getElementById("payroll10ResultsWrap");
+        if (wrap) wrap.hidden = true;
+        const tbody = document.querySelector("#payroll10Table tbody");
+        if (tbody) tbody.innerHTML = "";
+        const meta = document.getElementById("payroll10Meta");
+        if (meta) meta.textContent = "";
+        const err = document.getElementById("payroll10Error");
+        if (err) err.textContent = "";
+        lastPayroll10Results = null;
+        setPayroll10ExtrasEnabled(false);
+      }
+
+      function updatePayroll10Visibility() {
+        const card = document.getElementById("payroll10Card");
+        if (!card) return;
+        const summary = buildFullSummary();
+        const ready = summary.length > 0 && allAdjustmentsResolved();
+        card.hidden = !ready;
+        if (!ready) {
+          const wrap = document.getElementById("payroll10ResultsWrap");
+          if (wrap) wrap.hidden = true;
+          setPayroll10ExtrasEnabled(false);
+        }
+      }
+
+      function money2(n) {
+        return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toFixed(2);
+      }
+
       /** Rows included in totals (session, until Clear). */
       let sessionCalcRows = [];
       /** Excluded adj/resub rows with source file name (session, until Clear). */
@@ -366,6 +482,15 @@
       let nextAdjRowId = 1;
       /** Last rate map from analyze (for summary refresh after unit edits). */
       let lastRateMap = new Map();
+      /** Last generated payroll 1.0 numbers (used for CSV/Print). */
+      let lastPayroll10Results = null;
+
+      function setPayroll10ExtrasEnabled(enabled) {
+        const exportBtn = document.getElementById("exportPayroll10CsvBtn");
+        const printBtn = document.getElementById("printPayroll10Btn");
+        if (exportBtn) exportBtn.disabled = !enabled;
+        if (printBtn) printBtn.disabled = !enabled;
+      }
 
       async function commitAdjustmentUnits(adjId, inputEl) {
         const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
@@ -378,6 +503,7 @@
         }
         row.resolvedUnits = num;
         row.unitsLocked = true;
+        clearPayroll10Results();
         renderAdjResubTable(sessionAdjResubRows);
         try {
           const rateMap = await fetchEmployeeRateMap();
@@ -394,6 +520,7 @@
         tbody.innerHTML = "";
         if (!adjRows.length) {
           card.hidden = true;
+          updatePayroll10Visibility();
           return;
         }
         card.hidden = false;
@@ -434,6 +561,7 @@
           `;
           tbody.appendChild(tr);
         }
+        updatePayroll10Visibility();
       }
 
       function renderSummary(summary, rateMap) {
@@ -460,6 +588,7 @@
           `;
           tbody.appendChild(tr);
         }
+        updatePayroll10Visibility();
       }
 
       async function analyzeFiles() {
@@ -481,6 +610,7 @@
         status.textContent = "Analyzing...";
 
         try {
+          clearPayroll10Results();
           const runNames = [];
           let runRowCount = 0;
 
@@ -540,7 +670,226 @@
         document.getElementById("meta").textContent = "";
         document.querySelector("#summaryTable tbody").innerHTML = "";
         renderAdjResubTable([]);
+        clearPayroll10Results();
+        updatePayroll10Visibility();
       }
+
+      document.getElementById("generatePayroll10Btn").addEventListener("click", async () => {
+        const errEl = document.getElementById("payroll10Error");
+        errEl.textContent = "";
+        const wdRaw = document.getElementById("workingDaysInput").value;
+        const wd = parseInt(String(wdRaw).trim(), 10);
+        if (!Number.isFinite(wd) || wd < 1) {
+          errEl.textContent = "Enter a positive whole number of working days.";
+          return;
+        }
+        const incentiveThreshold = wd * 8;
+        const summary = buildFullSummary();
+        if (summary.length === 0) {
+          errEl.textContent = "No employee summary data. Analyze spreadsheets first.";
+          return;
+        }
+        if (!allAdjustmentsResolved()) {
+          errEl.textContent = "Confirm all adjustment units before generating payroll.";
+          return;
+        }
+
+        const [detailMap, orgRates] = await Promise.all([
+          fetchEmployeeDetailMap(),
+          fetchOrgRates(),
+        ]);
+
+        const tbody = document.querySelector("#payroll10Table tbody");
+        tbody.innerHTML = "";
+        let grandTotal = 0;
+        const rowsOut = [];
+
+        for (const item of summary) {
+          const caseWork = Number(item.totals.case_work || 0);
+          const report = Number(item.totals.report || 0);
+          const casePlusReports = caseWork + report;
+          const travelWait = Number(item.totals.travel_wait || 0);
+          const mileage = Number(item.totals.mileage || 0);
+
+          const pid = String(item.providerId || "").trim();
+          const det = detailMap.get(pid) || {
+            hourlyRate: 0,
+            incentivePay: false,
+            travelRate: 0,
+          };
+
+          let payRate;
+          if (det.incentivePay && casePlusReports >= incentiveThreshold) {
+            payRate = det.hourlyRate + orgRates.incentivePayRate;
+          } else {
+            payRate = det.hourlyRate;
+          }
+
+          const billablePay = casePlusReports * payRate;
+          const travelPay = travelWait * det.travelRate;
+          const mileagePay = mileage * orgRates.mileageRate;
+          const rowTotal = billablePay + travelPay + mileagePay;
+          grandTotal += rowTotal;
+
+          rowsOut.push({
+            employeeName: item.employeeName,
+            payRate,
+            billablePay,
+            travelPay,
+            mileagePay,
+            total: rowTotal,
+          });
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(item.employeeName)}</td>
+            <td>${escapeHtml(money2(payRate))}</td>
+            <td>${escapeHtml(money2(billablePay))}</td>
+            <td>${escapeHtml(money2(travelPay))}</td>
+            <td>${escapeHtml(money2(mileagePay))}</td>
+            <td>${escapeHtml(money2(rowTotal))}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+
+        const trTotal = document.createElement("tr");
+        trTotal.style.fontWeight = "700";
+        trTotal.innerHTML = `
+          <td>Total</td>
+          <td>—</td>
+          <td colspan="3"></td>
+          <td>${escapeHtml(money2(grandTotal))}</td>
+        `;
+        tbody.appendChild(trTotal);
+
+        document.getElementById("payroll10Meta").textContent =
+          `Working days: ${wd} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
+          `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit`;
+        document.getElementById("payroll10ResultsWrap").hidden = false;
+        lastPayroll10Results = {
+          workingDays: wd,
+          incentiveThreshold,
+          orgRates: {
+            incentivePayRate: orgRates.incentivePayRate,
+            mileageRate: orgRates.mileageRate,
+          },
+          rows: rowsOut,
+          grandTotal,
+        };
+        setPayroll10ExtrasEnabled(true);
+      });
+
+      function csvEscape(value) {
+        const s = String(value ?? "");
+        const needsQuotes = /[",\n\r]/.test(s);
+        const escaped = s.replace(/"/g, '""');
+        return needsQuotes ? `"${escaped}"` : escaped;
+      }
+
+      function downloadTextFile(filename, mimeType, text) {
+        const blob = new Blob([text], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      document.getElementById("exportPayroll10CsvBtn").addEventListener("click", () => {
+        const errEl = document.getElementById("payroll10Error");
+        errEl.textContent = "";
+        if (!lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) {
+          errEl.textContent = "Generate Payroll 1.0 before exporting.";
+          return;
+        }
+
+        const headers = [
+          "Employee",
+          "Pay rate ($/hr)",
+          "Billable pay ($)",
+          "Travel pay ($)",
+          "Mileage pay ($)",
+          "Total ($)",
+        ];
+
+        const lines = [headers.map(csvEscape).join(",")];
+        for (const row of lastPayroll10Results.rows) {
+          lines.push(
+            [
+              row.employeeName,
+              money2(row.payRate),
+              money2(row.billablePay),
+              money2(row.travelPay),
+              money2(row.mileagePay),
+              money2(row.total),
+            ]
+              .map(csvEscape)
+              .join(",")
+          );
+        }
+
+        lines.push(
+          ["Total", "", "", "", "", money2(lastPayroll10Results.grandTotal)]
+            .map(csvEscape)
+            .join(",")
+        );
+
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const filename = `Payroll1.0_${yyyy}-${mm}-${dd}.csv`;
+
+        downloadTextFile(filename, "text/csv;charset=utf-8", lines.join("\n"));
+      });
+
+      document.getElementById("printPayroll10Btn").addEventListener("click", () => {
+        const errEl = document.getElementById("payroll10Error");
+        errEl.textContent = "";
+        if (!lastPayroll10Results) {
+          errEl.textContent = "Generate Payroll 1.0 before printing.";
+          return;
+        }
+
+        const metaText = document.getElementById("payroll10Meta").textContent || "";
+        const tableHtml = document.getElementById("payroll10Table").outerHTML;
+
+        const w = window.open("", "_blank");
+        if (!w) {
+          errEl.textContent = "Pop-up blocked. Please allow pop-ups to print.";
+          return;
+        }
+
+        w.document.write(`<!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>Payroll 1.0</title>
+              <style>
+                body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+                h2 { margin: 0 0 6px; }
+                .muted { color: #666; }
+                table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+                th, td { border: 1px solid #ccc; padding: 6px 8px; }
+                th { background: #f6f6f6; text-align: right; }
+                td { text-align: right; }
+                th:first-child, td:first-child { text-align: left; }
+              </style>
+            </head>
+            <body>
+              <h2>Payroll 1.0</h2>
+              <div class="muted">${escapeHtml(metaText)}</div>
+              ${tableHtml}
+              <script>
+                window.onload = function () { window.focus(); window.print(); };
+              </script>
+            </body>
+          </html>`);
+        w.document.close();
+      });
 
       document.getElementById("analyzeBtn").addEventListener("click", analyzeFiles);
       document.getElementById("clearBtn").addEventListener("click", clearSession);
