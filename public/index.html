@@ -81,7 +81,8 @@
     <div class="card" id="payroll10Card" hidden>
       <h3>Payroll 1.0</h3>
       <p class="muted" id="payroll10Intro">
-        Incentive threshold = working days × 8 (hours). Pay rates come from
+        Incentive threshold = working days × 8 (hours). Enter working days and holiday days for this pay period.
+        Pay rates come from
         <a href="./rates.html">Employee pay rates</a> (hourly, incentive flag, travel rate) and organization-wide
         incentive and mileage rates on that page.
       </p>
@@ -94,6 +95,15 @@
           type="number"
           id="workingDaysInput"
           min="1"
+          step="1"
+          class="rate-input"
+          style="width: 6.5rem"
+        />
+        <label for="holidayDaysInput">Number of holiday days in this pay period</label>
+        <input
+          type="number"
+          id="holidayDaysInput"
+          min="0"
           step="1"
           class="rate-input"
           style="width: 6.5rem"
@@ -444,6 +454,8 @@
       function clearPayroll10Results() {
         const wd = document.getElementById("workingDaysInput");
         if (wd) wd.value = "";
+        const hd = document.getElementById("holidayDaysInput");
+        if (hd) hd.value = "";
         const wrap = document.getElementById("payroll10ResultsWrap");
         if (wrap) wrap.hidden = true;
         const tbody = document.querySelector("#payroll10Table tbody");
@@ -688,6 +700,12 @@
           errEl.textContent = "Enter a positive whole number of working days.";
           return;
         }
+        const hdRaw = document.getElementById("holidayDaysInput").value;
+        const holidayDays = parseInt(String(hdRaw).trim(), 10);
+        if (!Number.isFinite(holidayDays) || holidayDays < 0) {
+          errEl.textContent = "Enter a whole number of holiday days (0 or more).";
+          return;
+        }
         const incentiveThreshold = wd * 8;
         const summary = buildFullSummary();
         if (summary.length === 0) {
@@ -765,11 +783,12 @@
         tbody.appendChild(trTotal);
 
         document.getElementById("payroll10Meta").textContent =
-          `Working days: ${wd} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
+          `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
           `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit`;
         document.getElementById("payroll10ResultsWrap").hidden = false;
         lastPayroll10Results = {
           workingDays: wd,
+          holidayDays,
           incentiveThreshold,
           orgRates: {
             incentivePayRate: orgRates.incentivePayRate,
@@ -816,7 +835,12 @@
           "Total ($)",
         ];
 
-        const lines = [headers.map(csvEscape).join(",")];
+        const wdCsv = lastPayroll10Results.workingDays;
+        const hdCsv = lastPayroll10Results.holidayDays;
+        const lines = [
+          ["Payroll 1.0 inputs", "Working days", wdCsv, "Holiday days", hdCsv].map(csvEscape).join(","),
+          headers.map(csvEscape).join(","),
+        ];
         for (const row of lastPayroll10Results.rows) {
           lines.push(
             [
