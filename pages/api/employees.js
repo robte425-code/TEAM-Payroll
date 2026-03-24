@@ -1,5 +1,5 @@
 const { buffer } = require("node:stream/consumers");
-const { getSql } = require("../../lib/db");
+const { getPool } = require("../../lib/db");
 
 function rowToClient(row) {
   return {
@@ -64,21 +64,21 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  let sql;
+  let pool;
   try {
-    sql = getSql();
+    pool = getPool();
   } catch (e) {
     return res.status(500).json({ error: e.message || "Database not configured" });
   }
 
   try {
     if (req.method === "GET") {
-      const rows = await sql`
-        SELECT id, provider_id, display_name, hourly_rate, created_at, updated_at
-        FROM payroll.employees
-        ORDER BY display_name ASC, provider_id ASC
-      `;
-      return res.status(200).json({ employees: rows.map(rowToClient) });
+      const result = await pool.query(
+        `SELECT id, provider_id, display_name, hourly_rate, created_at, updated_at
+         FROM payroll.employees
+         ORDER BY display_name ASC, provider_id ASC`
+      );
+      return res.status(200).json({ employees: result.rows.map(rowToClient) });
     }
 
     const body = await readJsonBody(req);
@@ -95,12 +95,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "hourlyRate must be a non-negative number" });
       }
 
-      const inserted = await sql`
-        INSERT INTO payroll.employees (provider_id, display_name, hourly_rate)
-        VALUES (${providerId}, ${displayName}, ${hourlyRate})
-        RETURNING id, provider_id, display_name, hourly_rate, created_at, updated_at
-      `;
-      const row = inserted && inserted[0];
+      const inserted = await pool.query(
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate)
+         VALUES ($1, $2, $3)
+         RETURNING id, provider_id, display_name, hourly_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate]
+      );
+      const row = inserted && inserted.rows && inserted.rows[0];
       if (!row) {
         return res.status(500).json({ error: "Insert failed" });
       }
@@ -123,20 +124,20 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "hourlyRate must be a non-negative number" });
       }
 
-      const updated = await sql`
-        UPDATE payroll.employees
-        SET
-          provider_id = ${providerId},
-          display_name = ${displayName},
-          hourly_rate = ${hourlyRate},
-          updated_at = now()
-        WHERE id = ${id}
-        RETURNING id, provider_id, display_name, hourly_rate, created_at, updated_at
-      `;
-      if (!updated.length) {
+      const updated = await pool.query(
+        `UPDATE payroll.employees
+         SET provider_id = $1,
+             display_name = $2,
+             hourly_rate = $3,
+             updated_at = now()
+         WHERE id = $4::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, id]
+      );
+      if (!updated.rows.length) {
         return res.status(404).json({ error: "Employee not found" });
       }
-      return res.status(200).json({ employee: rowToClient(updated[0]) });
+      return res.status(200).json({ employee: rowToClient(updated.rows[0]) });
     }
 
     if (req.method === "DELETE") {
@@ -144,12 +145,13 @@ export default async function handler(req, res) {
       if (!id) {
         return res.status(400).json({ error: "Query id is required" });
       }
-      const deleted = await sql`
-        DELETE FROM payroll.employees
-        WHERE id = ${id}
-        RETURNING id
-      `;
-      if (!deleted.length) {
+      const deleted = await pool.query(
+        `DELETE FROM payroll.employees
+         WHERE id = $1::uuid
+         RETURNING id`,
+        [id]
+      );
+      if (!deleted.rows.length) {
         return res.status(404).json({ error: "Employee not found" });
       }
       return res.status(200).json({ ok: true });

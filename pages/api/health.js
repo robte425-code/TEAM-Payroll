@@ -1,4 +1,4 @@
-const { getSql, getDatabaseUrl } = require("../../lib/db");
+const { getPool, getDatabaseUrl } = require("../../lib/db");
 
 function envPresence() {
   const set = (k) => !!(process.env[k] && String(process.env[k]).trim());
@@ -24,8 +24,8 @@ export default async function handler(req, res) {
     hasResolvedUrl: !!getDatabaseUrl(),
   };
   try {
-    const sql = getSql();
-    await sql`SELECT 1 AS ok`;
+    const pool = getPool();
+    await pool.query("SELECT 1 AS ok");
     return res.status(200).json({
       ok: true,
       database: "connected",
