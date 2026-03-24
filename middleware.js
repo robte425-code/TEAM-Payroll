@@ -21,6 +21,12 @@ export default function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/", "/index.html", "/rates.html", "/api/employees/:path*"],
+  matcher: [
+    "/",
+    "/index.html",
+    "/rates.html",
+    "/api/employees/:path*",
+    "/api/settings",
+  ],
 };
 
