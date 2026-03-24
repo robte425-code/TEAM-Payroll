@@ -116,6 +116,7 @@
       <div id="payroll10ResultsWrap" hidden>
         <h4 style="margin: 14px 0 8px; font-size: 1rem">Results</h4>
         <p class="muted" id="payroll10Meta"></p>
+        <p class="muted" id="payroll10HeatherCommission" style="margin: 10px 0 0; font-weight: 600"></p>
         <table id="payroll10Table">
           <thead>
             <tr>
@@ -465,6 +466,8 @@
         if (tbody) tbody.innerHTML = "";
         const meta = document.getElementById("payroll10Meta");
         if (meta) meta.textContent = "";
+        const heather = document.getElementById("payroll10HeatherCommission");
+        if (heather) heather.textContent = "";
         const err = document.getElementById("payroll10Error");
         if (err) err.textContent = "";
         lastPayroll10Results = null;
@@ -730,6 +733,12 @@
         let grandTotal = 0;
         const rowsOut = [];
         const HOLIDAY_PAY_HOURS = 7.5;
+        const HEATHER_COMMISSION_LNI_FACTOR = 0.02;
+        const totalCaseWorkHours = summary.reduce(
+          (sum, item) => sum + Number(item.totals.case_work || 0),
+          0
+        );
+        const heatherCommission = totalCaseWorkHours * HEATHER_COMMISSION_LNI_FACTOR * orgRates.lniRate;
 
         for (const item of summary) {
           const caseWork = Number(item.totals.case_work || 0);
@@ -795,6 +804,9 @@
           `Holiday pay: holiday days × ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
           `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit · ` +
           `Org LNI rate: $${money2(orgRates.lniRate)}`;
+        document.getElementById("payroll10HeatherCommission").textContent =
+          `Commission for Heather: $${money2(heatherCommission)} ` +
+          `(sum of case work hours ${money2(totalCaseWorkHours)} × ${HEATHER_COMMISSION_LNI_FACTOR} × LNI rate $${money2(orgRates.lniRate)})`;
         document.getElementById("payroll10ResultsWrap").hidden = false;
         lastPayroll10Results = {
           workingDays: wd,
@@ -805,6 +817,8 @@
             mileageRate: orgRates.mileageRate,
             lniRate: orgRates.lniRate,
           },
+          totalCaseWorkHours,
+          heatherCommission,
           rows: rowsOut,
           grandTotal,
         };
@@ -874,6 +888,22 @@
             .join(",")
         );
 
+        const tcw = Number(lastPayroll10Results.totalCaseWorkHours) || 0;
+        const hc = Number(lastPayroll10Results.heatherCommission) || 0;
+        const lni = Number(lastPayroll10Results.orgRates?.lniRate) || 0;
+        lines.push(
+          [
+            `Commission for Heather (sum case work hr × 0.02 × LNI; ${money2(tcw)} hr, LNI $${money2(lni)})`,
+            "",
+            "",
+            "",
+            "",
+            money2(hc),
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+
         const d = new Date();
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -892,6 +922,8 @@
         }
 
         const metaText = document.getElementById("payroll10Meta").textContent || "";
+        const heatherText =
+          document.getElementById("payroll10HeatherCommission")?.textContent || "";
         const tableHtml = document.getElementById("payroll10Table").outerHTML;
 
         const w = window.open("", "_blank");
@@ -919,6 +951,11 @@
             <body>
               <h2>Payroll 1.0</h2>
               <div class="muted">${escapeHtml(metaText)}</div>
+              ${
+                heatherText
+                  ? `<div class="muted" style="margin-top:10px;font-weight:600;">${escapeHtml(heatherText)}</div>`
+                  : ""
+              }
               ${tableHtml}
               <script>
                 window.onload = function () { window.focus(); window.print(); };
