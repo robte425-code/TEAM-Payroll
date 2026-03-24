@@ -755,7 +755,7 @@
           const billablePay = casePlusReports * payRate;
           const travelPay = travelWait * det.travelRate;
           const mileagePay = mileage * orgRates.mileageRate;
-          const holidayPay = HOLIDAY_PAY_HOURS * det.ptoRate;
+          const holidayPay = holidayDays * HOLIDAY_PAY_HOURS * det.ptoRate;
           const rowTotal = billablePay + travelPay + mileagePay + holidayPay;
           grandTotal += rowTotal;
 
@@ -791,7 +791,7 @@
 
         document.getElementById("payroll10Meta").textContent =
           `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
-          `Holiday pay: ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
+          `Holiday pay: holiday days × ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
           `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit`;
         document.getElementById("payroll10ResultsWrap").hidden = false;
         lastPayroll10Results = {
