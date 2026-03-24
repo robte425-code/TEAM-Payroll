@@ -29,7 +29,6 @@
 
     <div class="card">
       <button type="button" id="addBtn">Add employee</button>
-      <button type="button" id="saveAllBtn">Save all</button>
       <button type="button" id="exportBtn">Export JSON</button>
       <label style="display: inline-block; margin-right: 8px">
         Import JSON
@@ -90,6 +89,9 @@
         </thead>
         <tbody id="ratesBody"></tbody>
       </table>
+      <p style="margin-top: 14px; margin-bottom: 0">
+        <button type="button" id="saveEmployeesBtn">Save</button>
+      </p>
     </div>
 
     <script>
@@ -145,7 +147,6 @@
           <td><input type="number" class="js-pto-rate rate-input" min="0" step="0.01" title="PTO rate" /></td>
           <td><input type="number" class="js-edu-rate rate-input" min="0" step="0.01" title="Edu rate" /></td>
           <td>
-            <button type="button" class="js-save">Save</button>
             <button type="button" class="js-remove">Remove</button>
           </td>
         `;
@@ -169,7 +170,6 @@
         tr.querySelector(".js-edu-rate").value =
           er === 0 || er == null ? "" : String(er);
 
-        tr.querySelector(".js-save").addEventListener("click", () => saveRow(tr));
         tr.querySelector(".js-remove").addEventListener("click", () => removeRow(tr));
         return tr;
       }
@@ -204,79 +204,6 @@
           eduRate,
           minWageRate,
         };
-      }
-
-      async function saveRow(tr) {
-        err.textContent = "";
-        const data = readRow(tr);
-        if (!data.providerId) {
-          flash("Provider ID is required.", true);
-          return;
-        }
-        if (!Number.isFinite(data.hourlyRate) || data.hourlyRate < 0) {
-          flash("Rate must be a valid non-negative number.", true);
-          return;
-        }
-        if (!Number.isFinite(data.minWageRate) || data.minWageRate < 0) {
-          flash("Min wage rate must be a valid non-negative number.", true);
-          return;
-        }
-        if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
-          flash("Travel rate must be a valid non-negative number.", true);
-          return;
-        }
-        if (!Number.isFinite(data.ptoRate) || data.ptoRate < 0) {
-          flash("PTO rate must be a valid non-negative number.", true);
-          return;
-        }
-        if (!Number.isFinite(data.eduRate) || data.eduRate < 0) {
-          flash("Edu rate must be a valid non-negative number.", true);
-          return;
-        }
-
-        try {
-          if (data.isNew) {
-            const res = await apiJson(API, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                providerId: data.providerId,
-                displayName: data.displayName,
-                hourlyRate: data.hourlyRate,
-                incentivePay: data.incentivePay,
-                paidHolidays: data.paidHolidays,
-                travelRate: data.travelRate,
-                ptoRate: data.ptoRate,
-                eduRate: data.eduRate,
-                minWageRate: data.minWageRate,
-              }),
-            });
-            delete tr.dataset.new;
-            tr.dataset.id = res.employee.id;
-            flash("Saved.");
-          } else {
-            await apiJson(API, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                id: data.id,
-                providerId: data.providerId,
-                displayName: data.displayName,
-                hourlyRate: data.hourlyRate,
-                incentivePay: data.incentivePay,
-                paidHolidays: data.paidHolidays,
-                travelRate: data.travelRate,
-                ptoRate: data.ptoRate,
-                eduRate: data.eduRate,
-                minWageRate: data.minWageRate,
-              }),
-            });
-            flash("Saved.");
-          }
-          await render();
-        } catch (e) {
-          flash(e.message || "Save failed.", true);
-        }
       }
 
       async function removeRow(tr) {
@@ -371,10 +298,10 @@
         );
         tbody.appendChild(tr);
         tr.querySelector(".js-name").focus();
-        flash("New row — enter details and click Save.");
+        flash("New row — enter details, then click Save below the table.");
       });
 
-      document.getElementById("saveAllBtn").addEventListener("click", async () => {
+      document.getElementById("saveEmployeesBtn").addEventListener("click", async () => {
         err.textContent = "";
         const rows = Array.from(tbody.querySelectorAll("tr[data-id], tr[data-new]"));
         if (rows.length === 0) {
@@ -444,7 +371,7 @@
               });
             }
           }
-          flash("All rows saved.");
+          flash("Saved.");
           await render();
         } catch (e) {
           flash(e.message || "Save failed.", true);
