@@ -8,6 +8,7 @@ function rowToClient(row) {
     displayName: row.display_name,
     hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : 0,
     incentivePay: Boolean(row.incentive_pay),
+    paidHolidays: Boolean(row.paid_holidays),
     travelRate: row.travel_rate != null ? Number(row.travel_rate) : 0,
     ptoRate: row.pto_rate != null ? Number(row.pto_rate) : 0,
     eduRate: row.edu_rate != null ? Number(row.edu_rate) : 0,
@@ -96,7 +97,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const result = await pool.query(
-        `SELECT id, provider_id, display_name, hourly_rate, incentive_pay,
+        `SELECT id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays,
                 travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
@@ -111,6 +112,7 @@ export default async function handler(req, res) {
       const displayName = String(body.displayName ?? "").trim();
       const hourlyRate = Number(body.hourlyRate);
       const incentivePay = toBool(body.incentivePay);
+      const paidHolidays = toBool(body.paidHolidays);
       const travelRate = toNonNegativeNumber(body.travelRate, 0);
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
@@ -124,10 +126,10 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, min_wage_rate)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, travelRate, ptoRate, eduRate, minWageRate]
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, paidHolidays, travelRate, ptoRate, eduRate, minWageRate]
       );
       const row = inserted && inserted.rows && inserted.rows[0];
       if (!row) {
@@ -145,6 +147,7 @@ export default async function handler(req, res) {
       const displayName = String(body.displayName ?? "").trim();
       const hourlyRate = Number(body.hourlyRate);
       const incentivePay = toBool(body.incentivePay);
+      const paidHolidays = toBool(body.paidHolidays);
       const travelRate = toNonNegativeNumber(body.travelRate, 0);
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
@@ -163,14 +166,15 @@ export default async function handler(req, res) {
              display_name = $2,
              hourly_rate = $3,
              incentive_pay = $4,
-             travel_rate = $5,
-             pto_rate = $6,
-             edu_rate = $7,
-             min_wage_rate = $8,
+             paid_holidays = $5,
+             travel_rate = $6,
+             pto_rate = $7,
+             edu_rate = $8,
+             min_wage_rate = $9,
              updated_at = now()
-         WHERE id = $9::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, travelRate, ptoRate, eduRate, minWageRate, id]
+         WHERE id = $10::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, paidHolidays, travelRate, ptoRate, eduRate, minWageRate, id]
       );
       if (!updated.rows.length) {
         return res.status(404).json({ error: "Employee not found" });

@@ -81,6 +81,7 @@
             <th>Rate ($ / hour)</th>
             <th>Min wage ($ / hr)</th>
             <th>Incentive Pay</th>
+            <th>Paid holidays</th>
             <th>Travel rate ($)</th>
             <th>PTO rate ($)</th>
             <th>Edu rate ($)</th>
@@ -139,6 +140,7 @@
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
           <td><input type="number" class="js-min-wage-rate rate-input" min="0" step="0.01" title="Minimum wage rate" /></td>
           <td><input type="checkbox" class="js-incentive" /></td>
+          <td><input type="checkbox" class="js-paid-holidays" title="Paid holidays" /></td>
           <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
           <td><input type="number" class="js-pto-rate rate-input" min="0" step="0.01" title="PTO rate" /></td>
           <td><input type="number" class="js-edu-rate rate-input" min="0" step="0.01" title="Edu rate" /></td>
@@ -156,6 +158,7 @@
         tr.querySelector(".js-min-wage-rate").value =
           mwr === 0 || mwr == null ? "" : String(mwr);
         tr.querySelector(".js-incentive").checked = Boolean(emp.incentivePay);
+        tr.querySelector(".js-paid-holidays").checked = Boolean(emp.paidHolidays);
         const trt = emp.travelRate;
         tr.querySelector(".js-travel-rate").value =
           trt === 0 || trt == null ? "" : String(trt);
@@ -181,6 +184,7 @@
         const minWageRaw = tr.querySelector(".js-min-wage-rate").value;
         const minWageRate = minWageRaw === "" ? 0 : Number(minWageRaw);
         const incentivePay = tr.querySelector(".js-incentive").checked;
+        const paidHolidays = tr.querySelector(".js-paid-holidays").checked;
         const trRaw = tr.querySelector(".js-travel-rate").value;
         const travelRate = trRaw === "" ? 0 : Number(trRaw);
         const ptoRaw = tr.querySelector(".js-pto-rate").value;
@@ -194,6 +198,7 @@
           providerId,
           hourlyRate,
           incentivePay,
+          paidHolidays,
           travelRate,
           ptoRate,
           eduRate,
@@ -239,6 +244,7 @@
                 displayName: data.displayName,
                 hourlyRate: data.hourlyRate,
                 incentivePay: data.incentivePay,
+                paidHolidays: data.paidHolidays,
                 travelRate: data.travelRate,
                 ptoRate: data.ptoRate,
                 eduRate: data.eduRate,
@@ -258,6 +264,7 @@
                 displayName: data.displayName,
                 hourlyRate: data.hourlyRate,
                 incentivePay: data.incentivePay,
+                paidHolidays: data.paidHolidays,
                 travelRate: data.travelRate,
                 ptoRate: data.ptoRate,
                 eduRate: data.eduRate,
@@ -296,7 +303,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="8" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="9" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -339,7 +346,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="8" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="9" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -354,6 +361,7 @@
             providerId: "",
             hourlyRate: 0,
             incentivePay: false,
+            paidHolidays: false,
             travelRate: 0,
             ptoRate: 0,
             eduRate: 0,
@@ -410,6 +418,7 @@
                   displayName: data.displayName,
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
+                  paidHolidays: data.paidHolidays,
                   travelRate: data.travelRate,
                   ptoRate: data.ptoRate,
                   eduRate: data.eduRate,
@@ -426,6 +435,7 @@
                   displayName: data.displayName,
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
+                  paidHolidays: data.paidHolidays,
                   travelRate: data.travelRate,
                   ptoRate: data.ptoRate,
                   eduRate: data.eduRate,
@@ -534,6 +544,9 @@
               const incentivePay = Boolean(
                 raw.incentivePay ?? raw.incentive_pay ?? false
               );
+              const paidHolidays = Boolean(
+                raw.paidHolidays ?? raw.paid_holidays ?? false
+              );
               const travelRate = Number(raw.travelRate ?? raw.travel_rate ?? 0);
               const ptoRate = Number(raw.ptoRate ?? raw.pto_rate ?? 0);
               const eduRate = Number(raw.eduRate ?? raw.edu_rate ?? 0);
@@ -555,6 +568,7 @@
                     displayName,
                     hourlyRate,
                     incentivePay,
+                    paidHolidays,
                     travelRate,
                     ptoRate,
                     eduRate,
@@ -578,6 +592,7 @@
                         displayName,
                         hourlyRate,
                         incentivePay,
+                        paidHolidays,
                         travelRate,
                         ptoRate,
                         eduRate,

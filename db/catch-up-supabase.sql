@@ -83,3 +83,9 @@ ADD COLUMN IF NOT EXISTS min_wage_rate NUMERIC(12, 4) NOT NULL DEFAULT 0
   CHECK (min_wage_rate >= 0);
 
 COMMENT ON COLUMN payroll.employees.min_wage_rate IS 'Minimum wage rate for this employee (e.g. dollars per hour).';
+
+-- ========== 009_add_paid_holidays.sql ==========
+ALTER TABLE payroll.employees
+ADD COLUMN IF NOT EXISTS paid_holidays BOOLEAN NOT NULL DEFAULT FALSE;
+
+COMMENT ON COLUMN payroll.employees.paid_holidays IS 'Whether this employee receives paid holidays.';
