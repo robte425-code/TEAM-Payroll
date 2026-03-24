@@ -4,6 +4,19 @@ const { getRateCodeCategory } = require("./rateCodes");
 
 const REQUIRED_HEADERS = ["Work Done By", "Provider ID", "Rate Code", "Units", "Adj/ Resub"];
 
+/**
+ * Rows flagged as adjustment (A) or resubmission (R) in Adj/Resub are excluded from payroll totals.
+ * The cell must contain A and/or R as the only letters (e.g. A, R, A/R), not words like "N/A" or "WRONG".
+ */
+function isAdjustmentOrResubmission(adjVal) {
+  const s = String(adjVal ?? "").trim();
+  if (!s) return false;
+  const letters = s.replace(/[^a-z]/gi, "");
+  if (!letters) return false;
+  if (!/^[AR]+$/i.test(letters)) return false;
+  return /A/i.test(letters) || /R/i.test(letters);
+}
+
 function normalizeRow(rawRow = {}) {
   const employeeName = String(rawRow["Work Done By"] || "").trim();
   const providerId = String(rawRow["Provider ID"] || "").trim();
@@ -47,11 +60,19 @@ function parseInvoiceFile(filePath) {
     .map(normalizeRow)
     .filter((row) => row.employeeName || row.providerId || row.rateCode);
 
+  const calculationRows = normalizedRows.filter(
+    (row) => !isAdjustmentOrResubmission(row.adjustmentOrResubmission)
+  );
+  const adjResubRows = normalizedRows.filter((row) =>
+    isAdjustmentOrResubmission(row.adjustmentOrResubmission)
+  );
+
   return {
     sourceFile: path.basename(filePath),
     worksheetName: firstSheetName,
     totalRows: normalizedRows.length,
-    rows: normalizedRows,
+    rows: calculationRows,
+    adjResubRows,
   };
 }
 
@@ -106,4 +127,5 @@ function summarizeByEmployeeAndCategory(normalizedRows = []) {
 module.exports = {
   parseInvoiceFile,
   summarizeByEmployeeAndCategory,
+  isAdjustmentOrResubmission,
 };

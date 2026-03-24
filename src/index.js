@@ -18,7 +18,10 @@ function main() {
       sourceFile: parsed.sourceFile,
       worksheetName: parsed.worksheetName,
       totalRows: parsed.totalRows,
+      rowsUsedInSummary: parsed.rows.length,
+      adjResubExcludedCount: parsed.adjResubRows.length,
       employees: summary,
+      adjResubRows: parsed.adjResubRows,
     },
     null,
     2

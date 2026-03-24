@@ -53,6 +53,27 @@
       </table>
     </div>
 
+    <div class="card" id="adjResubCard" hidden>
+      <h3>Adjustments &amp; resubmissions (excluded from totals)</h3>
+      <p class="muted">
+        Rows where <strong>Adj / Resub</strong> is only an <strong>A</strong> and/or <strong>R</strong> flag (e.g. A, R, A/R) are
+        not included in the summary above.
+      </p>
+      <table id="adjResubTable">
+        <thead>
+          <tr>
+            <th>Source file</th>
+            <th>Employee</th>
+            <th>Provider ID</th>
+            <th>Rate Code</th>
+            <th>Units</th>
+            <th>Adj / Resub</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
       const CASE_WORK_RATE_CODES = new Set([
@@ -76,11 +97,24 @@
         return "other";
       }
 
+      /**
+       * Adj/Resub: only A/R flags — letters in the cell must be A and/or R only (e.g. A, R, A/R), not "N/A".
+       */
+      function isAdjustmentOrResubmission(adjVal) {
+        const s = String(adjVal ?? "").trim();
+        if (!s) return false;
+        const letters = s.replace(/[^a-z]/gi, "");
+        if (!letters) return false;
+        if (!/^[AR]+$/i.test(letters)) return false;
+        return /A/i.test(letters) || /R/i.test(letters);
+      }
+
       function normalizeRow(rawRow) {
         const employeeName = String(rawRow["Work Done By"] || "").trim();
         const providerId = String(rawRow["Provider ID"] || "").trim();
         const rateCode = String(rawRow["Rate Code"] || "").trim().toUpperCase();
         const unitsRaw = Number(rawRow["Units"] || 0);
+        const adjResub = String(rawRow["Adj/ Resub"] || "").trim();
 
         return {
           employeeName,
@@ -88,6 +122,7 @@
           rateCode,
           rateCodeCategory: getRateCodeCategory(rateCode),
           units: Number.isFinite(unitsRaw) ? unitsRaw : 0,
+          adjResub,
         };
       }
 
@@ -231,8 +266,38 @@
         return v != null && Number.isFinite(v) ? v : null;
       }
 
-      /** Rows from all spreadsheets analyzed in this browser session (until Clear). */
-      let sessionRows = [];
+      /** Rows included in totals (session, until Clear). */
+      let sessionCalcRows = [];
+      /** Excluded adj/resub rows with source file name (session, until Clear). */
+      let sessionAdjResubRows = [];
+
+      function renderAdjResubTable(adjRows) {
+        const card = document.getElementById("adjResubCard");
+        const tbody = document.querySelector("#adjResubTable tbody");
+        tbody.innerHTML = "";
+        if (!adjRows.length) {
+          card.hidden = true;
+          return;
+        }
+        card.hidden = false;
+        const sorted = [...adjRows].sort((a, b) => {
+          const byName = a.employeeName.localeCompare(b.employeeName);
+          if (byName !== 0) return byName;
+          return a.sourceFile.localeCompare(b.sourceFile);
+        });
+        for (const r of sorted) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(r.sourceFile)}</td>
+            <td>${escapeHtml(r.employeeName)}</td>
+            <td>${escapeHtml(r.providerId)}</td>
+            <td>${escapeHtml(r.rateCode)}</td>
+            <td>${escapeHtml(String(r.units))}</td>
+            <td>${escapeHtml(r.adjResub)}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
 
       function renderSummary(summary, rateMap) {
         const fmt = (n) => Number(n || 0).toFixed(2);
@@ -287,15 +352,26 @@
             const arrayBuffer = await file.arrayBuffer();
             const workbook = XLSX.read(arrayBuffer, { type: "array" });
             const parsed = parseWorkbook(workbook);
-            sessionRows.push(...parsed.rows);
             runNames.push(file.name);
             runRowCount += parsed.rows.length;
+            for (const row of parsed.rows) {
+              const withFile = { ...row, sourceFile: file.name };
+              if (isAdjustmentOrResubmission(row.adjResub)) {
+                sessionAdjResubRows.push(withFile);
+              } else {
+                sessionCalcRows.push(withFile);
+              }
+            }
           }
 
-          const summary = summarizeByEmployee(sessionRows);
-          await syncMissingEmployeesFromRows(sessionRows);
+          const summary = summarizeByEmployee(sessionCalcRows);
+          const allRowsForSync = sessionCalcRows.concat(
+            sessionAdjResubRows.map(({ sourceFile, ...rest }) => rest)
+          );
+          await syncMissingEmployeesFromRows(allRowsForSync);
           const rateMap = await fetchEmployeeRateMap();
           renderSummary(summary, rateMap);
+          renderAdjResubTable(sessionAdjResubRows);
 
           const fileList =
             runNames.length <= 3
@@ -303,7 +379,8 @@
               : `${runNames.slice(0, 3).join(", ")} (+${runNames.length - 3} more)`;
           meta.textContent =
             `This run: ${fileList} (${runRowCount} rows) · ` +
-            `Session: ${sessionRows.length} rows total · Employees in summary: ${summary.length}`;
+            `Session: ${sessionCalcRows.length} rows in totals · ` +
+            `${sessionAdjResubRows.length} adj/resub excluded · Employees: ${summary.length}`;
           status.textContent = "Analysis complete.";
         } catch (err) {
           error.textContent = err.message || "Failed to analyze file.";
@@ -312,11 +389,13 @@
       }
 
       function clearSession() {
-        sessionRows = [];
+        sessionCalcRows = [];
+        sessionAdjResubRows = [];
         document.getElementById("error").textContent = "";
         document.getElementById("status").textContent = "";
         document.getElementById("meta").textContent = "";
         document.querySelector("#summaryTable tbody").innerHTML = "";
+        renderAdjResubTable([]);
       }
 
       document.getElementById("analyzeBtn").addEventListener("click", analyzeFiles);
