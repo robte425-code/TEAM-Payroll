@@ -40,12 +40,9 @@
             <th>Employee</th>
             <th>Provider ID</th>
             <th>Hourly rate ($)</th>
-            <th>Case Work</th>
+            <th>Case Hours</th>
             <th>Travel & Wait</th>
             <th>Mileage</th>
-            <th>Report</th>
-            <th>Unmapped Codes</th>
-            <th>Rows</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -183,6 +180,47 @@
         }
       }
 
+      async function syncMissingEmployeesFromRows(rows) {
+        let list = [];
+        try {
+          const r = await fetch("/api/employees");
+          if (!r.ok) return;
+          const data = await r.json();
+          list = data.employees || [];
+        } catch {
+          return;
+        }
+
+        const existingProviderIds = new Set(
+          list.map((e) => String(e.providerId || "").trim()).filter(Boolean)
+        );
+
+        const seenInSheet = new Set();
+        for (const row of rows) {
+          const providerId = String(row.providerId || "").trim();
+          if (!providerId) continue;
+          if (existingProviderIds.has(providerId)) continue;
+          if (seenInSheet.has(providerId)) continue;
+          seenInSheet.add(providerId);
+
+          const displayName = String(row.employeeName || "").trim();
+          try {
+            await fetch("/api/employees", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                providerId,
+                displayName,
+                hourlyRate: 0,
+              }),
+            });
+            existingProviderIds.add(providerId);
+          } catch {
+            // Ignore best-effort sync failures; analysis should still render.
+          }
+        }
+      }
+
       function hourlyRateFromMap(rateMap, providerId) {
         if (!providerId || !rateMap) return null;
         const v = rateMap.get(String(providerId));
@@ -191,18 +229,11 @@
 
       function renderSummary(summary, rateMap) {
         const fmt = (n) => Number(n || 0).toFixed(2);
-        const renderOtherCodes = (otherCodes) => {
-          const entries = Object.entries(otherCodes || {});
-          if (!entries.length) return '<span class="muted">—</span>';
-          return entries
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([code, value]) => `${escapeHtml(code)}: ${fmt(value)}`)
-            .join("<br/>");
-        };
         const tbody = document.querySelector("#summaryTable tbody");
         tbody.innerHTML = "";
 
         for (const item of summary) {
+          const caseHours = Number(item.totals.case_work || 0) + Number(item.totals.report || 0);
           const rate = hourlyRateFromMap(rateMap, item.providerId);
           const rateCell =
             rate === null ? '<span class="muted">—</span>' : escapeHtml(rate.toFixed(2));
@@ -211,12 +242,9 @@
             <td>${escapeHtml(item.employeeName)}</td>
             <td>${escapeHtml(item.providerId)}</td>
             <td>${rateCell}</td>
-            <td>${fmt(item.totals.case_work)}</td>
+            <td>${fmt(caseHours)}</td>
             <td>${fmt(item.totals.travel_wait)}</td>
             <td>${fmt(item.totals.mileage)}</td>
-            <td>${fmt(item.totals.report)}</td>
-            <td>${renderOtherCodes(item.otherCodes)}</td>
-            <td>${item.rowCount}</td>
           `;
           tbody.appendChild(tr);
         }
@@ -245,6 +273,7 @@
           const workbook = XLSX.read(arrayBuffer, { type: "array" });
           const parsed = parseWorkbook(workbook);
           const summary = summarizeByEmployee(parsed.rows);
+          await syncMissingEmployeesFromRows(parsed.rows);
           const rateMap = await fetchEmployeeRateMap();
           renderSummary(summary, rateMap);
 
