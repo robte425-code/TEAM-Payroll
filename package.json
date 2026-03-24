@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "migrate": "node scripts/apply-migrations.js",
     "parse:sample": "node src/index.js ./LniInvoiceVerification.xlsx",
     "vercel:dev": "vercel dev"
   },
