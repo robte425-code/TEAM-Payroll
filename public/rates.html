@@ -82,6 +82,8 @@
             <th>Rate ($ / hour)</th>
             <th>Incentive Pay</th>
             <th>Travel rate ($)</th>
+            <th>PTO rate ($)</th>
+            <th>Edu rate ($)</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -135,6 +137,8 @@
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
           <td><input type="checkbox" class="js-incentive" /></td>
           <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
+          <td><input type="number" class="js-pto-rate rate-input" min="0" step="0.01" title="PTO rate" /></td>
+          <td><input type="number" class="js-edu-rate rate-input" min="0" step="0.01" title="Edu rate" /></td>
           <td>
             <button type="button" class="js-save">Save</button>
             <button type="button" class="js-remove">Remove</button>
@@ -149,6 +153,12 @@
         const trt = emp.travelRate;
         tr.querySelector(".js-travel-rate").value =
           trt === 0 || trt == null ? "" : String(trt);
+        const pr = emp.ptoRate;
+        tr.querySelector(".js-pto-rate").value =
+          pr === 0 || pr == null ? "" : String(pr);
+        const er = emp.eduRate;
+        tr.querySelector(".js-edu-rate").value =
+          er === 0 || er == null ? "" : String(er);
 
         tr.querySelector(".js-save").addEventListener("click", () => saveRow(tr));
         tr.querySelector(".js-remove").addEventListener("click", () => removeRow(tr));
@@ -165,6 +175,10 @@
         const incentivePay = tr.querySelector(".js-incentive").checked;
         const trRaw = tr.querySelector(".js-travel-rate").value;
         const travelRate = trRaw === "" ? 0 : Number(trRaw);
+        const ptoRaw = tr.querySelector(".js-pto-rate").value;
+        const ptoRate = ptoRaw === "" ? 0 : Number(ptoRaw);
+        const eduRaw = tr.querySelector(".js-edu-rate").value;
+        const eduRate = eduRaw === "" ? 0 : Number(eduRaw);
         return {
           id,
           isNew,
@@ -173,6 +187,8 @@
           hourlyRate,
           incentivePay,
           travelRate,
+          ptoRate,
+          eduRate,
         };
       }
 
@@ -191,6 +207,14 @@
           flash("Travel rate must be a valid non-negative number.", true);
           return;
         }
+        if (!Number.isFinite(data.ptoRate) || data.ptoRate < 0) {
+          flash("PTO rate must be a valid non-negative number.", true);
+          return;
+        }
+        if (!Number.isFinite(data.eduRate) || data.eduRate < 0) {
+          flash("Edu rate must be a valid non-negative number.", true);
+          return;
+        }
 
         try {
           if (data.isNew) {
@@ -203,6 +227,8 @@
                 hourlyRate: data.hourlyRate,
                 incentivePay: data.incentivePay,
                 travelRate: data.travelRate,
+                ptoRate: data.ptoRate,
+                eduRate: data.eduRate,
               }),
             });
             delete tr.dataset.new;
@@ -219,6 +245,8 @@
                 hourlyRate: data.hourlyRate,
                 incentivePay: data.incentivePay,
                 travelRate: data.travelRate,
+                ptoRate: data.ptoRate,
+                eduRate: data.eduRate,
               }),
             });
             flash("Saved.");
@@ -253,7 +281,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="6" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="8" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -296,7 +324,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="6" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="8" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -312,6 +340,8 @@
             hourlyRate: 0,
             incentivePay: false,
             travelRate: 0,
+            ptoRate: 0,
+            eduRate: 0,
           },
           true
         );
@@ -343,6 +373,14 @@
               flash("Each travel rate must be a valid non-negative number.", true);
               return;
             }
+            if (!Number.isFinite(data.ptoRate) || data.ptoRate < 0) {
+              flash("Each PTO rate must be a valid non-negative number.", true);
+              return;
+            }
+            if (!Number.isFinite(data.eduRate) || data.eduRate < 0) {
+              flash("Each Edu rate must be a valid non-negative number.", true);
+              return;
+            }
             if (data.isNew) {
               await apiJson(API, {
                 method: "POST",
@@ -353,6 +391,8 @@
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
                   travelRate: data.travelRate,
+                  ptoRate: data.ptoRate,
+                  eduRate: data.eduRate,
                 }),
               });
             } else {
@@ -366,6 +406,8 @@
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
                   travelRate: data.travelRate,
+                  ptoRate: data.ptoRate,
+                  eduRate: data.eduRate,
                 }),
               });
             }
@@ -471,9 +513,13 @@
                 raw.incentivePay ?? raw.incentive_pay ?? false
               );
               const travelRate = Number(raw.travelRate ?? raw.travel_rate ?? 0);
+              const ptoRate = Number(raw.ptoRate ?? raw.pto_rate ?? 0);
+              const eduRate = Number(raw.eduRate ?? raw.edu_rate ?? 0);
               if (!providerId) continue;
               if (!Number.isFinite(hourlyRate) || hourlyRate < 0) continue;
               if (!Number.isFinite(travelRate) || travelRate < 0) continue;
+              if (!Number.isFinite(ptoRate) || ptoRate < 0) continue;
+              if (!Number.isFinite(eduRate) || eduRate < 0) continue;
               try {
                 await apiJson(API, {
                   method: "POST",
@@ -484,6 +530,8 @@
                     hourlyRate,
                     incentivePay,
                     travelRate,
+                    ptoRate,
+                    eduRate,
                   }),
                 });
                 n += 1;
@@ -504,6 +552,8 @@
                         hourlyRate,
                         incentivePay,
                         travelRate,
+                        ptoRate,
+                        eduRate,
                       }),
                     });
                     n += 1;

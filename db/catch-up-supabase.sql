@@ -64,3 +64,15 @@ DROP COLUMN IF EXISTS mileage_rate;
 -- ========== 006_drop_employee_incentive_pay_rate.sql ==========
 ALTER TABLE payroll.employees
 DROP COLUMN IF EXISTS incentive_pay_rate;
+
+-- ========== 007_add_pto_edu_rates.sql ==========
+ALTER TABLE payroll.employees
+ADD COLUMN IF NOT EXISTS pto_rate NUMERIC(12, 4) NOT NULL DEFAULT 0
+  CHECK (pto_rate >= 0);
+
+ALTER TABLE payroll.employees
+ADD COLUMN IF NOT EXISTS edu_rate NUMERIC(12, 4) NOT NULL DEFAULT 0
+  CHECK (edu_rate >= 0);
+
+COMMENT ON COLUMN payroll.employees.pto_rate IS 'PTO pay rate (e.g. dollars per hour).';
+COMMENT ON COLUMN payroll.employees.edu_rate IS 'Education (Edu) pay rate (e.g. dollars per hour).';
