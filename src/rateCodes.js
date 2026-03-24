@@ -11,10 +11,14 @@ const CASE_WORK_RATE_CODES = new Set([
   "0823V",
   "0824V",
   "0830V",
+  "0831V",
+  "0844V",
   "0840V",
   "0841V",
   "0842V",
   "0845V",
+  "0808V",
+  "0809V",
 ]);
 
 const MILEAGE_RATE_CODES = new Set(["0893V", "0894V"]);
