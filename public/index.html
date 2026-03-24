@@ -435,14 +435,15 @@
       async function fetchOrgRates() {
         try {
           const r = await fetch("/api/settings");
-          if (!r.ok) return { incentivePayRate: 0, mileageRate: 0 };
+          if (!r.ok) return { incentivePayRate: 0, mileageRate: 0, lniRate: 0 };
           const d = await r.json();
           return {
             incentivePayRate: Number(d.incentivePayRate) || 0,
             mileageRate: Number(d.mileageRate) || 0,
+            lniRate: Number(d.lniRate) || 0,
           };
         } catch {
-          return { incentivePayRate: 0, mileageRate: 0 };
+          return { incentivePayRate: 0, mileageRate: 0, lniRate: 0 };
         }
       }
 
@@ -792,7 +793,8 @@
         document.getElementById("payroll10Meta").textContent =
           `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
           `Holiday pay: holiday days × ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
-          `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit`;
+          `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit · ` +
+          `Org LNI rate: $${money2(orgRates.lniRate)}`;
         document.getElementById("payroll10ResultsWrap").hidden = false;
         lastPayroll10Results = {
           workingDays: wd,
@@ -801,6 +803,7 @@
           orgRates: {
             incentivePayRate: orgRates.incentivePayRate,
             mileageRate: orgRates.mileageRate,
+            lniRate: orgRates.lniRate,
           },
           rows: rowsOut,
           grandTotal,

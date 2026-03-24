@@ -3,6 +3,7 @@ const { getPool } = require("../../lib/db");
 
 const MILEAGE_KEY = "mileage_rate";
 const INCENTIVE_PAY_RATE_KEY = "incentive_pay_rate";
+const LNI_RATE_KEY = "lni_rate";
 
 function toNonNegativeNumber(value, fallback = 0) {
   const n = Number(value);
@@ -53,7 +54,7 @@ function parseRateFromRow(value) {
 async function fetchOrgRates(pool) {
   const result = await pool.query(
     `SELECT key, value FROM payroll.app_kv WHERE key = ANY($1::text[])`,
-    [[MILEAGE_KEY, INCENTIVE_PAY_RATE_KEY]]
+    [[MILEAGE_KEY, INCENTIVE_PAY_RATE_KEY, LNI_RATE_KEY]]
   );
   const map = {};
   for (const row of result.rows) {
@@ -62,6 +63,7 @@ async function fetchOrgRates(pool) {
   return {
     mileageRate: map[MILEAGE_KEY] ?? 0,
     incentivePayRate: map[INCENTIVE_PAY_RATE_KEY] ?? 0,
+    lniRate: map[LNI_RATE_KEY] ?? 0,
   };
 }
 
@@ -107,9 +109,13 @@ export default async function handler(req, res) {
         await upsertRate(pool, INCENTIVE_PAY_RATE_KEY, toNonNegativeNumber(body.incentivePayRate, 0));
         updated = true;
       }
+      if (body.lniRate !== undefined) {
+        await upsertRate(pool, LNI_RATE_KEY, toNonNegativeNumber(body.lniRate, 0));
+        updated = true;
+      }
       if (!updated) {
         return res.status(400).json({
-          error: "Provide mileageRate and/or incentivePayRate to update",
+          error: "Provide mileageRate, incentivePayRate, and/or lniRate to update",
         });
       }
       const rates = await fetchOrgRates(pool);

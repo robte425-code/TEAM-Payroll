@@ -41,7 +41,7 @@
     <div class="card">
       <h3 class="rates-section-title" style="margin-top: 0">Organization-wide rates</h3>
       <p class="muted" style="margin-bottom: 12px">
-        Incentive pay rate and mileage rate are the same for everyone. Saved separately from employee rows.
+        Organization-wide rates are the same for everyone. Saved separately from employee rows.
       </p>
       <div style="margin-bottom: 10px">
         <label for="globalIncentivePayRate" class="muted" style="display: inline-block; width: 11rem"
@@ -63,6 +63,19 @@
         <input
           type="number"
           id="globalMileageRate"
+          class="rate-input"
+          min="0"
+          step="0.01"
+          style="width: 8rem; margin-right: 16px"
+        />
+      </div>
+      <div style="margin-bottom: 12px">
+        <label for="globalLniRate" class="muted" style="display: inline-block; width: 11rem"
+          >LNI rate ($)</label
+        >
+        <input
+          type="number"
+          id="globalLniRate"
           class="rate-input"
           min="0"
           step="0.01"
@@ -247,6 +260,7 @@
       async function loadGlobalSettings() {
         const mileageEl = document.getElementById("globalMileageRate");
         const incentiveEl = document.getElementById("globalIncentivePayRate");
+        const lniEl = document.getElementById("globalLniRate");
         try {
           const d = await apiJson(SETTINGS_API, { method: "GET" });
           if (mileageEl) {
@@ -257,9 +271,14 @@
             const r = d.incentivePayRate;
             incentiveEl.value = r === 0 || r == null || r === "" ? "" : String(r);
           }
+          if (lniEl) {
+            const r = d.lniRate;
+            lniEl.value = r === 0 || r == null || r === "" ? "" : String(r);
+          }
         } catch {
           if (mileageEl) mileageEl.value = "";
           if (incentiveEl) incentiveEl.value = "";
+          if (lniEl) lniEl.value = "";
         }
       }
 
@@ -399,10 +418,13 @@
         err.textContent = "";
         const mileageRaw = document.getElementById("globalMileageRate");
         const incentiveRaw = document.getElementById("globalIncentivePayRate");
+        const lniRaw = document.getElementById("globalLniRate");
         const mr = mileageRaw ? String(mileageRaw.value).trim() : "";
         const ir = incentiveRaw ? String(incentiveRaw.value).trim() : "";
+        const lr = lniRaw ? String(lniRaw.value).trim() : "";
         const mileageRate = mr === "" ? 0 : Number(mr);
         const incentivePayRate = ir === "" ? 0 : Number(ir);
+        const lniRate = lr === "" ? 0 : Number(lr);
         if (!Number.isFinite(mileageRate) || mileageRate < 0) {
           flash("Mileage rate must be a valid non-negative number.", true);
           return;
@@ -411,11 +433,15 @@
           flash("Incentive Pay rate must be a valid non-negative number.", true);
           return;
         }
+        if (!Number.isFinite(lniRate) || lniRate < 0) {
+          flash("LNI rate must be a valid non-negative number.", true);
+          return;
+        }
         try {
           await apiJson(SETTINGS_API, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mileageRate, incentivePayRate }),
+            body: JSON.stringify({ mileageRate, incentivePayRate, lniRate }),
           });
           flash("Organization rates saved.");
         } catch (e) {
@@ -432,6 +458,7 @@
           const payload = {
             incentivePayRate: Number(settings.incentivePayRate) || 0,
             mileageRate: Number(settings.mileageRate) || 0,
+            lniRate: Number(settings.lniRate) || 0,
             employees: data.employees || [],
           };
           const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -464,11 +491,15 @@
             const globalMileage = Number(
               parsed.mileageRate ?? parsed.mileage_rate ?? NaN
             );
+            const globalLni = Number(parsed.lniRate ?? parsed.lni_rate ?? NaN);
             if (Number.isFinite(globalIncentive) && globalIncentive >= 0) {
               patch.incentivePayRate = globalIncentive;
             }
             if (Number.isFinite(globalMileage) && globalMileage >= 0) {
               patch.mileageRate = globalMileage;
+            }
+            if (Number.isFinite(globalLni) && globalLni >= 0) {
+              patch.lniRate = globalLni;
             }
             if (Object.keys(patch).length) {
               await apiJson(SETTINGS_API, {
