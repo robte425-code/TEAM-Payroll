@@ -39,9 +39,10 @@
         <thead>
           <tr>
             <th>Employee</th>
-            <th>Provider ID</th>
             <th>Hourly rate ($)</th>
-            <th>Case Hours</th>
+            <th>Case work</th>
+            <th>Report</th>
+            <th>Case + Reports</th>
             <th>Travel & Wait</th>
             <th>Mileage</th>
           </tr>
@@ -234,16 +235,19 @@
         tbody.innerHTML = "";
 
         for (const item of summary) {
-          const caseHours = Number(item.totals.case_work || 0) + Number(item.totals.report || 0);
+          const caseWork = Number(item.totals.case_work || 0);
+          const report = Number(item.totals.report || 0);
+          const casePlusReports = caseWork + report;
           const rate = hourlyRateFromMap(rateMap, item.providerId);
           const rateCell =
             rate === null ? '<span class="muted">—</span>' : escapeHtml(rate.toFixed(2));
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(item.employeeName)}</td>
-            <td>${escapeHtml(item.providerId)}</td>
             <td>${rateCell}</td>
-            <td>${fmt(caseHours)}</td>
+            <td>${fmt(caseWork)}</td>
+            <td>${fmt(report)}</td>
+            <td>${fmt(casePlusReports)}</td>
             <td>${fmt(item.totals.travel_wait)}</td>
             <td>${fmt(item.totals.mileage)}</td>
           `;
