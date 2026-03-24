@@ -78,7 +78,6 @@
         <thead>
           <tr>
             <th>Employee name</th>
-            <th>Provider ID</th>
             <th>Rate ($ / hour)</th>
             <th>Incentive Pay</th>
             <th>Travel rate ($)</th>
@@ -131,9 +130,11 @@
         } else {
           tr.dataset.id = emp.id;
         }
+        const pidField = isNew
+          ? '<input type="text" class="js-name" placeholder="Employee name" /><input type="text" class="js-pid" placeholder="Provider ID" autocomplete="off" style="display:block;margin-top:8px;width:min(100%,20rem)" />'
+          : '<input type="hidden" class="js-pid" /><input type="text" class="js-name" />';
         tr.innerHTML = `
-          <td><input type="text" class="js-name" /></td>
-          <td><input type="text" class="js-pid" /></td>
+          <td>${pidField}</td>
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
           <td><input type="checkbox" class="js-incentive" /></td>
           <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
@@ -281,7 +282,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="8" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="7" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -324,7 +325,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="8" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="7" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
