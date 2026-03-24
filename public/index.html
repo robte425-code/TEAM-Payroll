@@ -146,22 +146,29 @@
         <strong>PTO time</strong> — activity <strong>Z PTO</strong>.
         <strong>Sick time</strong> — activity <strong>Z Sick time</strong>.
       </p>
+      <div id="payroll20GenReimSection" style="margin: 14px 0">
+        <p class="muted" style="margin: 0 0 8px">
+          <strong>General reimbursement ($)</strong> — per employee (blank or 0 if none). Filled from Payroll 1.0
+          employee list.
+        </p>
+        <div class="payroll20-genreim-scroll">
+          <table class="payroll20-genreim-table" aria-label="General reimbursement by employee">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>General reim. ($)</th>
+              </tr>
+            </thead>
+            <tbody id="payroll20GenReimTbody"></tbody>
+          </table>
+        </div>
+      </div>
       <div
         class="payroll10-controls"
         style="margin: 12px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center"
       >
         <label for="nonBillFileInput">Non-bill spreadsheet (.xlsx)</label>
         <input id="nonBillFileInput" type="file" accept=".xlsx,.xls" />
-        <label for="generalReimbursementInput">General reimbursement ($)</label>
-        <input
-          type="number"
-          id="generalReimbursementInput"
-          min="0"
-          step="0.01"
-          class="rate-input"
-          style="width: 7rem"
-          value="0"
-        />
         <button type="button" id="generatePayroll20Btn">Generate Payroll 2.0</button>
         <button type="button" id="exportPayroll20CsvBtn" hidden disabled>Export CSV</button>
         <button type="button" id="printPayroll20Btn" hidden disabled>Print</button>
@@ -615,10 +622,9 @@
         lastPayroll10Results = null;
         setPayroll10ExtrasEnabled(false);
         clearPayroll20Results();
+        clearPayroll20GeneralReimTbody();
         const nbIn = document.getElementById("nonBillFileInput");
         if (nbIn) nbIn.value = "";
-        const grIn = document.getElementById("generalReimbursementInput");
-        if (grIn) grIn.value = "0";
         updatePayroll20Visibility();
       }
 
@@ -689,6 +695,57 @@
         if (err) err.textContent = "";
         lastPayroll20Results = null;
         setPayroll20ExtrasEnabled(false);
+      }
+
+      function clearPayroll20GeneralReimTbody() {
+        const tb = document.getElementById("payroll20GenReimTbody");
+        if (tb) tb.innerHTML = "";
+      }
+
+      function renderPayroll20GeneralReimInputs() {
+        const tb = document.getElementById("payroll20GenReimTbody");
+        if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) return;
+        tb.innerHTML = "";
+        lastPayroll10Results.rows.forEach((r, idx) => {
+          const tr = document.createElement("tr");
+          const tdName = document.createElement("td");
+          tdName.textContent = r.employeeName;
+          const tdAmt = document.createElement("td");
+          const inp = document.createElement("input");
+          inp.type = "number";
+          inp.min = "0";
+          inp.step = "0.01";
+          inp.className = "rate-input js-p20-genreim";
+          inp.style.width = "7rem";
+          inp.dataset.p20RowIndex = String(idx);
+          inp.setAttribute("aria-label", `General reimbursement for ${r.employeeName}`);
+          tdAmt.appendChild(inp);
+          tr.appendChild(tdName);
+          tr.appendChild(tdAmt);
+          tb.appendChild(tr);
+        });
+      }
+
+      function readPayroll20GeneralReimbursements() {
+        const tb = document.getElementById("payroll20GenReimTbody");
+        if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) {
+          return { error: "Generate Payroll 1.0 first." };
+        }
+        const n = lastPayroll10Results.rows.length;
+        const amounts = new Array(n).fill(0);
+        const inputs = tb.querySelectorAll("input.js-p20-genreim");
+        for (const inp of inputs) {
+          const i = Number(inp.dataset.p20RowIndex);
+          if (!Number.isFinite(i) || i < 0 || i >= n) continue;
+          const t = String(inp.value).trim();
+          const v = t === "" ? 0 : parseFloat(t);
+          if (!Number.isFinite(v) || v < 0) {
+            const name = lastPayroll10Results.rows[i]?.employeeName || "Employee";
+            return { error: `Invalid general reimbursement for ${name} (enter 0 or more).` };
+          }
+          amounts[i] = v;
+        }
+        return { amounts };
       }
 
       function updatePayroll20Visibility() {
@@ -886,6 +943,7 @@
         const errEl = document.getElementById("payroll10Error");
         errEl.textContent = "";
         clearPayroll20Results();
+        clearPayroll20GeneralReimTbody();
         const wdRaw = document.getElementById("workingDaysInput").value;
         const wd = parseInt(String(wdRaw).trim(), 10);
         if (!Number.isFinite(wd) || wd < 1) {
@@ -1016,6 +1074,7 @@
         };
         setPayroll10ExtrasEnabled(true);
         updatePayroll20Visibility();
+        renderPayroll20GeneralReimInputs();
       });
 
       function csvEscape(value) {
@@ -1170,13 +1229,12 @@
           errEl.textContent = "Select the non-bill time spreadsheet.";
           return;
         }
-        const grRaw = document.getElementById("generalReimbursementInput").value;
-        const grTrim = String(grRaw).trim();
-        const generalReimbursement = grTrim === "" ? 0 : parseFloat(grTrim);
-        if (!Number.isFinite(generalReimbursement) || generalReimbursement < 0) {
-          errEl.textContent = "Enter a valid general reimbursement amount (0 or more).";
+        const grRead = readPayroll20GeneralReimbursements();
+        if (grRead.error) {
+          errEl.textContent = grRead.error;
           return;
         }
+        const generalReimByRow = grRead.amounts;
 
         try {
           const file = fileInput.files[0];
@@ -1212,7 +1270,8 @@
           let sumGenReim = 0;
           let sumBonus = 0;
 
-          for (const r of lastPayroll10Results.rows) {
+          lastPayroll10Results.rows.forEach((r, rowIdx) => {
+            const generalReimbursement = Number(generalReimByRow[rowIdx]) || 0;
             const nameKey = normalizeEmployeeName(r.employeeName);
             const nbh = nbMap.get(nameKey) || { nb: 0, pto: 0, sick: 0 };
             const caseWork = Number(r.caseWork) || 0;
@@ -1294,7 +1353,7 @@
               <td>${escapeHtml(money2(nonDiscBonus))}</td>
             `;
             tbody.appendChild(tr);
-          }
+          });
 
           const trTotal = document.createElement("tr");
           trTotal.style.fontWeight = "700";
@@ -1314,7 +1373,7 @@
           tbody.appendChild(trTotal);
 
           let metaText =
-            `Non-bill file: ${file.name} · Incentive threshold (from Payroll 1.0): ${money2(incentiveThreshold)} hr · General reimbursement: $${money2(generalReimbursement)} per employee`;
+            `Non-bill file: ${file.name} · Incentive threshold (from Payroll 1.0): ${money2(incentiveThreshold)} hr · General reimbursement: per-employee amounts per table above`;
           if (unmatchedLabels.length) {
             metaText += ` · Note: non-bill rows for names not in Payroll 1.0 (${unmatchedLabels.length}): ${unmatchedLabels.join("; ")}`;
           }
@@ -1323,7 +1382,6 @@
 
           lastPayroll20Results = {
             fileName: file.name,
-            generalReimbursement,
             incentiveThreshold,
             unmatchedNonBillNames: unmatchedLabels,
             rows: rows20,
@@ -1370,7 +1428,7 @@
           "Non-discretionary bonus ($)",
         ];
         const lines = [
-          ["Payroll 2.0", "Non-bill file", lastPayroll20Results.fileName, "General reim. / employee", money2(lastPayroll20Results.generalReimbursement)]
+          ["Payroll 2.0", "Non-bill file", lastPayroll20Results.fileName, "General reim.", "per employee row"]
             .map(csvEscape)
             .join(","),
           headers.map(csvEscape).join(","),
