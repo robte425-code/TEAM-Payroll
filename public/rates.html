@@ -72,24 +72,26 @@
       <button type="button" id="saveOrgRatesBtn">Save organization rates</button>
     </div>
 
-    <div class="card">
-      <table id="ratesTable">
-        <thead>
-          <tr>
-            <th>Employee name</th>
-            <th>Rate ($ / hour)</th>
-            <th>Min wage ($ / hr)</th>
-            <th>Incentive Pay</th>
-            <th>Paid holidays</th>
-            <th>Travel rate ($)</th>
-            <th>PTO rate ($)</th>
-            <th>Edu rate ($)</th>
-            <th>Health insurance ($)</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="ratesBody"></tbody>
-      </table>
+    <div class="card rates-employee-card">
+      <div class="rates-table-scroll">
+        <table id="ratesTable" class="rates-table">
+          <thead>
+            <tr>
+              <th>Employee name</th>
+              <th>Rate ($ / hour)</th>
+              <th>Min wage ($ / hr)</th>
+              <th>Incentive Pay</th>
+              <th>Paid holidays</th>
+              <th>Travel rate ($)</th>
+              <th>PTO rate ($)</th>
+              <th>Edu rate ($)</th>
+              <th>Health insurance ($)</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ratesBody"></tbody>
+        </table>
+      </div>
       <p style="margin-top: 14px; margin-bottom: 0">
         <button type="button" id="saveEmployeesBtn">Save</button>
       </p>
@@ -136,7 +138,7 @@
           tr.dataset.id = emp.id;
         }
         const pidField = isNew
-          ? '<input type="text" class="js-name" placeholder="Employee name" /><input type="text" class="js-pid" placeholder="Provider ID" autocomplete="off" style="display:block;margin-top:8px;width:min(100%,20rem)" />'
+          ? '<input type="text" class="js-name" placeholder="Employee name" /><input type="text" class="js-pid" placeholder="Provider ID" autocomplete="off" style="display:block;margin-top:6px;width:100%;max-width:100%" />'
           : '<input type="hidden" class="js-pid" /><input type="text" class="js-name" />';
         tr.innerHTML = `
           <td>${pidField}</td>
