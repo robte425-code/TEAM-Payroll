@@ -57,6 +57,14 @@ function parseInvoiceFile(filePath) {
 
 function summarizeByEmployeeAndCategory(normalizedRows = []) {
   const summaryMap = new Map();
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const toActualHours = (category, units) => {
+    if (category === "case_work") return units / 10;
+    if (category === "travel_wait") return units / 10;
+    if (category === "report") return units / 2;
+    if (category === "mileage") return units;
+    return units;
+  };
 
   for (const row of normalizedRows) {
     const key = `${row.providerId}::${row.employeeName}`;
@@ -76,7 +84,9 @@ function summarizeByEmployeeAndCategory(normalizedRows = []) {
     }
 
     const current = summaryMap.get(key);
-    current.totals[row.rateCodeCategory] += row.units;
+    current.totals[row.rateCodeCategory] = round2(
+      current.totals[row.rateCodeCategory] + toActualHours(row.rateCodeCategory, row.units)
+    );
     current.rowCount += 1;
   }
 
