@@ -46,6 +46,7 @@
             <th>Employee name</th>
             <th>Provider ID</th>
             <th>Rate ($ / hour)</th>
+            <th>Incentive Pay</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -96,6 +97,7 @@
           <td><input type="text" class="js-name" /></td>
           <td><input type="text" class="js-pid" /></td>
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
+          <td><input type="checkbox" class="js-incentive" /></td>
           <td>
             <button type="button" class="js-save">Save</button>
             <button type="button" class="js-remove">Remove</button>
@@ -106,6 +108,7 @@
         const rate = emp.hourlyRate;
         tr.querySelector(".js-rate").value =
           rate === 0 || rate == null ? "" : String(rate);
+        tr.querySelector(".js-incentive").checked = Boolean(emp.incentivePay);
 
         tr.querySelector(".js-save").addEventListener("click", () => saveRow(tr));
         tr.querySelector(".js-remove").addEventListener("click", () => removeRow(tr));
@@ -119,7 +122,8 @@
         const providerId = tr.querySelector(".js-pid").value.trim();
         const rateRaw = tr.querySelector(".js-rate").value;
         const hourlyRate = rateRaw === "" ? 0 : Number(rateRaw);
-        return { id, isNew, displayName, providerId, hourlyRate };
+        const incentivePay = tr.querySelector(".js-incentive").checked;
+        return { id, isNew, displayName, providerId, hourlyRate, incentivePay };
       }
 
       async function saveRow(tr) {
@@ -143,6 +147,7 @@
                 providerId: data.providerId,
                 displayName: data.displayName,
                 hourlyRate: data.hourlyRate,
+                incentivePay: data.incentivePay,
               }),
             });
             delete tr.dataset.new;
@@ -157,6 +162,7 @@
                 providerId: data.providerId,
                 displayName: data.displayName,
                 hourlyRate: data.hourlyRate,
+                incentivePay: data.incentivePay,
               }),
             });
             flash("Saved.");
@@ -191,7 +197,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="4" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="5" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -214,7 +220,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="4" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="5" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -224,7 +230,7 @@
           tbody.innerHTML = "";
         }
         const tr = rowTemplate(
-          { displayName: "", providerId: "", hourlyRate: 0 },
+          { displayName: "", providerId: "", hourlyRate: 0, incentivePay: false },
           true
         );
         tbody.appendChild(tr);
@@ -259,6 +265,7 @@
                   providerId: data.providerId,
                   displayName: data.displayName,
                   hourlyRate: data.hourlyRate,
+                  incentivePay: data.incentivePay,
                 }),
               });
             } else {
@@ -270,6 +277,7 @@
                   providerId: data.providerId,
                   displayName: data.displayName,
                   hourlyRate: data.hourlyRate,
+                  incentivePay: data.incentivePay,
                 }),
               });
             }
@@ -315,13 +323,16 @@
                 raw.displayName ?? raw.name ?? ""
               ).trim();
               const hourlyRate = Number(raw.hourlyRate ?? raw.ratePerHour ?? 0);
+              const incentivePay = Boolean(
+                raw.incentivePay ?? raw.incentive_pay ?? false
+              );
               if (!providerId) continue;
               if (!Number.isFinite(hourlyRate) || hourlyRate < 0) continue;
               try {
                 await apiJson(API, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ providerId, displayName, hourlyRate }),
+                  body: JSON.stringify({ providerId, displayName, hourlyRate, incentivePay }),
                 });
                 n += 1;
               } catch (e) {
@@ -339,6 +350,7 @@
                         providerId,
                         displayName,
                         hourlyRate,
+                        incentivePay,
                       }),
                     });
                     n += 1;

@@ -7,9 +7,21 @@ function rowToClient(row) {
     providerId: row.provider_id,
     displayName: row.display_name,
     hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : 0,
+    incentivePay: Boolean(row.incentive_pay),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function toBool(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(v)) return true;
+    if (["false", "0", "no", "n", "off", ""].includes(v)) return false;
+  }
+  return false;
 }
 
 function getQueryId(req) {
@@ -74,7 +86,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const result = await pool.query(
-        `SELECT id, provider_id, display_name, hourly_rate, created_at, updated_at
+        `SELECT id, provider_id, display_name, hourly_rate, incentive_pay, created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
       );
@@ -87,6 +99,7 @@ export default async function handler(req, res) {
       const providerId = String(body.providerId || "").trim();
       const displayName = String(body.displayName ?? "").trim();
       const hourlyRate = Number(body.hourlyRate);
+      const incentivePay = toBool(body.incentivePay);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -96,10 +109,10 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate)
-         VALUES ($1, $2, $3)
-         RETURNING id, provider_id, display_name, hourly_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate]
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay]
       );
       const row = inserted && inserted.rows && inserted.rows[0];
       if (!row) {
@@ -116,6 +129,7 @@ export default async function handler(req, res) {
       const providerId = String(body.providerId || "").trim();
       const displayName = String(body.displayName ?? "").trim();
       const hourlyRate = Number(body.hourlyRate);
+      const incentivePay = toBool(body.incentivePay);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -129,10 +143,11 @@ export default async function handler(req, res) {
          SET provider_id = $1,
              display_name = $2,
              hourly_rate = $3,
+             incentive_pay = $4,
              updated_at = now()
-         WHERE id = $4::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, id]
+         WHERE id = $5::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, created_at, updated_at`,
+        [providerId, displayName, hourlyRate, incentivePay, id]
       );
       if (!updated.rows.length) {
         return res.status(404).json({ error: "Employee not found" });
