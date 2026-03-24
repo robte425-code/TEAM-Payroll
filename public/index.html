@@ -170,12 +170,36 @@
         <label for="nonBillFileInput">Non-bill spreadsheet (.xlsx)</label>
         <input id="nonBillFileInput" type="file" accept=".xlsx,.xls" />
         <button type="button" id="generatePayroll20Btn">Generate Payroll 2.0</button>
-        <button type="button" id="exportPayroll20CsvBtn" hidden disabled>Export CSV</button>
-        <button type="button" id="printPayroll20Btn" hidden disabled>Print</button>
       </div>
       <p id="payroll20Error" class="error"></p>
       <div id="payroll20ResultsWrap" hidden>
-        <h4 style="margin: 14px 0 8px; font-size: 1rem">Results</h4>
+        <div
+          class="payroll20-results-toolbar"
+          style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 8px"
+        >
+          <h4 style="margin: 0; font-size: 1rem">Payroll 2.0 results</h4>
+          <span style="flex: 1; min-width: 4px" aria-hidden="true"></span>
+          <button
+            type="button"
+            id="exportPayroll20CsvBtn"
+            class="btn-secondary"
+            hidden
+            disabled
+            title="Download Payroll 2.0 table as CSV"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            id="printPayroll20Btn"
+            class="btn-secondary"
+            hidden
+            disabled
+            title="Print Payroll 2.0 results"
+          >
+            Print
+          </button>
+        </div>
         <p class="muted" id="payroll20Meta"></p>
         <div class="payroll20-table-scroll">
           <table id="payroll20Table">
