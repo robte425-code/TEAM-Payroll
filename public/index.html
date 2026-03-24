@@ -66,6 +66,7 @@
             <th>Employee</th>
             <th>Date From</th>
             <th>Date To</th>
+            <th>Referral #</th>
             <th>Provider ID</th>
             <th>Rate Code</th>
             <th>Units</th>
@@ -136,6 +137,9 @@
         const adjResub = String(rawRow["Adj/ Resub"] || "").trim();
         const dateFromRaw = rawRow["Date From"];
         const dateToRaw = rawRow["Date To"];
+        const referralRaw = rawRow["Referral #"];
+        const referralNumber =
+          referralRaw == null || referralRaw === "" ? "" : String(referralRaw).trim();
 
         return {
           employeeName,
@@ -146,6 +150,7 @@
           adjResub,
           dateFrom: formatDateCell(dateFromRaw),
           dateTo: formatDateCell(dateToRaw),
+          referralNumber,
         };
       }
 
@@ -311,12 +316,16 @@
         for (const r of sorted) {
           const df = r.dateFrom ? escapeHtml(r.dateFrom) : '<span class="muted">—</span>';
           const dt = r.dateTo ? escapeHtml(r.dateTo) : '<span class="muted">—</span>';
+          const ref = r.referralNumber
+            ? escapeHtml(r.referralNumber)
+            : '<span class="muted">—</span>';
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(r.sourceFile)}</td>
             <td>${escapeHtml(r.employeeName)}</td>
             <td>${df}</td>
             <td>${dt}</td>
+            <td>${ref}</td>
             <td>${escapeHtml(r.providerId)}</td>
             <td>${escapeHtml(r.rateCode)}</td>
             <td>${escapeHtml(String(r.units))}</td>

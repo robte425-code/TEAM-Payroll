@@ -38,6 +38,9 @@ function normalizeRow(rawRow = {}) {
   const units = Number(rawRow["Units"] || 0);
   const adjustmentOrResubmission = String(rawRow["Adj/ Resub"] || "").trim();
 
+  const refRaw = rawRow["Referral #"];
+  const referralNumber = refRaw == null || refRaw === "" ? "" : String(refRaw).trim();
+
   return {
     employeeName,
     providerId,
@@ -47,6 +50,7 @@ function normalizeRow(rawRow = {}) {
     adjustmentOrResubmission,
     dateFrom: formatDateCell(rawRow["Date From"]),
     dateTo: formatDateCell(rawRow["Date To"]),
+    referralNumber,
     raw: rawRow,
   };
 }
