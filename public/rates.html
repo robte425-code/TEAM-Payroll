@@ -40,22 +40,37 @@
     </div>
 
     <div class="card">
-      <h3 class="rates-section-title" style="margin-top: 0">Mileage rate (organization-wide)</h3>
+      <h3 class="rates-section-title" style="margin-top: 0">Organization-wide rates</h3>
       <p class="muted" style="margin-bottom: 12px">
-        One rate for everyone (e.g. dollars per mile). Saved separately from employee rows.
+        Incentive pay rate and mileage rate are the same for everyone. Saved separately from employee rows.
       </p>
-      <label for="globalMileageRate" class="muted" style="display: inline-block; margin-right: 10px"
-        >Mileage rate ($)</label
-      >
-      <input
-        type="number"
-        id="globalMileageRate"
-        class="rate-input"
-        min="0"
-        step="0.01"
-        style="width: 8rem; margin-right: 10px"
-      />
-      <button type="button" id="saveMileageBtn">Save mileage rate</button>
+      <div style="margin-bottom: 10px">
+        <label for="globalIncentivePayRate" class="muted" style="display: inline-block; width: 11rem"
+          >Incentive Pay rate ($)</label
+        >
+        <input
+          type="number"
+          id="globalIncentivePayRate"
+          class="rate-input"
+          min="0"
+          step="0.01"
+          style="width: 8rem; margin-right: 16px"
+        />
+      </div>
+      <div style="margin-bottom: 12px">
+        <label for="globalMileageRate" class="muted" style="display: inline-block; width: 11rem"
+          >Mileage rate ($)</label
+        >
+        <input
+          type="number"
+          id="globalMileageRate"
+          class="rate-input"
+          min="0"
+          step="0.01"
+          style="width: 8rem; margin-right: 16px"
+        />
+      </div>
+      <button type="button" id="saveOrgRatesBtn">Save organization rates</button>
     </div>
 
     <div class="card">
@@ -66,7 +81,6 @@
             <th>Provider ID</th>
             <th>Rate ($ / hour)</th>
             <th>Incentive Pay</th>
-            <th>Incentive Pay rate ($)</th>
             <th>Travel rate ($)</th>
             <th>Actions</th>
           </tr>
@@ -120,7 +134,6 @@
           <td><input type="text" class="js-pid" /></td>
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
           <td><input type="checkbox" class="js-incentive" /></td>
-          <td><input type="number" class="js-incentive-rate rate-input" min="0" step="0.01" title="Incentive pay rate" /></td>
           <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
           <td>
             <button type="button" class="js-save">Save</button>
@@ -133,9 +146,6 @@
         tr.querySelector(".js-rate").value =
           rate === 0 || rate == null ? "" : String(rate);
         tr.querySelector(".js-incentive").checked = Boolean(emp.incentivePay);
-        const ipr = emp.incentivePayRate;
-        tr.querySelector(".js-incentive-rate").value =
-          ipr === 0 || ipr == null ? "" : String(ipr);
         const trt = emp.travelRate;
         tr.querySelector(".js-travel-rate").value =
           trt === 0 || trt == null ? "" : String(trt);
@@ -153,8 +163,6 @@
         const rateRaw = tr.querySelector(".js-rate").value;
         const hourlyRate = rateRaw === "" ? 0 : Number(rateRaw);
         const incentivePay = tr.querySelector(".js-incentive").checked;
-        const iprRaw = tr.querySelector(".js-incentive-rate").value;
-        const incentivePayRate = iprRaw === "" ? 0 : Number(iprRaw);
         const trRaw = tr.querySelector(".js-travel-rate").value;
         const travelRate = trRaw === "" ? 0 : Number(trRaw);
         return {
@@ -164,7 +172,6 @@
           providerId,
           hourlyRate,
           incentivePay,
-          incentivePayRate,
           travelRate,
         };
       }
@@ -178,10 +185,6 @@
         }
         if (!Number.isFinite(data.hourlyRate) || data.hourlyRate < 0) {
           flash("Rate must be a valid non-negative number.", true);
-          return;
-        }
-        if (!Number.isFinite(data.incentivePayRate) || data.incentivePayRate < 0) {
-          flash("Incentive Pay rate must be a valid non-negative number.", true);
           return;
         }
         if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
@@ -199,7 +202,6 @@
                 displayName: data.displayName,
                 hourlyRate: data.hourlyRate,
                 incentivePay: data.incentivePay,
-                incentivePayRate: data.incentivePayRate,
                 travelRate: data.travelRate,
               }),
             });
@@ -216,7 +218,6 @@
                 displayName: data.displayName,
                 hourlyRate: data.hourlyRate,
                 incentivePay: data.incentivePay,
-                incentivePayRate: data.incentivePayRate,
                 travelRate: data.travelRate,
               }),
             });
@@ -252,19 +253,26 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="7" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="6" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
-      async function loadGlobalMileage() {
-        const el = document.getElementById("globalMileageRate");
-        if (!el) return;
+      async function loadGlobalSettings() {
+        const mileageEl = document.getElementById("globalMileageRate");
+        const incentiveEl = document.getElementById("globalIncentivePayRate");
         try {
           const d = await apiJson(SETTINGS_API, { method: "GET" });
-          const r = d.mileageRate;
-          el.value = r === 0 || r == null || r === "" ? "" : String(r);
+          if (mileageEl) {
+            const r = d.mileageRate;
+            mileageEl.value = r === 0 || r == null || r === "" ? "" : String(r);
+          }
+          if (incentiveEl) {
+            const r = d.incentivePayRate;
+            incentiveEl.value = r === 0 || r == null || r === "" ? "" : String(r);
+          }
         } catch {
-          el.value = "";
+          if (mileageEl) mileageEl.value = "";
+          if (incentiveEl) incentiveEl.value = "";
         }
       }
 
@@ -272,7 +280,7 @@
         err.textContent = "";
         msg.textContent = "Loading...";
         try {
-          await loadGlobalMileage();
+          await loadGlobalSettings();
           const data = await apiJson(API, { method: "GET" });
           const list = data.employees || [];
           tbody.innerHTML = "";
@@ -288,7 +296,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="7" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="6" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -303,7 +311,6 @@
             providerId: "",
             hourlyRate: 0,
             incentivePay: false,
-            incentivePayRate: 0,
             travelRate: 0,
           },
           true
@@ -332,10 +339,6 @@
               flash("Each rate must be a valid non-negative number.", true);
               return;
             }
-            if (!Number.isFinite(data.incentivePayRate) || data.incentivePayRate < 0) {
-              flash("Each incentive pay rate must be a valid non-negative number.", true);
-              return;
-            }
             if (!Number.isFinite(data.travelRate) || data.travelRate < 0) {
               flash("Each travel rate must be a valid non-negative number.", true);
               return;
@@ -349,7 +352,6 @@
                   displayName: data.displayName,
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
-                  incentivePayRate: data.incentivePayRate,
                   travelRate: data.travelRate,
                 }),
               });
@@ -363,7 +365,6 @@
                   displayName: data.displayName,
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
-                  incentivePayRate: data.incentivePayRate,
                   travelRate: data.travelRate,
                 }),
               });
@@ -376,22 +377,29 @@
         }
       });
 
-      document.getElementById("saveMileageBtn").addEventListener("click", async () => {
+      document.getElementById("saveOrgRatesBtn").addEventListener("click", async () => {
         err.textContent = "";
-        const el = document.getElementById("globalMileageRate");
-        const raw = el ? String(el.value).trim() : "";
-        const mileageRate = raw === "" ? 0 : Number(raw);
+        const mileageRaw = document.getElementById("globalMileageRate");
+        const incentiveRaw = document.getElementById("globalIncentivePayRate");
+        const mr = mileageRaw ? String(mileageRaw.value).trim() : "";
+        const ir = incentiveRaw ? String(incentiveRaw.value).trim() : "";
+        const mileageRate = mr === "" ? 0 : Number(mr);
+        const incentivePayRate = ir === "" ? 0 : Number(ir);
         if (!Number.isFinite(mileageRate) || mileageRate < 0) {
           flash("Mileage rate must be a valid non-negative number.", true);
+          return;
+        }
+        if (!Number.isFinite(incentivePayRate) || incentivePayRate < 0) {
+          flash("Incentive Pay rate must be a valid non-negative number.", true);
           return;
         }
         try {
           await apiJson(SETTINGS_API, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mileageRate }),
+            body: JSON.stringify({ mileageRate, incentivePayRate }),
           });
-          flash("Mileage rate saved.");
+          flash("Organization rates saved.");
         } catch (e) {
           flash(e.message || "Save failed.", true);
         }
@@ -404,6 +412,7 @@
             apiJson(SETTINGS_API, { method: "GET" }),
           ]);
           const payload = {
+            incentivePayRate: Number(settings.incentivePayRate) || 0,
             mileageRate: Number(settings.mileageRate) || 0,
             employees: data.employees || [],
           };
@@ -430,14 +439,24 @@
           try {
             const text = String(reader.result || "");
             const parsed = JSON.parse(text);
+            const patch = {};
+            const globalIncentive = Number(
+              parsed.incentivePayRate ?? parsed.incentive_pay_rate ?? NaN
+            );
             const globalMileage = Number(
               parsed.mileageRate ?? parsed.mileage_rate ?? NaN
             );
+            if (Number.isFinite(globalIncentive) && globalIncentive >= 0) {
+              patch.incentivePayRate = globalIncentive;
+            }
             if (Number.isFinite(globalMileage) && globalMileage >= 0) {
+              patch.mileageRate = globalMileage;
+            }
+            if (Object.keys(patch).length) {
               await apiJson(SETTINGS_API, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ mileageRate: globalMileage }),
+                body: JSON.stringify(patch),
               });
             }
             const rows = Array.isArray(parsed) ? parsed : parsed.employees || [];
@@ -451,13 +470,9 @@
               const incentivePay = Boolean(
                 raw.incentivePay ?? raw.incentive_pay ?? false
               );
-              const incentivePayRate = Number(
-                raw.incentivePayRate ?? raw.incentive_pay_rate ?? 0
-              );
               const travelRate = Number(raw.travelRate ?? raw.travel_rate ?? 0);
               if (!providerId) continue;
               if (!Number.isFinite(hourlyRate) || hourlyRate < 0) continue;
-              if (!Number.isFinite(incentivePayRate) || incentivePayRate < 0) continue;
               if (!Number.isFinite(travelRate) || travelRate < 0) continue;
               try {
                 await apiJson(API, {
@@ -468,7 +483,6 @@
                     displayName,
                     hourlyRate,
                     incentivePay,
-                    incentivePayRate,
                     travelRate,
                   }),
                 });
@@ -489,7 +503,6 @@
                         displayName,
                         hourlyRate,
                         incentivePay,
-                        incentivePayRate,
                         travelRate,
                       }),
                     });

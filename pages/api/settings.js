@@ -2,6 +2,7 @@ const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 
 const MILEAGE_KEY = "mileage_rate";
+const INCENTIVE_PAY_RATE_KEY = "incentive_pay_rate";
 
 function toNonNegativeNumber(value, fallback = 0) {
   const n = Number(value);
@@ -40,13 +41,37 @@ async function readJsonBody(req) {
   }
 }
 
-function parseMileageFromRow(value) {
+function parseRateFromRow(value) {
   if (value == null) return 0;
   if (typeof value === "number" && Number.isFinite(value)) return value >= 0 ? value : 0;
   if (typeof value === "object" && value.rate != null) {
     return toNonNegativeNumber(value.rate, 0);
   }
   return 0;
+}
+
+async function fetchOrgRates(pool) {
+  const result = await pool.query(
+    `SELECT key, value FROM payroll.app_kv WHERE key = ANY($1::text[])`,
+    [[MILEAGE_KEY, INCENTIVE_PAY_RATE_KEY]]
+  );
+  const map = {};
+  for (const row of result.rows) {
+    map[row.key] = parseRateFromRow(row.value);
+  }
+  return {
+    mileageRate: map[MILEAGE_KEY] ?? 0,
+    incentivePayRate: map[INCENTIVE_PAY_RATE_KEY] ?? 0,
+  };
+}
+
+async function upsertRate(pool, key, rate) {
+  await pool.query(
+    `INSERT INTO payroll.app_kv (key, value, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, JSON.stringify({ rate })]
+  );
 }
 
 export default async function handler(req, res) {
@@ -67,24 +92,28 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
-      const result = await pool.query(
-        `SELECT value FROM payroll.app_kv WHERE key = $1`,
-        [MILEAGE_KEY]
-      );
-      const mileageRate = result.rows[0] ? parseMileageFromRow(result.rows[0].value) : 0;
-      return res.status(200).json({ mileageRate });
+      const rates = await fetchOrgRates(pool);
+      return res.status(200).json(rates);
     }
 
     if (req.method === "PATCH" || req.method === "PUT") {
       const body = await readJsonBody(req);
-      const mileageRate = toNonNegativeNumber(body.mileageRate, 0);
-      await pool.query(
-        `INSERT INTO payroll.app_kv (key, value, updated_at)
-         VALUES ($1, $2::jsonb, now())
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-        [MILEAGE_KEY, JSON.stringify({ rate: mileageRate })]
-      );
-      return res.status(200).json({ mileageRate });
+      let updated = false;
+      if (body.mileageRate !== undefined) {
+        await upsertRate(pool, MILEAGE_KEY, toNonNegativeNumber(body.mileageRate, 0));
+        updated = true;
+      }
+      if (body.incentivePayRate !== undefined) {
+        await upsertRate(pool, INCENTIVE_PAY_RATE_KEY, toNonNegativeNumber(body.incentivePayRate, 0));
+        updated = true;
+      }
+      if (!updated) {
+        return res.status(400).json({
+          error: "Provide mileageRate and/or incentivePayRate to update",
+        });
+      }
+      const rates = await fetchOrgRates(pool);
+      return res.status(200).json(rates);
     }
 
     res.setHeader("Allow", "GET, PATCH, PUT, OPTIONS");
