@@ -13,6 +13,8 @@ function rowToClient(row) {
     ptoRate: row.pto_rate != null ? Number(row.pto_rate) : 0,
     eduRate: row.edu_rate != null ? Number(row.edu_rate) : 0,
     minWageRate: row.min_wage_rate != null ? Number(row.min_wage_rate) : 0,
+    healthInsuranceDeduction:
+      row.health_insurance_deduction != null ? Number(row.health_insurance_deduction) : 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -98,7 +100,8 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const result = await pool.query(
         `SELECT id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays,
-                travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at
+                travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction,
+                created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
       );
@@ -117,6 +120,7 @@ export default async function handler(req, res) {
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
+      const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -126,10 +130,21 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, paidHolidays, travelRate, ptoRate, eduRate, minWageRate]
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
+        [
+          providerId,
+          displayName,
+          hourlyRate,
+          incentivePay,
+          paidHolidays,
+          travelRate,
+          ptoRate,
+          eduRate,
+          minWageRate,
+          healthInsuranceDeduction,
+        ]
       );
       const row = inserted && inserted.rows && inserted.rows[0];
       if (!row) {
@@ -152,6 +167,7 @@ export default async function handler(req, res) {
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
+      const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
@@ -171,10 +187,23 @@ export default async function handler(req, res) {
              pto_rate = $7,
              edu_rate = $8,
              min_wage_rate = $9,
+             health_insurance_deduction = $10,
              updated_at = now()
-         WHERE id = $10::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, created_at, updated_at`,
-        [providerId, displayName, hourlyRate, incentivePay, paidHolidays, travelRate, ptoRate, eduRate, minWageRate, id]
+         WHERE id = $11::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
+        [
+          providerId,
+          displayName,
+          hourlyRate,
+          incentivePay,
+          paidHolidays,
+          travelRate,
+          ptoRate,
+          eduRate,
+          minWageRate,
+          healthInsuranceDeduction,
+          id,
+        ]
       );
       if (!updated.rows.length) {
         return res.status(404).json({ error: "Employee not found" });

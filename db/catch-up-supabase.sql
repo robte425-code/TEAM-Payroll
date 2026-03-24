@@ -89,3 +89,10 @@ ALTER TABLE payroll.employees
 ADD COLUMN IF NOT EXISTS paid_holidays BOOLEAN NOT NULL DEFAULT FALSE;
 
 COMMENT ON COLUMN payroll.employees.paid_holidays IS 'Whether this employee receives paid holidays.';
+
+-- ========== 010_add_health_insurance_deduction.sql ==========
+ALTER TABLE payroll.employees
+ADD COLUMN IF NOT EXISTS health_insurance_deduction NUMERIC(12, 4) NOT NULL DEFAULT 0
+  CHECK (health_insurance_deduction >= 0);
+
+COMMENT ON COLUMN payroll.employees.health_insurance_deduction IS 'Health insurance deduction amount in dollars for this employee.';
