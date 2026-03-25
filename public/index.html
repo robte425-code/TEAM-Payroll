@@ -42,7 +42,6 @@
         <thead>
           <tr>
             <th>Employee</th>
-            <th>Hourly rate ($)</th>
             <th>Case work</th>
             <th>Report</th>
             <th>Case + Reports</th>
@@ -1112,13 +1111,9 @@
           const caseWork = Number(item.totals.case_work || 0);
           const report = Number(item.totals.report || 0);
           const casePlusReports = caseWork + report;
-          const rate = hourlyRateFromMap(rateMap, item.providerId);
-          const rateCell =
-            rate === null ? '<span class="muted">—</span>' : escapeHtml(rate.toFixed(2));
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(item.employeeName)}</td>
-            <td>${rateCell}</td>
             <td>${fmt(caseWork)}</td>
             <td>${fmt(report)}</td>
             <td>${fmt(casePlusReports)}</td>
