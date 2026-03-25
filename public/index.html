@@ -219,7 +219,7 @@
                 <th>PTO pay ($)</th>
                 <th>Sick pay ($)</th>
                 <th>Holiday pay ($)</th>
-                <th>Mileage ($)</th>
+                <th>Mileage</th>
                 <th>General reim. ($)</th>
                 <th>Non-discretionary bonus ($)</th>
               </tr>
@@ -821,7 +821,7 @@
               <td>${escapeHtml(money2(r.ptoPay))}</td>
               <td>${escapeHtml(money2(r.sickPay))}</td>
               <td>${escapeHtml(money2(r.holidayPay))}</td>
-              <td>${escapeHtml(money2(r.mileageReimb))}</td>
+            <td>${escapeHtml(money2(r.mileage ?? r.mileageReimb))}</td>
               <td>${escapeHtml(money2(r.generalReimbursement))}</td>
               <td>${escapeHtml(money2(r.nonDiscBonus))}</td>
             `;
@@ -1600,7 +1600,7 @@
             const ptoPay = nbh.pto * (Number(det.ptoRate) || 0);
             const sickPay = nbh.sick * (Number(det.hourlyRate) || 0);
             const holidayPay = Number(r.holidayPay) || 0;
-            const mileageReimb = Number(r.mileagePay) || 0;
+            const mileageUnits = Number(r.mileage) || 0;
             // Non-discretionary bonus: billable pay + travel pay - regular pay - overtime pay.
             const nonDiscBonus =
               Number(r.billablePay) + Number(r.travelPay) - regularPay - overtimePay;
@@ -1610,7 +1610,7 @@
             sumPto += ptoPay;
             sumSick += sickPay;
             sumHoliday += holidayPay;
-            sumMileage += mileageReimb;
+            sumMileage += mileageUnits;
             sumGenReim += generalReimbursement;
             sumBonus += nonDiscBonus;
 
@@ -1628,7 +1628,7 @@
               ptoPay,
               sickPay,
               holidayPay,
-              mileageReimb,
+              mileage: mileageUnits,
               generalReimbursement,
               nonDiscBonus,
             };
@@ -1649,7 +1649,7 @@
               <td>${escapeHtml(money2(ptoPay))}</td>
               <td>${escapeHtml(money2(sickPay))}</td>
               <td>${escapeHtml(money2(holidayPay))}</td>
-              <td>${escapeHtml(money2(mileageReimb))}</td>
+              <td>${escapeHtml(money2(mileageUnits))}</td>
               <td>${escapeHtml(money2(generalReimbursement))}</td>
               <td>${escapeHtml(money2(nonDiscBonus))}</td>
             `;
@@ -1724,7 +1724,7 @@
           "PTO pay ($)",
           "Sick pay ($)",
           "Holiday pay ($)",
-          "Mileage ($)",
+          "Mileage",
           "General reim. ($)",
           "Non-discretionary bonus ($)",
         ];
@@ -1750,7 +1750,7 @@
               money2(row.ptoPay),
               money2(row.sickPay),
               money2(row.holidayPay),
-              money2(row.mileageReimb),
+              money2(row.mileage ?? row.mileageReimb),
               money2(row.generalReimbursement),
               money2(row.nonDiscBonus),
             ]
@@ -1774,7 +1774,7 @@
             money2(s.ptoPay),
             money2(s.sickPay),
             money2(s.holidayPay),
-            money2(s.mileage),
+              money2(s.mileage),
             money2(s.generalReimbursement),
             money2(s.nonDiscBonus),
           ]
