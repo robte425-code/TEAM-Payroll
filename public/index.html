@@ -227,6 +227,10 @@
             <tbody></tbody>
           </table>
         </div>
+        <div id="payroll20HeatherFooter" style="margin-top: 10px">
+          <p class="muted" id="payroll20HeatherCommissionFromP10" style="margin: 0; font-weight: 600"></p>
+          <p class="muted" id="payroll20ManagementFeeFromP10" style="margin: 6px 0 0"></p>
+        </div>
       </div>
     </div>
 
@@ -864,6 +868,23 @@
         if (wrap) wrap.hidden = false;
         setPayroll20ExtrasEnabled(true);
 
+        // Add Heather summary from Payroll 1.0 (as requested).
+        const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
+        const employeeCount = Array.isArray(lastPayroll10Results?.rows)
+          ? lastPayroll10Results.rows.length
+          : 0;
+        const managementFee = 50 * employeeCount;
+        const hcEl = document.getElementById("payroll20HeatherCommissionFromP10");
+        if (hcEl) {
+          hcEl.textContent = `Commission for Heather (from Payroll 1.0): $${money2(hcFromP1)}`;
+        }
+        const mfEl = document.getElementById("payroll20ManagementFeeFromP10");
+        if (mfEl) {
+          mfEl.textContent = `Management fee for Heather ($50 x ${employeeCount} employees): $${money2(
+            managementFee
+          )}`;
+        }
+
         // Rebuild the reimbursement input table and fill amounts if Payroll 1.0 snapshot exists.
         renderPayroll20GeneralReimInputs();
         if (lastPayroll20Results && lastPayroll10Results && Array.isArray(p.rows)) {
@@ -963,6 +984,10 @@
         if (tbody) tbody.innerHTML = "";
         const meta = document.getElementById("payroll20Meta");
         if (meta) meta.textContent = "";
+        const hc = document.getElementById("payroll20HeatherCommissionFromP10");
+        if (hc) hc.textContent = "";
+        const mf = document.getElementById("payroll20ManagementFeeFromP10");
+        if (mf) mf.textContent = "";
         const err = document.getElementById("payroll20Error");
         if (err) err.textContent = "";
         lastPayroll20Results = null;
@@ -1697,6 +1722,21 @@
             },
           };
           setPayroll20ExtrasEnabled(true);
+
+          // Add Heather summary from Payroll 1.0 (as requested).
+          const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
+          const employeeCount = Array.isArray(lastPayroll10Results?.rows)
+            ? lastPayroll10Results.rows.length
+            : 0;
+          const managementFee = 50 * employeeCount;
+          const hcEl = document.getElementById("payroll20HeatherCommissionFromP10");
+          if (hcEl) hcEl.textContent = `Commission for Heather (from Payroll 1.0): $${money2(hcFromP1)}`;
+          const mfEl = document.getElementById("payroll20ManagementFeeFromP10");
+          if (mfEl)
+            mfEl.textContent = `Management fee for Heather ($50 x ${employeeCount} employees): $${money2(
+              managementFee
+            )}`;
+
           saveSessionToStorage();
         } catch (e) {
           errEl.textContent = e.message || "Failed to read non-bill spreadsheet.";
@@ -1798,6 +1838,8 @@
         }
         const metaText = document.getElementById("payroll20Meta").textContent || "";
         const tableHtml = document.getElementById("payroll20Table").outerHTML;
+        const footerEl = document.getElementById("payroll20HeatherFooter");
+        const footerHtml = footerEl ? footerEl.outerHTML : "";
         const w = window.open("", "_blank");
         if (!w) {
           errEl.textContent = "Pop-up blocked. Please allow pop-ups to print.";
@@ -1823,6 +1865,7 @@
               <h2>Payroll 2.0</h2>
               <div class="muted">${escapeHtml(metaText)}</div>
               ${tableHtml}
+              ${footerHtml}
               <script>
                 window.onload = function () { window.focus(); window.print(); };
               <\/script>
