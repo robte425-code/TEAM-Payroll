@@ -12,6 +12,7 @@ function rowToClient(row) {
     travelRate: row.travel_rate != null ? Number(row.travel_rate) : 0,
     ptoRate: row.pto_rate != null ? Number(row.pto_rate) : 0,
     eduRate: row.edu_rate != null ? Number(row.edu_rate) : 0,
+    trainingRate: row.training_rate != null ? Number(row.training_rate) : 0,
     minWageRate: row.min_wage_rate != null ? Number(row.min_wage_rate) : 0,
     healthInsuranceDeduction:
       row.health_insurance_deduction != null ? Number(row.health_insurance_deduction) : 0,
@@ -100,7 +101,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const result = await pool.query(
         `SELECT id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays,
-                travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction,
+                travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction,
                 created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
@@ -119,6 +120,7 @@ export default async function handler(req, res) {
       const travelRate = toNonNegativeNumber(body.travelRate, 0);
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
+      const trainingRate = toNonNegativeNumber(body.trainingRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
       const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
@@ -130,9 +132,9 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
         [
           providerId,
           displayName,
@@ -142,6 +144,7 @@ export default async function handler(req, res) {
           travelRate,
           ptoRate,
           eduRate,
+          trainingRate,
           minWageRate,
           healthInsuranceDeduction,
         ]
@@ -166,6 +169,7 @@ export default async function handler(req, res) {
       const travelRate = toNonNegativeNumber(body.travelRate, 0);
       const ptoRate = toNonNegativeNumber(body.ptoRate, 0);
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
+      const trainingRate = toNonNegativeNumber(body.trainingRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
       const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
@@ -186,11 +190,12 @@ export default async function handler(req, res) {
              travel_rate = $6,
              pto_rate = $7,
              edu_rate = $8,
-             min_wage_rate = $9,
-             health_insurance_deduction = $10,
+             training_rate = $9,
+             min_wage_rate = $10,
+             health_insurance_deduction = $11,
              updated_at = now()
-         WHERE id = $11::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
+         WHERE id = $12::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
         [
           providerId,
           displayName,
@@ -200,6 +205,7 @@ export default async function handler(req, res) {
           travelRate,
           ptoRate,
           eduRate,
+          trainingRate,
           minWageRate,
           healthInsuranceDeduction,
           id,

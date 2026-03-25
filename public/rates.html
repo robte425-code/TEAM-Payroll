@@ -98,6 +98,7 @@
               <th>Travel rate ($)</th>
               <th>PTO rate ($)</th>
               <th>Edu rate ($)</th>
+              <th>Training rate ($)</th>
               <th>Health insurance ($)</th>
               <th>Actions</th>
             </tr>
@@ -162,6 +163,7 @@
           <td><input type="number" class="js-travel-rate rate-input" min="0" step="0.01" title="Travel rate" /></td>
           <td><input type="number" class="js-pto-rate rate-input" min="0" step="0.01" title="PTO rate" /></td>
           <td><input type="number" class="js-edu-rate rate-input" min="0" step="0.01" title="Edu rate" /></td>
+          <td><input type="number" class="js-training-rate rate-input" min="0" step="0.01" title="Training rate" /></td>
           <td><input type="number" class="js-health-insurance rate-input" min="0" step="0.01" title="Health insurance deduction" /></td>
           <td>
             <button type="button" class="js-remove">Remove</button>
@@ -186,6 +188,9 @@
         const er = emp.eduRate;
         tr.querySelector(".js-edu-rate").value =
           er === 0 || er == null ? "" : String(er);
+        const trn = emp.trainingRate;
+        tr.querySelector(".js-training-rate").value =
+          trn === 0 || trn == null ? "" : String(trn);
         const hi = emp.healthInsuranceDeduction;
         tr.querySelector(".js-health-insurance").value =
           hi === 0 || hi == null ? "" : String(hi);
@@ -211,6 +216,8 @@
         const ptoRate = ptoRaw === "" ? 0 : Number(ptoRaw);
         const eduRaw = tr.querySelector(".js-edu-rate").value;
         const eduRate = eduRaw === "" ? 0 : Number(eduRaw);
+        const trainingRaw = tr.querySelector(".js-training-rate").value;
+        const trainingRate = trainingRaw === "" ? 0 : Number(trainingRaw);
         const hiRaw = tr.querySelector(".js-health-insurance").value;
         const healthInsuranceDeduction = hiRaw === "" ? 0 : Number(hiRaw);
         return {
@@ -224,6 +231,7 @@
           travelRate,
           ptoRate,
           eduRate,
+          trainingRate,
           minWageRate,
           healthInsuranceDeduction,
         };
@@ -253,7 +261,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="10" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="11" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -302,7 +310,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="10" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="11" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -321,6 +329,7 @@
             travelRate: 0,
             ptoRate: 0,
             eduRate: 0,
+            trainingRate: 0,
             minWageRate: 0,
             healthInsuranceDeduction: 0,
           },
@@ -366,6 +375,10 @@
               flash("Each Edu rate must be a valid non-negative number.", true);
               return;
             }
+            if (!Number.isFinite(data.trainingRate) || data.trainingRate < 0) {
+              flash("Each training rate must be a valid non-negative number.", true);
+              return;
+            }
             if (!Number.isFinite(data.healthInsuranceDeduction) || data.healthInsuranceDeduction < 0) {
               flash("Each health insurance amount must be a valid non-negative number.", true);
               return;
@@ -383,6 +396,7 @@
                   travelRate: data.travelRate,
                   ptoRate: data.ptoRate,
                   eduRate: data.eduRate,
+                  trainingRate: data.trainingRate,
                   minWageRate: data.minWageRate,
                   healthInsuranceDeduction: data.healthInsuranceDeduction,
                 }),
@@ -401,6 +415,7 @@
                   travelRate: data.travelRate,
                   ptoRate: data.ptoRate,
                   eduRate: data.eduRate,
+                  trainingRate: data.trainingRate,
                   minWageRate: data.minWageRate,
                   healthInsuranceDeduction: data.healthInsuranceDeduction,
                 }),
@@ -525,6 +540,9 @@
               const travelRate = Number(raw.travelRate ?? raw.travel_rate ?? 0);
               const ptoRate = Number(raw.ptoRate ?? raw.pto_rate ?? 0);
               const eduRate = Number(raw.eduRate ?? raw.edu_rate ?? 0);
+              const trainingRate = Number(
+                raw.trainingRate ?? raw.training_rate ?? 0
+              );
               const minWageRate = Number(
                 raw.minWageRate ?? raw.min_wage_rate ?? 0
               );
@@ -540,6 +558,7 @@
               if (!Number.isFinite(travelRate) || travelRate < 0) continue;
               if (!Number.isFinite(ptoRate) || ptoRate < 0) continue;
               if (!Number.isFinite(eduRate) || eduRate < 0) continue;
+              if (!Number.isFinite(trainingRate) || trainingRate < 0) continue;
               try {
                 await apiJson(API, {
                   method: "POST",
@@ -553,6 +572,7 @@
                     travelRate,
                     ptoRate,
                     eduRate,
+                    trainingRate,
                     minWageRate,
                     healthInsuranceDeduction,
                   }),
@@ -578,6 +598,7 @@
                         travelRate,
                         ptoRate,
                         eduRate,
+                        trainingRate,
                         minWageRate,
                         healthInsuranceDeduction,
                       }),

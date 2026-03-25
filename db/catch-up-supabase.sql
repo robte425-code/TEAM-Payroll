@@ -96,3 +96,10 @@ ADD COLUMN IF NOT EXISTS health_insurance_deduction NUMERIC(12, 4) NOT NULL DEFA
   CHECK (health_insurance_deduction >= 0);
 
 COMMENT ON COLUMN payroll.employees.health_insurance_deduction IS 'Health insurance deduction amount in dollars for this employee.';
+
+-- ========== 011_add_training_rate.sql ==========
+ALTER TABLE payroll.employees
+ADD COLUMN IF NOT EXISTS training_rate NUMERIC(12, 4) NOT NULL DEFAULT 0
+  CHECK (training_rate >= 0);
+
+COMMENT ON COLUMN payroll.employees.training_rate IS 'Training pay rate (e.g. dollars per hour).';
