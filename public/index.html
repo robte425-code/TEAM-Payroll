@@ -870,8 +870,14 @@
 
         // Add Heather summary from Payroll 1.0 (as requested).
         const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
+        const excludedEmployeeNames = new Set(
+          ["Robert Evans", "Heather Asplund"].map((n) => normalizeEmployeeName(n))
+        );
         const employeeCount = Array.isArray(lastPayroll10Results?.rows)
-          ? lastPayroll10Results.rows.length
+          ? lastPayroll10Results.rows.filter((r) => {
+              const k = normalizeEmployeeName(r.employeeName);
+              return !excludedEmployeeNames.has(k);
+            }).length
           : 0;
         const managementFee = 50 * employeeCount;
         const hcEl = document.getElementById("payroll20HeatherCommissionFromP10");
@@ -1725,8 +1731,14 @@
 
           // Add Heather summary from Payroll 1.0 (as requested).
           const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
+          const excludedEmployeeNames = new Set(
+            ["Robert Evans", "Heather Asplund"].map((n) => normalizeEmployeeName(n))
+          );
           const employeeCount = Array.isArray(lastPayroll10Results?.rows)
-            ? lastPayroll10Results.rows.length
+            ? lastPayroll10Results.rows.filter((r) => {
+                const k = normalizeEmployeeName(r.employeeName);
+                return !excludedEmployeeNames.has(k);
+              }).length
             : 0;
           const managementFee = 50 * employeeCount;
           const hcEl = document.getElementById("payroll20HeatherCommissionFromP10");
