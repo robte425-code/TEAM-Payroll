@@ -143,9 +143,14 @@
         spacing ignored).
       </p>
       <p class="muted" style="margin-top: 8px">
-        <strong>NB time</strong> — sum of <strong>Prof. Hours</strong> where activity starts with NB.
+        <strong>NB time</strong> — sum of <strong>Prof. Hours</strong> where activity starts with NB (includes
+        <strong>NB TT</strong> training activities).
         <strong>PTO time</strong> — activity <strong>Z PTO</strong>.
         <strong>Sick time</strong> — activity <strong>Z Sick time</strong>.
+        <strong>Training pay</strong> — Prof. Hours where activity starts with <strong>NB TT</strong> × employee
+        Training rate.
+        <strong>Edu pay</strong> — Prof. Hours where activity starts with <strong>Z Education</strong> × employee
+        Edu rate.
       </p>
       <div id="payroll20GenReimSection" style="margin: 14px 0">
         <p class="muted" style="margin: 0 0 8px">
@@ -219,6 +224,8 @@
                 <th>PTO pay ($)</th>
                 <th>Sick pay ($)</th>
                 <th>Holiday pay ($)</th>
+                <th>Training pay ($)</th>
+                <th>Edu pay ($)</th>
                 <th>Mileage</th>
                 <th>General reim. ($)</th>
                 <th>Non-discretionary bonus ($)</th>
@@ -323,18 +330,20 @@
       }
 
       /**
-       * Non-bill rows: only NB* and Z* activity types; bucket NB, Z PTO, Z Sick time.
-       * @returns {"nb"|"pto"|"sick"|null}
+       * Non-bill rows: NB* (incl. NB TT training), Z PTO, Z Sick time, Z Education*.
+       * @returns {"nb"|"training"|"pto"|"sick"|"edu"|null}
        */
       function nonBillActivityBucket(activityRaw) {
         const a = String(activityRaw || "").trim();
         if (!a) return null;
         const au = a.toUpperCase();
+        if (au.startsWith("NB TT")) return "training";
         if (au.startsWith("NB")) return "nb";
         if (!au.startsWith("Z")) return null;
         const norm = a.toLowerCase().replace(/\s+/g, " ").trim();
         if (norm === "z pto") return "pto";
         if (norm === "z sick time") return "sick";
+        if (norm.startsWith("z education")) return "edu";
         return null;
       }
 
@@ -381,12 +390,16 @@
           const key = normalizeEmployeeName(row.timekeeper);
           if (!key) continue;
           if (!map.has(key)) {
-            map.set(key, { nb: 0, pto: 0, sick: 0 });
+            map.set(key, { nb: 0, pto: 0, sick: 0, training: 0, edu: 0 });
           }
           const cur = map.get(key);
-          if (row.bucket === "nb") cur.nb += row.profHours;
+          if (row.bucket === "training") {
+            cur.training += row.profHours;
+            cur.nb += row.profHours;
+          } else if (row.bucket === "nb") cur.nb += row.profHours;
           else if (row.bucket === "pto") cur.pto += row.profHours;
           else if (row.bucket === "sick") cur.sick += row.profHours;
+          else if (row.bucket === "edu") cur.edu += row.profHours;
         }
         return map;
       }
@@ -607,6 +620,8 @@
               incentivePay: Boolean(e.incentivePay),
               travelRate: Number(e.travelRate) || 0,
               ptoRate: Number(e.ptoRate) || 0,
+              eduRate: Number(e.eduRate) || 0,
+              trainingRate: Number(e.trainingRate) || 0,
             });
           }
           return m;
@@ -825,6 +840,8 @@
               <td>${escapeHtml(money2(r.ptoPay))}</td>
               <td>${escapeHtml(money2(r.sickPay))}</td>
               <td>${escapeHtml(money2(r.holidayPay))}</td>
+              <td>${escapeHtml(money2(r.trainingPay ?? 0))}</td>
+              <td>${escapeHtml(money2(r.eduPay ?? 0))}</td>
             <td>${escapeHtml(money2(r.mileage ?? r.mileageReimb))}</td>
               <td>${escapeHtml(money2(r.generalReimbursement))}</td>
               <td>${escapeHtml(money2(r.nonDiscBonus))}</td>
@@ -843,6 +860,8 @@
             <td>${escapeHtml(money2(s.ptoPay))}</td>
             <td>${escapeHtml(money2(s.sickPay))}</td>
             <td>${escapeHtml(money2(s.holidayPay))}</td>
+            <td>${escapeHtml(money2(s.trainingPay ?? 0))}</td>
+            <td>${escapeHtml(money2(s.eduPay ?? 0))}</td>
             <td>${escapeHtml(money2(s.mileage))}</td>
             <td>${escapeHtml(money2(s.generalReimbursement))}</td>
             <td>${escapeHtml(money2(s.nonDiscBonus))}</td>
@@ -1594,6 +1613,8 @@
           let sumPto = 0;
           let sumSick = 0;
           let sumHoliday = 0;
+          let sumTrainingPay = 0;
+          let sumEduPay = 0;
           let sumMileage = 0;
           let sumGenReim = 0;
           let sumBonus = 0;
@@ -1601,7 +1622,7 @@
           lastPayroll10Results.rows.forEach((r, rowIdx) => {
             const generalReimbursement = Number(generalReimByRow[rowIdx]) || 0;
             const nameKey = normalizeEmployeeName(r.employeeName);
-            const nbh = nbMap.get(nameKey) || { nb: 0, pto: 0, sick: 0 };
+            const nbh = nbMap.get(nameKey) || { nb: 0, pto: 0, sick: 0, training: 0, edu: 0 };
             const caseWork = Number(r.caseWork) || 0;
             const report = Number(r.report) || 0;
             const travelWait = Number(r.travelWait) || 0;
@@ -1624,6 +1645,8 @@
               minWageRate: 0,
               travelRate: 0,
               ptoRate: 0,
+              eduRate: 0,
+              trainingRate: 0,
             };
             const minW = Number(det.minWageRate) || 0;
             const regularPay = totalHoursWorked * minW;
@@ -1631,6 +1654,8 @@
             const ptoPay = nbh.pto * (Number(det.ptoRate) || 0);
             const sickPay = nbh.sick * (Number(det.hourlyRate) || 0);
             const holidayPay = Number(r.holidayPay) || 0;
+            const trainingPay = nbh.training * (Number(det.trainingRate) || 0);
+            const eduPay = nbh.edu * (Number(det.eduRate) || 0);
             const mileageUnits = Number(r.mileage) || 0;
             // Non-discretionary bonus: billable pay + travel pay - regular pay - overtime pay.
             const nonDiscBonus =
@@ -1641,6 +1666,8 @@
             sumPto += ptoPay;
             sumSick += sickPay;
             sumHoliday += holidayPay;
+            sumTrainingPay += trainingPay;
+            sumEduPay += eduPay;
             sumMileage += mileageUnits;
             sumGenReim += generalReimbursement;
             sumBonus += nonDiscBonus;
@@ -1659,6 +1686,8 @@
               ptoPay,
               sickPay,
               holidayPay,
+              trainingPay,
+              eduPay,
               mileage: mileageUnits,
               generalReimbursement,
               nonDiscBonus,
@@ -1680,6 +1709,8 @@
               <td>${escapeHtml(money2(ptoPay))}</td>
               <td>${escapeHtml(money2(sickPay))}</td>
               <td>${escapeHtml(money2(holidayPay))}</td>
+              <td>${escapeHtml(money2(trainingPay))}</td>
+              <td>${escapeHtml(money2(eduPay))}</td>
               <td>${escapeHtml(money2(mileageUnits))}</td>
               <td>${escapeHtml(money2(generalReimbursement))}</td>
               <td>${escapeHtml(money2(nonDiscBonus))}</td>
@@ -1697,6 +1728,8 @@
             <td>${escapeHtml(money2(sumPto))}</td>
             <td>${escapeHtml(money2(sumSick))}</td>
             <td>${escapeHtml(money2(sumHoliday))}</td>
+            <td>${escapeHtml(money2(sumTrainingPay))}</td>
+            <td>${escapeHtml(money2(sumEduPay))}</td>
             <td>${escapeHtml(money2(sumMileage))}</td>
             <td>${escapeHtml(money2(sumGenReim))}</td>
             <td>${escapeHtml(money2(sumBonus))}</td>
@@ -1722,6 +1755,8 @@
               ptoPay: sumPto,
               sickPay: sumSick,
               holidayPay: sumHoliday,
+              trainingPay: sumTrainingPay,
+              eduPay: sumEduPay,
               mileage: sumMileage,
               generalReimbursement: sumGenReim,
               nonDiscBonus: sumBonus,
@@ -1776,6 +1811,8 @@
           "PTO pay ($)",
           "Sick pay ($)",
           "Holiday pay ($)",
+          "Training pay ($)",
+          "Edu pay ($)",
           "Mileage",
           "General reim. ($)",
           "Non-discretionary bonus ($)",
@@ -1802,6 +1839,8 @@
               money2(row.ptoPay),
               money2(row.sickPay),
               money2(row.holidayPay),
+              money2(row.trainingPay ?? 0),
+              money2(row.eduPay ?? 0),
               money2(row.mileage ?? row.mileageReimb),
               money2(row.generalReimbursement),
               money2(row.nonDiscBonus),
@@ -1826,7 +1865,9 @@
             money2(s.ptoPay),
             money2(s.sickPay),
             money2(s.holidayPay),
-              money2(s.mileage),
+            money2(s.trainingPay ?? 0),
+            money2(s.eduPay ?? 0),
+            money2(s.mileage),
             money2(s.generalReimbursement),
             money2(s.nonDiscBonus),
           ]
