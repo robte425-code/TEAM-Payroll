@@ -1601,7 +1601,9 @@
             const sickPay = nbh.sick * (Number(det.hourlyRate) || 0);
             const holidayPay = Number(r.holidayPay) || 0;
             const mileageReimb = Number(r.mileagePay) || 0;
-            const nonDiscBonus = Number(r.billablePay) - regularPay - overtimePay;
+            // Non-discretionary bonus: billable pay + travel pay - regular pay - overtime pay.
+            const nonDiscBonus =
+              Number(r.billablePay) + Number(r.travelPay) - regularPay - overtimePay;
 
             sumRegular += regularPay;
             sumOt += overtimePay;
