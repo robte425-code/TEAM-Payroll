@@ -209,10 +209,10 @@
                 <th>Employee</th>
                 <th>Case + Reports (hr)</th>
                 <th>NB time (hr)</th>
-                <th>PTO time (hr)</th>
-                <th>Sick time (hr)</th>
                 <th>Travel &amp; Wait (hr)</th>
                 <th>Total hrs worked</th>
+                <th>PTO time (hr)</th>
+                <th>Sick time (hr)</th>
                 <th>Overtime (hr)</th>
                 <th>Regular pay ($)</th>
                 <th>Overtime pay ($)</th>
@@ -671,7 +671,9 @@
       }
 
       function money2(n) {
-        return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toFixed(2);
+        const v = Number(n);
+        if (!Number.isFinite(v)) return "0.00";
+        return (Math.round((v + Number.EPSILON) * 100) / 100).toFixed(2);
       }
 
       /** Rows included in totals (session, until Clear). */
@@ -809,10 +811,10 @@
               <td>${escapeHtml(r.employeeName)}</td>
               <td>${escapeHtml(money2(r.casePlusReports))}</td>
               <td>${escapeHtml(money2(r.nbTime))}</td>
-              <td>${escapeHtml(money2(r.ptoTime))}</td>
-              <td>${escapeHtml(money2(r.sickTime))}</td>
               <td>${escapeHtml(money2(r.travelWaitHours))}</td>
               <td>${escapeHtml(money2(r.totalHoursWorked))}</td>
+              <td>${escapeHtml(money2(r.ptoTime))}</td>
+              <td>${escapeHtml(money2(r.sickTime))}</td>
               <td>${escapeHtml(money2(r.overtimeHours))}</td>
               <td>${escapeHtml(money2(r.regularPay))}</td>
               <td>${escapeHtml(money2(r.overtimePay))}</td>
@@ -1633,10 +1635,10 @@
               <td>${escapeHtml(r.employeeName)}</td>
               <td>${escapeHtml(money2(casePlusReports))}</td>
               <td>${escapeHtml(money2(nbh.nb))}</td>
-              <td>${escapeHtml(money2(nbh.pto))}</td>
-              <td>${escapeHtml(money2(nbh.sick))}</td>
               <td>${escapeHtml(money2(travelWait))}</td>
               <td>${escapeHtml(money2(totalHoursWorked))}</td>
+              <td>${escapeHtml(money2(nbh.pto))}</td>
+              <td>${escapeHtml(money2(nbh.sick))}</td>
               <td>${escapeHtml(money2(overtimeHours))}</td>
               <td>${escapeHtml(money2(regularPay))}</td>
               <td>${escapeHtml(money2(overtimePay))}</td>
@@ -1708,10 +1710,10 @@
           "Employee",
           "Case + Reports (hr)",
           "NB time (hr)",
-          "PTO time (hr)",
-          "Sick time (hr)",
           "Travel & Wait (hr)",
           "Total hrs worked",
+          "PTO time (hr)",
+          "Sick time (hr)",
           "Overtime (hr)",
           "Regular pay ($)",
           "Overtime pay ($)",
@@ -1734,10 +1736,10 @@
               row.employeeName,
               money2(row.casePlusReports),
               money2(row.nbTime),
-              money2(row.ptoTime),
-              money2(row.sickTime),
               money2(row.travelWaitHours),
               money2(row.totalHoursWorked),
+              money2(row.ptoTime),
+              money2(row.sickTime),
               money2(row.overtimeHours),
               money2(row.regularPay),
               money2(row.overtimePay),
