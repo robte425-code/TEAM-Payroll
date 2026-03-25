@@ -121,6 +121,7 @@
           <thead>
             <tr>
               <th>Employee</th>
+              <th>Incentive</th>
               <th>Billable pay ($)</th>
               <th>Travel pay ($)</th>
               <th>Mileage pay ($)</th>
@@ -727,6 +728,7 @@
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td>${escapeHtml(row.employeeName)}</td>
+              <td style="text-align:center">${row.incentiveApplied ? "✓" : ""}</td>
               <td>${escapeHtml(money2(row.billablePay))}</td>
               <td>${escapeHtml(money2(row.travelPay))}</td>
               <td>${escapeHtml(money2(row.mileagePay))}</td>
@@ -739,7 +741,7 @@
           trTotal.style.fontWeight = "700";
           trTotal.innerHTML = `
             <td>Total</td>
-            <td colspan="4"></td>
+            <td colspan="5"></td>
             <td>${escapeHtml(money2(p.grandTotal))}</td>
           `;
           tbody.appendChild(trTotal);
@@ -765,9 +767,10 @@
 
         const heatherEl = document.getElementById("payroll10HeatherCommission");
         if (heatherEl) {
+          const totalReportHours = Number(p.totalReportHours) || 0;
           heatherEl.textContent =
             `Commission for Heather: $${money2(p.heatherCommission)} ` +
-            `(sum of case work hours ${money2(p.totalCaseWorkHours)} × ${heatherFactor} × LNI rate $${money2(
+            `(case work ${money2(p.totalCaseWorkHours)} hr + report ${money2(totalReportHours)} hr) × ${heatherFactor} × LNI rate $${money2(
               orgRates.lniRate
             )})`;
         }
@@ -1239,7 +1242,14 @@
           (sum, item) => sum + Number(item.totals.case_work || 0),
           0
         );
-        const heatherCommission = totalCaseWorkHours * HEATHER_COMMISSION_LNI_FACTOR * orgRates.lniRate;
+        const totalReportHours = summary.reduce(
+          (sum, item) => sum + Number(item.totals.report || 0),
+          0
+        );
+        const heatherCommission =
+          (totalCaseWorkHours + totalReportHours) *
+          HEATHER_COMMISSION_LNI_FACTOR *
+          orgRates.lniRate;
 
         for (const item of summary) {
           const caseWork = Number(item.totals.case_work || 0);
@@ -1258,7 +1268,8 @@
           };
 
           let payRate;
-          if (det.incentivePay && casePlusReports >= incentiveThreshold) {
+          const incentiveApplied = Boolean(det.incentivePay && casePlusReports >= incentiveThreshold);
+          if (incentiveApplied) {
             payRate = det.hourlyRate + orgRates.incentivePayRate;
           } else {
             payRate = det.hourlyRate;
@@ -1274,6 +1285,7 @@
           rowsOut.push({
             providerId: pid,
             employeeName: item.employeeName,
+            incentiveApplied,
             billablePay,
             travelPay,
             mileagePay,
@@ -1288,6 +1300,7 @@
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escapeHtml(item.employeeName)}</td>
+            <td style="text-align:center">${incentiveApplied ? "✓" : ""}</td>
             <td>${escapeHtml(money2(billablePay))}</td>
             <td>${escapeHtml(money2(travelPay))}</td>
             <td>${escapeHtml(money2(mileagePay))}</td>
@@ -1301,7 +1314,7 @@
         trTotal.style.fontWeight = "700";
         trTotal.innerHTML = `
           <td>Total</td>
-          <td colspan="4"></td>
+          <td colspan="5"></td>
           <td>${escapeHtml(money2(grandTotal))}</td>
         `;
         tbody.appendChild(trTotal);
@@ -1313,7 +1326,7 @@
           `Org LNI rate: $${money2(orgRates.lniRate)}`;
         document.getElementById("payroll10HeatherCommission").textContent =
           `Commission for Heather: $${money2(heatherCommission)} ` +
-          `(sum of case work hours ${money2(totalCaseWorkHours)} × ${HEATHER_COMMISSION_LNI_FACTOR} × LNI rate $${money2(orgRates.lniRate)})`;
+          `(case work ${money2(totalCaseWorkHours)} hr + report ${money2(totalReportHours)} hr) × ${HEATHER_COMMISSION_LNI_FACTOR} × LNI rate $${money2(orgRates.lniRate)})`;
         document.getElementById("payroll10ResultsWrap").hidden = false;
         lastPayroll10Results = {
           workingDays: wd,
@@ -1325,6 +1338,7 @@
             lniRate: orgRates.lniRate,
           },
           totalCaseWorkHours,
+          totalReportHours,
           heatherCommission,
           rows: rowsOut,
           grandTotal,
@@ -1364,6 +1378,7 @@
 
         const headers = [
           "Employee",
+          "Incentive",
           "Billable pay ($)",
           "Travel pay ($)",
           "Mileage pay ($)",
@@ -1381,6 +1396,7 @@
           lines.push(
             [
               row.employeeName,
+              row.incentiveApplied ? "Y" : "",
               money2(row.billablePay),
               money2(row.travelPay),
               money2(row.mileagePay),
@@ -1393,17 +1409,18 @@
         }
 
         lines.push(
-          ["Total", "", "", "", "", money2(lastPayroll10Results.grandTotal)]
+          ["Total", "", "", "", "", "", money2(lastPayroll10Results.grandTotal)]
             .map(csvEscape)
             .join(",")
         );
 
         const tcw = Number(lastPayroll10Results.totalCaseWorkHours) || 0;
+        const trh = Number(lastPayroll10Results.totalReportHours) || 0;
         const hc = Number(lastPayroll10Results.heatherCommission) || 0;
         const lni = Number(lastPayroll10Results.orgRates?.lniRate) || 0;
         lines.push(
           [
-            `Commission for Heather (sum case work hr × 0.02 × LNI; ${money2(tcw)} hr, LNI $${money2(lni)})`,
+            `Commission for Heather ((case work + report) hr × 0.02 × LNI; case ${money2(tcw)} hr, report ${money2(trh)} hr, LNI $${money2(lni)})`,
             "",
             "",
             "",
