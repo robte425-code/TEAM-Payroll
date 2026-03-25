@@ -352,10 +352,10 @@ table.rates-table td:last-child button {
   box-sizing: border-box;
 }
 
-/* Column widths — sum 100% so table spans full card */
+/* Column widths — sum 100% so table spans full card (11 cols incl. Actions) */
 table.rates-table th:nth-child(1),
 table.rates-table td:nth-child(1) {
-  width: 27%;
+  width: 25%;
 }
 table.rates-table th:nth-child(2),
 table.rates-table td:nth-child(2),
@@ -378,9 +378,14 @@ table.rates-table th:nth-child(8),
 table.rates-table td:nth-child(8),
 table.rates-table th:nth-child(9),
 table.rates-table td:nth-child(9) {
-  width: 9%;
+  width: 8%;
 }
 table.rates-table th:nth-child(10),
 table.rates-table td:nth-child(10) {
-  width: 9%;
+  width: 8%;
+}
+table.rates-table th:nth-child(11),
+table.rates-table td:nth-child(11) {
+  width: 7%;
+  min-width: 4.5rem;
 }
