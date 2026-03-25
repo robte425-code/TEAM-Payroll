@@ -207,14 +207,15 @@
             <thead>
               <tr>
                 <th>Employee</th>
+                <th>Case + Reports (hr)</th>
                 <th>NB time (hr)</th>
                 <th>PTO time (hr)</th>
                 <th>Sick time (hr)</th>
+                <th>Travel &amp; Wait (hr)</th>
                 <th>Total hrs worked</th>
                 <th>Overtime (hr)</th>
                 <th>Regular pay ($)</th>
                 <th>Overtime pay ($)</th>
-                <th>Travel &amp; Wait pay ($)</th>
                 <th>PTO pay ($)</th>
                 <th>Sick pay ($)</th>
                 <th>Holiday pay ($)</th>
@@ -806,14 +807,15 @@
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td>${escapeHtml(r.employeeName)}</td>
+              <td>${escapeHtml(money2(r.casePlusReports))}</td>
               <td>${escapeHtml(money2(r.nbTime))}</td>
               <td>${escapeHtml(money2(r.ptoTime))}</td>
               <td>${escapeHtml(money2(r.sickTime))}</td>
+              <td>${escapeHtml(money2(r.travelWaitHours))}</td>
               <td>${escapeHtml(money2(r.totalHoursWorked))}</td>
               <td>${escapeHtml(money2(r.overtimeHours))}</td>
               <td>${escapeHtml(money2(r.regularPay))}</td>
               <td>${escapeHtml(money2(r.overtimePay))}</td>
-              <td>${escapeHtml(money2(r.travelWaitPay))}</td>
               <td>${escapeHtml(money2(r.ptoPay))}</td>
               <td>${escapeHtml(money2(r.sickPay))}</td>
               <td>${escapeHtml(money2(r.holidayPay))}</td>
@@ -829,10 +831,9 @@
           trTotal.style.fontWeight = "700";
           trTotal.innerHTML = `
             <td>Total</td>
-            <td colspan="5"></td>
+            <td colspan="7"></td>
             <td>${escapeHtml(money2(s.regularPay))}</td>
             <td>${escapeHtml(money2(s.overtimePay))}</td>
-            <td>${escapeHtml(money2(s.travelWaitPay))}</td>
             <td>${escapeHtml(money2(s.ptoPay))}</td>
             <td>${escapeHtml(money2(s.sickPay))}</td>
             <td>${escapeHtml(money2(s.holidayPay))}</td>
@@ -1556,7 +1557,6 @@
           const rows20 = [];
           let sumRegular = 0;
           let sumOt = 0;
-          let sumTravel = 0;
           let sumPto = 0;
           let sumSick = 0;
           let sumHoliday = 0;
@@ -1571,6 +1571,7 @@
             const caseWork = Number(r.caseWork) || 0;
             const report = Number(r.report) || 0;
             const travelWait = Number(r.travelWait) || 0;
+            const casePlusReports = caseWork + report;
             const totalForOT = nbh.nb + caseWork + report + travelWait;
             let totalHoursWorked;
             let overtimeHours;
@@ -1592,7 +1593,6 @@
             const minW = Number(det.minWageRate) || 0;
             const regularPay = totalHoursWorked * minW;
             const overtimePay = overtimeHours * minW * 1.5;
-            const travelWaitPay = travelWait * (Number(det.travelRate) || 0);
             const ptoPay = nbh.pto * (Number(det.ptoRate) || 0);
             const sickPay = nbh.sick * (Number(det.hourlyRate) || 0);
             const holidayPay = Number(r.holidayPay) || 0;
@@ -1601,7 +1601,6 @@
 
             sumRegular += regularPay;
             sumOt += overtimePay;
-            sumTravel += travelWaitPay;
             sumPto += ptoPay;
             sumSick += sickPay;
             sumHoliday += holidayPay;
@@ -1611,14 +1610,15 @@
 
             const rowObj = {
               employeeName: r.employeeName,
+              casePlusReports,
               nbTime: nbh.nb,
               ptoTime: nbh.pto,
               sickTime: nbh.sick,
+              travelWaitHours: travelWait,
               totalHoursWorked,
               overtimeHours,
               regularPay,
               overtimePay,
-              travelWaitPay,
               ptoPay,
               sickPay,
               holidayPay,
@@ -1631,14 +1631,15 @@
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td>${escapeHtml(r.employeeName)}</td>
+              <td>${escapeHtml(money2(casePlusReports))}</td>
               <td>${escapeHtml(money2(nbh.nb))}</td>
               <td>${escapeHtml(money2(nbh.pto))}</td>
               <td>${escapeHtml(money2(nbh.sick))}</td>
+              <td>${escapeHtml(money2(travelWait))}</td>
               <td>${escapeHtml(money2(totalHoursWorked))}</td>
               <td>${escapeHtml(money2(overtimeHours))}</td>
               <td>${escapeHtml(money2(regularPay))}</td>
               <td>${escapeHtml(money2(overtimePay))}</td>
-              <td>${escapeHtml(money2(travelWaitPay))}</td>
               <td>${escapeHtml(money2(ptoPay))}</td>
               <td>${escapeHtml(money2(sickPay))}</td>
               <td>${escapeHtml(money2(holidayPay))}</td>
@@ -1653,10 +1654,9 @@
           trTotal.style.fontWeight = "700";
           trTotal.innerHTML = `
             <td>Total</td>
-            <td colspan="5"></td>
+            <td colspan="7"></td>
             <td>${escapeHtml(money2(sumRegular))}</td>
             <td>${escapeHtml(money2(sumOt))}</td>
-            <td>${escapeHtml(money2(sumTravel))}</td>
             <td>${escapeHtml(money2(sumPto))}</td>
             <td>${escapeHtml(money2(sumSick))}</td>
             <td>${escapeHtml(money2(sumHoliday))}</td>
@@ -1682,7 +1682,6 @@
             sums: {
               regularPay: sumRegular,
               overtimePay: sumOt,
-              travelWaitPay: sumTravel,
               ptoPay: sumPto,
               sickPay: sumSick,
               holidayPay: sumHoliday,
@@ -1707,14 +1706,15 @@
         }
         const headers = [
           "Employee",
+          "Case + Reports (hr)",
           "NB time (hr)",
           "PTO time (hr)",
           "Sick time (hr)",
+          "Travel & Wait (hr)",
           "Total hrs worked",
           "Overtime (hr)",
           "Regular pay ($)",
           "Overtime pay ($)",
-          "Travel & Wait pay ($)",
           "PTO pay ($)",
           "Sick pay ($)",
           "Holiday pay ($)",
@@ -1732,14 +1732,15 @@
           lines.push(
             [
               row.employeeName,
+              money2(row.casePlusReports),
               money2(row.nbTime),
               money2(row.ptoTime),
               money2(row.sickTime),
+              money2(row.travelWaitHours),
               money2(row.totalHoursWorked),
               money2(row.overtimeHours),
               money2(row.regularPay),
               money2(row.overtimePay),
-              money2(row.travelWaitPay),
               money2(row.ptoPay),
               money2(row.sickPay),
               money2(row.holidayPay),
@@ -1760,9 +1761,10 @@
             "",
             "",
             "",
+            "",
+            "",
             money2(s.regularPay),
             money2(s.overtimePay),
-            money2(s.travelWaitPay),
             money2(s.ptoPay),
             money2(s.sickPay),
             money2(s.holidayPay),
