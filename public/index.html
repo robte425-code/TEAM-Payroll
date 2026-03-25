@@ -1657,9 +1657,14 @@
             const trainingPay = nbh.training * (Number(det.trainingRate) || 0);
             const eduPay = nbh.edu * (Number(det.eduRate) || 0);
             const mileageUnits = Number(r.mileage) || 0;
-            // Non-discretionary bonus: billable pay + travel pay - regular pay - overtime pay.
+            // Non-discretionary bonus: billable + travel + training + edu pay - regular - overtime pay.
             const nonDiscBonus =
-              Number(r.billablePay) + Number(r.travelPay) - regularPay - overtimePay;
+              Number(r.billablePay) +
+              Number(r.travelPay) +
+              trainingPay +
+              eduPay -
+              regularPay -
+              overtimePay;
 
             sumRegular += regularPay;
             sumOt += overtimePay;
