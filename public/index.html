@@ -1315,6 +1315,7 @@
             total: rowTotal,
             caseWork,
             report,
+            casePlusReports,
             travelWait,
             mileage,
           });
@@ -1573,8 +1574,9 @@
             const caseWork = Number(r.caseWork) || 0;
             const report = Number(r.report) || 0;
             const travelWait = Number(r.travelWait) || 0;
-            const casePlusReports = caseWork + report;
-            const totalForOT = nbh.nb + caseWork + report + travelWait;
+            const casePlusReportsStored = Number(r.casePlusReports);
+            const casePlusReports = Number.isFinite(casePlusReportsStored) ? casePlusReportsStored : caseWork + report;
+            const totalForOT = nbh.nb + casePlusReports + travelWait;
             let totalHoursWorked;
             let overtimeHours;
             if (totalForOT > incentiveThreshold) {
