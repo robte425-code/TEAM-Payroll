@@ -31,6 +31,7 @@
       <button type="button" id="analyzeBtn">Analyze</button>
       <button type="button" id="clearBtn" class="btn-secondary">Clear session</button>
       <p id="status" class="muted"></p>
+      <p id="sessionFiles" class="muted" aria-live="polite"></p>
       <p id="error" class="error"></p>
     </div>
 
@@ -677,6 +678,8 @@
       let sessionCalcRows = [];
       /** Pre-aggregated employee totals for sessionCalcRows (smaller persistence than raw rows). */
       let sessionCalcSummary = [];
+      /** Spreadsheet file names uploaded/analyzed in this session. */
+      let sessionSourceFiles = [];
       /** Excluded adj/resub rows with source file name (session, until Clear). */
       let sessionAdjResubRows = [];
       /** Monotonic id for adj rows (editable units). */
@@ -698,12 +701,26 @@
         }
       }
 
+      function renderSessionFiles() {
+        const el = document.getElementById("sessionFiles");
+        if (!el) return;
+        if (!sessionSourceFiles.length) {
+          el.textContent = "";
+          return;
+        }
+        const shown = sessionSourceFiles.slice(0, 6);
+        const extra = sessionSourceFiles.length - shown.length;
+        el.textContent =
+          `Uploaded in this session: ${shown.join(", ")}${extra > 0 ? ` (+${extra} more)` : ""}`;
+      }
+
       function saveSessionToStorage() {
         try {
           const payload = {
             sessionCalcSummary,
             sessionAdjResubRows,
             nextAdjRowId,
+            sessionSourceFiles,
             lastPayroll10Results,
             lastPayroll20Results,
           };
@@ -877,12 +894,15 @@
         sessionCalcSummary = Array.isArray(payload.sessionCalcSummary) ? payload.sessionCalcSummary : [];
         sessionAdjResubRows = Array.isArray(payload.sessionAdjResubRows) ? payload.sessionAdjResubRows : [];
         nextAdjRowId = Number(payload.nextAdjRowId) || 1;
+        sessionSourceFiles = Array.isArray(payload.sessionSourceFiles) ? payload.sessionSourceFiles : [];
         lastPayroll10Results = payload.lastPayroll10Results || null;
         lastPayroll20Results = payload.lastPayroll20Results || null;
 
         document.getElementById("error").textContent = "";
         document.getElementById("status").textContent = "";
         document.getElementById("meta").textContent = "";
+
+        renderSessionFiles();
 
         // Restore analysis tables.
         renderAdjResubTable(sessionAdjResubRows);
@@ -1156,6 +1176,8 @@
 
           // Used for preserving session across navigation.
           sessionCalcSummary = summarizeByEmployee(sessionCalcRows);
+          sessionSourceFiles = Array.from(new Set([...(sessionSourceFiles || []), ...runNames]));
+          renderSessionFiles();
 
           const summary = buildFullSummary();
           const allRowsForSync = sessionCalcRows.concat(
@@ -1187,12 +1209,14 @@
         sessionCalcRows = [];
         sessionCalcSummary = [];
         sessionAdjResubRows = [];
+        sessionSourceFiles = [];
         nextAdjRowId = 1;
         lastRateMap = new Map();
         clearSessionStorage();
         document.getElementById("error").textContent = "";
         document.getElementById("status").textContent = "";
         document.getElementById("meta").textContent = "";
+        renderSessionFiles();
         document.querySelector("#summaryTable tbody").innerHTML = "";
         renderAdjResubTable([]);
         clearPayroll10Results();
