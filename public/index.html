@@ -475,7 +475,7 @@
       }
 
       function buildFullSummary() {
-        const base = summarizeByEmployee(sessionCalcRows);
+        const base = sessionCalcRows.length ? summarizeByEmployee(sessionCalcRows) : sessionCalcSummary || [];
         const merged = base.map(cloneSummaryItem);
 
         const getOrCreate = (employeeName, providerId) => {
@@ -674,6 +674,8 @@
 
       /** Rows included in totals (session, until Clear). */
       let sessionCalcRows = [];
+      /** Pre-aggregated employee totals for sessionCalcRows (smaller persistence than raw rows). */
+      let sessionCalcSummary = [];
       /** Excluded adj/resub rows with source file name (session, until Clear). */
       let sessionAdjResubRows = [];
       /** Monotonic id for adj rows (editable units). */
@@ -684,6 +686,224 @@
       let lastPayroll10Results = null;
       /** Last payroll 2.0 export snapshot. */
       let lastPayroll20Results = null;
+
+      const SESSION_STORAGE_KEY = "TEAM_PAYROLL_SESSION_V1";
+
+      function clearSessionStorage() {
+        try {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+      }
+
+      function saveSessionToStorage() {
+        try {
+          const payload = {
+            sessionCalcSummary,
+            sessionAdjResubRows,
+            nextAdjRowId,
+            lastPayroll10Results,
+            lastPayroll20Results,
+          };
+          sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+        } catch {
+          // ignore (e.g. storage full / blocked)
+        }
+      }
+
+      function renderPayroll10FromSnapshot(p) {
+        if (!p) return;
+        const wdEl = document.getElementById("workingDaysInput");
+        const hdEl = document.getElementById("holidayDaysInput");
+        if (wdEl) wdEl.value = String(p.workingDays ?? "");
+        if (hdEl) hdEl.value = String(p.holidayDays ?? "");
+
+        const tbody = document.querySelector("#payroll10Table tbody");
+        if (tbody) {
+          tbody.innerHTML = "";
+          const rows = Array.isArray(p.rows) ? p.rows : [];
+          for (const row of rows) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${escapeHtml(row.employeeName)}</td>
+              <td>${escapeHtml(money2(row.billablePay))}</td>
+              <td>${escapeHtml(money2(row.travelPay))}</td>
+              <td>${escapeHtml(money2(row.mileagePay))}</td>
+              <td>${escapeHtml(money2(row.holidayPay))}</td>
+              <td>${escapeHtml(money2(row.total))}</td>
+            `;
+            tbody.appendChild(tr);
+          }
+          const trTotal = document.createElement("tr");
+          trTotal.style.fontWeight = "700";
+          trTotal.innerHTML = `
+            <td>Total</td>
+            <td colspan="4"></td>
+            <td>${escapeHtml(money2(p.grandTotal))}</td>
+          `;
+          tbody.appendChild(trTotal);
+        }
+
+        const wd = p.workingDays ?? 0;
+        const holidayDays = p.holidayDays ?? 0;
+        const incentiveThreshold = p.incentiveThreshold ?? 0;
+        const orgRates = p.orgRates || { incentivePayRate: 0, mileageRate: 0, lniRate: 0 };
+        const HOLIDAY_PAY_HOURS = 7.5;
+        const heatherFactor = 0.02;
+
+        const metaEl = document.getElementById("payroll10Meta");
+        if (metaEl) {
+          metaEl.textContent =
+            `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
+            `Holiday pay: holiday days × ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
+            `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(
+              orgRates.mileageRate
+            )}/unit · ` +
+            `Org LNI rate: $${money2(orgRates.lniRate)}`;
+        }
+
+        const heatherEl = document.getElementById("payroll10HeatherCommission");
+        if (heatherEl) {
+          heatherEl.textContent =
+            `Commission for Heather: $${money2(p.heatherCommission)} ` +
+            `(sum of case work hours ${money2(p.totalCaseWorkHours)} × ${heatherFactor} × LNI rate $${money2(
+              orgRates.lniRate
+            )})`;
+        }
+
+        const wrap = document.getElementById("payroll10ResultsWrap");
+        if (wrap) wrap.hidden = false;
+        setPayroll10ExtrasEnabled(true);
+      }
+
+      function renderPayroll20FromSnapshot(p) {
+        if (!p) return;
+        const tbody = document.querySelector("#payroll20Table tbody");
+        if (tbody) {
+          tbody.innerHTML = "";
+          const rows = Array.isArray(p.rows) ? p.rows : [];
+          for (const r of rows) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${escapeHtml(r.employeeName)}</td>
+              <td>${escapeHtml(money2(r.nbTime))}</td>
+              <td>${escapeHtml(money2(r.ptoTime))}</td>
+              <td>${escapeHtml(money2(r.sickTime))}</td>
+              <td>${escapeHtml(money2(r.totalHoursWorked))}</td>
+              <td>${escapeHtml(money2(r.overtimeHours))}</td>
+              <td>${escapeHtml(money2(r.regularPay))}</td>
+              <td>${escapeHtml(money2(r.overtimePay))}</td>
+              <td>${escapeHtml(money2(r.travelWaitPay))}</td>
+              <td>${escapeHtml(money2(r.ptoPay))}</td>
+              <td>${escapeHtml(money2(r.sickPay))}</td>
+              <td>${escapeHtml(money2(r.holidayPay))}</td>
+              <td>${escapeHtml(money2(r.mileageReimb))}</td>
+              <td>${escapeHtml(money2(r.generalReimbursement))}</td>
+              <td>${escapeHtml(money2(r.nonDiscBonus))}</td>
+            `;
+            tbody.appendChild(tr);
+          }
+
+          const s = p.sums || {};
+          const trTotal = document.createElement("tr");
+          trTotal.style.fontWeight = "700";
+          trTotal.innerHTML = `
+            <td>Total</td>
+            <td colspan="5"></td>
+            <td>${escapeHtml(money2(s.regularPay))}</td>
+            <td>${escapeHtml(money2(s.overtimePay))}</td>
+            <td>${escapeHtml(money2(s.travelWaitPay))}</td>
+            <td>${escapeHtml(money2(s.ptoPay))}</td>
+            <td>${escapeHtml(money2(s.sickPay))}</td>
+            <td>${escapeHtml(money2(s.holidayPay))}</td>
+            <td>${escapeHtml(money2(s.mileage))}</td>
+            <td>${escapeHtml(money2(s.generalReimbursement))}</td>
+            <td>${escapeHtml(money2(s.nonDiscBonus))}</td>
+          `;
+          tbody.appendChild(trTotal);
+        }
+
+        const metaEl = document.getElementById("payroll20Meta");
+        if (metaEl) {
+          let metaText = `Non-bill file: ${p.fileName || ""} · Incentive threshold (from Payroll 1.0): ${money2(
+            p.incentiveThreshold
+          )} hr · General reimbursement: per-employee amounts per table above`;
+          const unmatched = Array.isArray(p.unmatchedNonBillNames) ? p.unmatchedNonBillNames : [];
+          if (unmatched.length) {
+            metaText += ` · Note: non-bill rows for names not in Payroll 1.0 (${unmatched.length}): ${unmatched.join(
+              "; "
+            )}`;
+          }
+          metaEl.textContent = metaText;
+        }
+
+        const wrap = document.getElementById("payroll20ResultsWrap");
+        if (wrap) wrap.hidden = false;
+        setPayroll20ExtrasEnabled(true);
+
+        // Rebuild the reimbursement input table and fill amounts if Payroll 1.0 snapshot exists.
+        renderPayroll20GeneralReimInputs();
+        if (lastPayroll20Results && lastPayroll10Results && Array.isArray(p.rows)) {
+          const inputs = document.querySelectorAll("input.js-p20-genreim");
+          inputs.forEach((inp, idx) => {
+            const v = p.rows[idx]?.generalReimbursement;
+            if (v == null || !Number.isFinite(Number(v))) return;
+            inp.value = String(Number(v));
+          });
+        }
+      }
+
+      async function restoreFromSessionStorage() {
+        let raw = null;
+        try {
+          raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        } catch {
+          raw = null;
+        }
+        if (!raw) return;
+
+        let payload = null;
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          return;
+        }
+
+        sessionCalcRows = [];
+        sessionCalcSummary = Array.isArray(payload.sessionCalcSummary) ? payload.sessionCalcSummary : [];
+        sessionAdjResubRows = Array.isArray(payload.sessionAdjResubRows) ? payload.sessionAdjResubRows : [];
+        nextAdjRowId = Number(payload.nextAdjRowId) || 1;
+        lastPayroll10Results = payload.lastPayroll10Results || null;
+        lastPayroll20Results = payload.lastPayroll20Results || null;
+
+        document.getElementById("error").textContent = "";
+        document.getElementById("status").textContent = "";
+        document.getElementById("meta").textContent = "";
+
+        // Restore analysis tables.
+        renderAdjResubTable(sessionAdjResubRows);
+        updatePayroll10Visibility();
+
+        try {
+          const rateMap = await fetchEmployeeRateMap();
+          lastRateMap = rateMap;
+          renderSummary(buildFullSummary(), rateMap);
+        } catch {
+          renderSummary(buildFullSummary(), lastRateMap);
+        }
+
+        // Restore Payroll 1.0/2.0 snapshots if present.
+        if (lastPayroll10Results) {
+          renderPayroll10FromSnapshot(lastPayroll10Results);
+          updatePayroll20Visibility();
+        }
+        if (lastPayroll20Results && lastPayroll10Results) {
+          renderPayroll20FromSnapshot(lastPayroll20Results);
+        }
+      }
+
+      window.addEventListener("beforeunload", () => saveSessionToStorage());
 
       function setPayroll10ExtrasEnabled(enabled) {
         const exportBtn = document.getElementById("exportPayroll10CsvBtn");
@@ -804,6 +1024,7 @@
         } catch {
           renderSummary(buildFullSummary(), lastRateMap);
         }
+        saveSessionToStorage();
       }
 
       function renderAdjResubTable(adjRows) {
@@ -930,6 +1151,9 @@
             }
           }
 
+          // Used for preserving session across navigation.
+          sessionCalcSummary = summarizeByEmployee(sessionCalcRows);
+
           const summary = buildFullSummary();
           const allRowsForSync = sessionCalcRows.concat(
             sessionAdjResubRows.map(({ sourceFile, _adjId, unitsLocked, resolvedUnits, ...rest }) => rest)
@@ -949,6 +1173,7 @@
             `Session: ${sessionCalcRows.length} rows in totals · ` +
             `${sessionAdjResubRows.length} adj/resub excluded · Employees: ${summary.length}`;
           status.textContent = "Analysis complete.";
+          saveSessionToStorage();
         } catch (err) {
           error.textContent = err.message || "Failed to analyze file.";
           status.textContent = "";
@@ -957,9 +1182,11 @@
 
       function clearSession() {
         sessionCalcRows = [];
+        sessionCalcSummary = [];
         sessionAdjResubRows = [];
         nextAdjRowId = 1;
         lastRateMap = new Map();
+        clearSessionStorage();
         document.getElementById("error").textContent = "";
         document.getElementById("status").textContent = "";
         document.getElementById("meta").textContent = "";
@@ -1105,6 +1332,7 @@
         setPayroll10ExtrasEnabled(true);
         updatePayroll20Visibility();
         renderPayroll20GeneralReimInputs();
+        saveSessionToStorage();
       });
 
       function csvEscape(value) {
@@ -1428,6 +1656,7 @@
             },
           };
           setPayroll20ExtrasEnabled(true);
+          saveSessionToStorage();
         } catch (e) {
           errEl.textContent = e.message || "Failed to read non-bill spreadsheet.";
         }
@@ -1557,6 +1786,9 @@
           </html>`);
         w.document.close();
       });
+
+      // Restore analysis session when returning from another page (e.g. employee pay rates).
+      void restoreFromSessionStorage();
 
       document.getElementById("analyzeBtn").addEventListener("click", analyzeFiles);
       document.getElementById("clearBtn").addEventListener("click", clearSession);
