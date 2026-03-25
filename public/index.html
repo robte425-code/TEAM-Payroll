@@ -68,6 +68,7 @@
             <th>Date From</th>
             <th>Date To</th>
             <th>Claim #</th>
+            <th>Claimant</th>
             <th>Rate Code</th>
             <th>Units</th>
             <th>Adj / Resub</th>
@@ -283,6 +284,8 @@
       function normalizeRow(rawRow) {
         const employeeName = String(rawRow["Work Done By"] || "").trim();
         const providerId = String(rawRow["Provider ID"] || "").trim();
+        const claimant =
+          String(rawRow["Claimant"] || rawRow["Claimant "] || rawRow["Claimant Name"] || "").trim();
         const rateCode = String(rawRow["Rate Code"] || "").trim().toUpperCase();
         const unitsRaw = Number(rawRow["Units"] || 0);
         const adjResub = String(rawRow["Adj/ Resub"] || "").trim();
@@ -295,6 +298,7 @@
         return {
           employeeName,
           providerId,
+          claimant,
           rateCode,
           rateCodeCategory: getRateCodeCategory(rateCode),
           units: Number.isFinite(unitsRaw) ? unitsRaw : 0,
@@ -825,6 +829,9 @@
           const ref = r.referralNumber
             ? escapeHtml(r.referralNumber)
             : '<span class="muted">—</span>';
+          const claimantCell = r.claimant
+            ? escapeHtml(r.claimant)
+            : '<span class="muted">—</span>';
           let unitsCell;
           if (isAdjustmentRow(r.adjResub) && !r.unitsLocked) {
             const id = r._adjId;
@@ -842,6 +849,7 @@
             <td>${df}</td>
             <td>${dt}</td>
             <td>${ref}</td>
+            <td>${claimantCell}</td>
             <td>${escapeHtml(r.rateCode)}</td>
             <td>${unitsCell}</td>
             <td>${escapeHtml(r.adjResub)}</td>
