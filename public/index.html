@@ -1566,6 +1566,9 @@
         const metaText = document.getElementById("payroll10Meta").textContent || "";
         const heatherText =
           document.getElementById("payroll10HeatherCommission")?.textContent || "";
+        const endDateRaw = document.getElementById("payrollEndDateInput")?.value || "";
+        const formattedEndDate = formatEndDateForTitle(endDateRaw);
+        const payroll10Title = `Payroll 1.0${formattedEndDate ? ` (${formattedEndDate})` : ""}`;
         const tableHtml = document.getElementById("payroll10Table").outerHTML;
 
         const w = window.open("", "_blank");
@@ -1578,7 +1581,7 @@
           <html>
             <head>
               <meta charset="utf-8" />
-              <title>Payroll 1.0</title>
+              <title>${escapeHtml(payroll10Title)}</title>
               <style>
                 body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
                 h2 { margin: 0 0 6px; }
@@ -1591,7 +1594,7 @@
               </style>
             </head>
             <body>
-              <h2>Payroll 1.0</h2>
+              <h2>${escapeHtml(payroll10Title)}</h2>
               <div class="muted">${escapeHtml(metaText)}</div>
               ${
                 heatherText
@@ -1937,6 +1940,9 @@
           return;
         }
         const metaText = document.getElementById("payroll20Meta").textContent || "";
+        const endDateRaw = document.getElementById("payrollEndDateInput")?.value || "";
+        const formattedEndDate = formatEndDateForTitle(endDateRaw);
+        const payroll20Title = `Payroll 2.0${formattedEndDate ? ` (${formattedEndDate})` : ""}`;
         const tableHtml = document.getElementById("payroll20Table").outerHTML;
         const footerEl = document.getElementById("payroll20HeatherFooter");
         const footerHtml = footerEl ? footerEl.outerHTML : "";
@@ -1949,7 +1955,7 @@
           <html>
             <head>
               <meta charset="utf-8" />
-              <title>Payroll 2.0</title>
+              <title>${escapeHtml(payroll20Title)}</title>
               <style>
                 body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
                 h2 { margin: 0 0 6px; }
@@ -1962,7 +1968,7 @@
               </style>
             </head>
             <body>
-              <h2>Payroll 2.0</h2>
+              <h2>${escapeHtml(payroll20Title)}</h2>
               <div class="muted">${escapeHtml(metaText)}</div>
               ${tableHtml}
               ${footerHtml}
