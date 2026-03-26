@@ -796,7 +796,7 @@
         const metaEl = document.getElementById("payroll10Meta");
         if (metaEl) {
           metaEl.textContent =
-            `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
+            `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report + travel & wait hours) · ` +
             `Holiday pay: holiday days × ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
             `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(
               orgRates.mileageRate
@@ -1341,7 +1341,8 @@
           };
 
           let payRate;
-          const incentiveApplied = Boolean(det.incentivePay && casePlusReports >= incentiveThreshold);
+          const incentiveHours = casePlusReports + travelWait;
+          const incentiveApplied = Boolean(det.incentivePay && incentiveHours >= incentiveThreshold);
           if (incentiveApplied) {
             payRate = det.hourlyRate + orgRates.incentivePayRate;
           } else {
@@ -1394,7 +1395,7 @@
         tbody.appendChild(trTotal);
 
         document.getElementById("payroll10Meta").textContent =
-          `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report hours) · ` +
+          `Working days: ${wd} · Holiday days: ${holidayDays} · Incentive threshold: ${incentiveThreshold} hours (case + report + travel & wait hours) · ` +
           `Holiday pay: holiday days × ${HOLIDAY_PAY_HOURS} hr × PTO rate · ` +
           `Org incentive rate: $${money2(orgRates.incentivePayRate)}/hr · Org mileage rate: $${money2(orgRates.mileageRate)}/unit · ` +
           `Org LNI rate: $${money2(orgRates.lniRate)}`;
