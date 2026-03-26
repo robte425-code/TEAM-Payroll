@@ -31,6 +31,13 @@
       <input id="fileInput" type="file" accept=".xlsx,.xls" multiple />
       <button type="button" id="analyzeBtn">Analyze</button>
       <button type="button" id="clearBtn" class="btn-secondary">Clear session</button>
+      <label for="payrollEndDateInput" class="muted" style="margin-left: 10px">Payroll end date</label>
+      <input
+        type="date"
+        id="payrollEndDateInput"
+        class="rate-input"
+        style="width: 9.5rem; margin-left: 6px"
+      />
       <p id="status" class="muted"></p>
       <p id="sessionFiles" class="muted" aria-live="polite"></p>
       <p id="error" class="error"></p>
@@ -110,13 +117,6 @@
           step="1"
           class="rate-input"
           style="width: 6.5rem"
-        />
-        <label for="payrollEndDateInput">Payroll end date</label>
-        <input
-          type="date"
-          id="payrollEndDateInput"
-          class="rate-input"
-          style="width: 9.5rem"
         />
         <button type="button" id="generatePayroll10Btn">Generate Payroll 1.0</button>
         <button type="button" id="exportPayroll10CsvBtn" hidden disabled>Export CSV</button>
