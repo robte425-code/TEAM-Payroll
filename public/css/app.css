@@ -355,7 +355,7 @@ table.rates-table td:last-child button {
 /* Column widths — sum 100% so table spans full card (11 cols incl. Actions) */
 table.rates-table th:nth-child(1),
 table.rates-table td:nth-child(1) {
-  width: 25%;
+  width: 23%;
 }
 table.rates-table th:nth-child(2),
 table.rates-table td:nth-child(2),
@@ -386,6 +386,6 @@ table.rates-table td:nth-child(10) {
 }
 table.rates-table th:nth-child(11),
 table.rates-table td:nth-child(11) {
-  width: 7%;
+  width: 9%;
   min-width: 4.5rem;
 }

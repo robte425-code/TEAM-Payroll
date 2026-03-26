@@ -30,9 +30,15 @@
     <div class="card">
       <button type="button" id="addBtn">Add employee</button>
       <button type="button" id="exportBtn">Export JSON</button>
+      <button type="button" id="printBtn">Print</button>
+      <button type="button" id="exportCsvBtn">Export CSV</button>
       <label style="display: inline-block; margin-right: 8px">
         Import JSON
         <input id="importFile" type="file" accept=".json,application/json" style="margin-left: 4px" />
+      </label>
+      <label style="display: inline-block; margin-right: 8px">
+        Import CSV
+        <input id="importCsvFile" type="file" accept=".csv,text/csv" style="margin-left: 4px" />
       </label>
       <p id="msg" class="muted" aria-live="polite"></p>
       <p id="err" class="error"></p>
@@ -462,6 +468,486 @@
         } catch (e) {
           flash(e.message || "Save failed.", true);
         }
+      });
+
+      const CSV_HEADER = [
+        "rowType",
+        "incentivePayRate",
+        "mileageRate",
+        "lniRate",
+        "providerId",
+        "displayName",
+        "hourlyRate",
+        "minWageRate",
+        "incentivePay",
+        "paidHolidays",
+        "travelRate",
+        "ptoRate",
+        "eduRate",
+        "trainingRate",
+        "healthInsuranceDeduction",
+      ];
+
+      function toCsvCell(value) {
+        const s = value == null ? "" : String(value);
+        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      }
+
+      function parseCsv(text) {
+        const out = [];
+        const t = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        let row = [];
+        let cell = "";
+        let inQuotes = false;
+        for (let i = 0; i < t.length; i += 1) {
+          const ch = t[i];
+          if (inQuotes) {
+            if (ch === '"') {
+              if (t[i + 1] === '"') {
+                cell += '"';
+                i += 1;
+              } else {
+                inQuotes = false;
+              }
+            } else {
+              cell += ch;
+            }
+            continue;
+          }
+
+          if (ch === '"') {
+            inQuotes = true;
+            continue;
+          }
+          if (ch === ",") {
+            row.push(cell);
+            cell = "";
+            continue;
+          }
+          if (ch === "\n") {
+            row.push(cell);
+            cell = "";
+            // Avoid adding trailing empty line.
+            if (row.some((c) => String(c).trim() !== "")) out.push(row);
+            row = [];
+            continue;
+          }
+          cell += ch;
+        }
+
+        // Final cell (if file doesn't end with newline).
+        if (cell !== "" || row.length) {
+          row.push(cell);
+          if (row.some((c) => String(c).trim() !== "")) out.push(row);
+        }
+        return out;
+      }
+
+      function parseNonNegativeNumberCell(value) {
+        const n = Number(String(value ?? "").trim());
+        if (!Number.isFinite(n) || n < 0) return null;
+        return n;
+      }
+
+      function parseBoolCell(value) {
+        const s = String(value ?? "").trim().toLowerCase();
+        if (["1", "true", "t", "yes", "y", "on"].includes(s)) return true;
+        return false;
+      }
+
+      function downloadTextFile(filename, mimeType, text) {
+        const blob = new Blob([text], { type: mimeType || "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function getBackupFromDom() {
+        const mileageRaw = document.getElementById("globalMileageRate")?.value ?? "";
+        const incentiveRaw = document.getElementById("globalIncentivePayRate")?.value ?? "";
+        const lniRaw = document.getElementById("globalLniRate")?.value ?? "";
+        const mileageRate = Number(mileageRaw);
+        const incentivePayRate = Number(incentiveRaw);
+        const lniRate = Number(lniRaw);
+        const org = {
+          incentivePayRate: Number.isFinite(incentivePayRate) && incentivePayRate >= 0 ? incentivePayRate : 0,
+          mileageRate: Number.isFinite(mileageRate) && mileageRate >= 0 ? mileageRate : 0,
+          lniRate: Number.isFinite(lniRate) && lniRate >= 0 ? lniRate : 0,
+        };
+
+        const rows = Array.from(tbody.querySelectorAll("tr[data-id], tr[data-new]"));
+        const employees = rows
+          .filter((tr) => !tr.querySelector("td[colspan]"))
+          .map((tr) => readRow(tr))
+          .map((r) => ({
+            providerId: r.providerId,
+            displayName: r.displayName,
+            hourlyRate: r.hourlyRate,
+            minWageRate: r.minWageRate,
+            incentivePay: r.incentivePay,
+            paidHolidays: r.paidHolidays,
+            travelRate: r.travelRate,
+            ptoRate: r.ptoRate,
+            eduRate: r.eduRate,
+            trainingRate: r.trainingRate,
+            healthInsuranceDeduction: r.healthInsuranceDeduction,
+          }));
+
+        return { org, employees };
+      }
+
+      function backupToCsv({ org, employees }) {
+        const lines = [];
+        lines.push(CSV_HEADER.map(toCsvCell).join(","));
+        lines.push(
+          [
+            "org",
+            org.incentivePayRate,
+            org.mileageRate,
+            org.lniRate,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+          ].map(toCsvCell).join(",")
+        );
+        for (const e of employees) {
+          lines.push(
+            [
+              "employee",
+              "",
+              "",
+              "",
+              e.providerId,
+              e.displayName,
+              e.hourlyRate,
+              e.minWageRate,
+              e.incentivePay ? 1 : 0,
+              e.paidHolidays ? 1 : 0,
+              e.travelRate,
+              e.ptoRate,
+              e.eduRate,
+              e.trainingRate,
+              e.healthInsuranceDeduction,
+            ].map(toCsvCell).join(",")
+          );
+        }
+        return lines.join("\n");
+      }
+
+      function printBackup(backup) {
+        const escapeHtml = (s) =>
+          String(s ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const org = backup.org || { incentivePayRate: 0, mileageRate: 0, lniRate: 0 };
+        const employees = Array.isArray(backup.employees) ? backup.employees : [];
+
+        const w = window.open("", "_blank");
+        if (!w) {
+          flash("Pop-up blocked. Allow pop-ups to print.", true);
+          return;
+        }
+
+        const employeeRowsHtml = employees
+          .map((e) => {
+            return `
+              <tr>
+                <td>${escapeHtml(e.providerId)}</td>
+                <td>${escapeHtml(e.displayName)}</td>
+                <td>${escapeHtml(e.hourlyRate)}</td>
+                <td>${escapeHtml(e.minWageRate)}</td>
+                <td>${e.incentivePay ? "Yes" : "No"}</td>
+                <td>${e.paidHolidays ? "Yes" : "No"}</td>
+                <td>${escapeHtml(e.travelRate)}</td>
+                <td>${escapeHtml(e.ptoRate)}</td>
+                <td>${escapeHtml(e.eduRate)}</td>
+                <td>${escapeHtml(e.trainingRate)}</td>
+                <td>${escapeHtml(e.healthInsuranceDeduction)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        w.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Employee pay rates</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+      h2 { margin: 0 0 8px; }
+      .muted { color: #666; }
+      table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 12px; }
+      th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+      th { background: #f6f6f6; }
+    </style>
+  </head>
+  <body>
+    <h2>Employee pay rates</h2>
+    <div class="muted">Includes organization-wide rates + current employee rows from the page.</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Incentive Pay rate ($/hr)</th>
+          <th>Mileage rate ($/unit)</th>
+          <th>LNI rate ($/hr)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${escapeHtml(org.incentivePayRate)}</td>
+          <td>${escapeHtml(org.mileageRate)}</td>
+          <td>${escapeHtml(org.lniRate)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <table>
+      <thead>
+        <tr>
+          <th>Provider ID</th>
+          <th>Employee name</th>
+          <th>Hourly rate</th>
+          <th>Min wage rate</th>
+          <th>Incentive Pay</th>
+          <th>Paid holidays</th>
+          <th>Travel rate</th>
+          <th>PTO rate</th>
+          <th>Edu rate</th>
+          <th>Training rate</th>
+          <th>Health insurance deduction</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${employeeRowsHtml}
+      </tbody>
+    </table>
+    <script>
+      window.onload = function () { window.focus(); window.print(); };
+    <\/script>
+  </body>
+</html>`);
+        w.document.close();
+      }
+
+      function upsertEmployeeFromBackup(emp) {
+        // providerId is required for upsert.
+        if (!emp || !emp.providerId) return Promise.resolve(0);
+        return (async () => {
+          const providerId = String(emp.providerId).trim();
+          const displayName = String(emp.displayName ?? "").trim();
+          const hourlyRate = Number(emp.hourlyRate) || 0;
+          const minWageRate = Number(emp.minWageRate) || 0;
+          const incentivePay = Boolean(emp.incentivePay);
+          const paidHolidays = Boolean(emp.paidHolidays);
+          const travelRate = Number(emp.travelRate) || 0;
+          const ptoRate = Number(emp.ptoRate) || 0;
+          const eduRate = Number(emp.eduRate) || 0;
+          const trainingRate = Number(emp.trainingRate) || 0;
+          const healthInsuranceDeduction = Number(emp.healthInsuranceDeduction) || 0;
+
+          // Basic non-negative validation; invalid numbers skip the row.
+          const nums = [
+            hourlyRate,
+            minWageRate,
+            travelRate,
+            ptoRate,
+            eduRate,
+            trainingRate,
+            healthInsuranceDeduction,
+          ];
+          if (nums.some((n) => !Number.isFinite(n) || n < 0)) return 0;
+
+          try {
+            await apiJson(API, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                providerId,
+                displayName,
+                hourlyRate,
+                incentivePay,
+                paidHolidays,
+                travelRate,
+                ptoRate,
+                eduRate,
+                trainingRate,
+                minWageRate,
+                healthInsuranceDeduction,
+              }),
+            });
+            return 1;
+          } catch (e) {
+            if (/already exists|409|duplicate/i.test(String(e.message))) {
+              const list = await apiJson(API, { method: "GET" });
+              const found = (list.employees || []).find(
+                (x) => String(x.providerId) === providerId
+              );
+              if (found) {
+                await apiJson(API, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: found.id,
+                    providerId,
+                    displayName,
+                    hourlyRate,
+                    incentivePay,
+                    paidHolidays,
+                    travelRate,
+                    ptoRate,
+                    eduRate,
+                    trainingRate,
+                    minWageRate,
+                    healthInsuranceDeduction,
+                  }),
+                });
+                return 1;
+              }
+            }
+            throw e;
+          }
+        })();
+      }
+
+      document.getElementById("printBtn").addEventListener("click", () => {
+        try {
+          const backup = getBackupFromDom();
+          printBackup(backup);
+        } catch (e) {
+          flash(e.message || "Print failed.", true);
+        }
+      });
+
+      document.getElementById("exportCsvBtn").addEventListener("click", () => {
+        try {
+          const backup = getBackupFromDom();
+          const csv = backupToCsv(backup);
+          downloadTextFile("team-payroll-employees.csv", "text/csv;charset=utf-8", csv);
+          flash("CSV download started.");
+        } catch (e) {
+          flash(e.message || "CSV export failed.", true);
+        }
+      });
+
+      document.getElementById("importCsvFile").addEventListener("change", (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        ev.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const text = String(reader.result || "");
+            const rows = parseCsv(text);
+            if (!rows.length) throw new Error("CSV is empty.");
+
+            const header = rows[0].map((h) => String(h ?? "").trim());
+            const idx = {};
+            header.forEach((h, i) => (idx[h] = i));
+
+            const required = CSV_HEADER;
+            for (const k of required) {
+              if (idx[k] == null) {
+                throw new Error(`CSV missing required column: ${k}`);
+              }
+            }
+
+            const get = (r, col) => (idx[col] != null ? r[idx[col]] : "");
+            const orgPatch = {};
+            const employees = [];
+            let sawEmployee = false;
+
+            for (let i = 1; i < rows.length; i += 1) {
+              const r = rows[i];
+              if (!r || !r.length) continue;
+              const rowType = String(get(r, "rowType") ?? "").trim().toLowerCase();
+
+              if (rowType === "org") {
+                const incentive = parseNonNegativeNumberCell(get(r, "incentivePayRate"));
+                const mileage = parseNonNegativeNumberCell(get(r, "mileageRate"));
+                const lni = parseNonNegativeNumberCell(get(r, "lniRate"));
+                if (incentive != null) orgPatch.incentivePayRate = incentive;
+                if (mileage != null) orgPatch.mileageRate = mileage;
+                if (lni != null) orgPatch.lniRate = lni;
+              } else if (rowType === "employee") {
+                sawEmployee = true;
+                const providerId = String(get(r, "providerId") ?? "").trim();
+                const displayName = String(get(r, "displayName") ?? "").trim();
+                if (!providerId) continue;
+
+                const hourlyRate = parseNonNegativeNumberCell(get(r, "hourlyRate"));
+                const minWageRate = parseNonNegativeNumberCell(get(r, "minWageRate"));
+                const travelRate = parseNonNegativeNumberCell(get(r, "travelRate"));
+                const ptoRate = parseNonNegativeNumberCell(get(r, "ptoRate"));
+                const eduRate = parseNonNegativeNumberCell(get(r, "eduRate"));
+                const trainingRate = parseNonNegativeNumberCell(get(r, "trainingRate"));
+                const healthInsuranceDeduction = parseNonNegativeNumberCell(
+                  get(r, "healthInsuranceDeduction")
+                );
+
+                if (
+                  hourlyRate == null ||
+                  minWageRate == null ||
+                  travelRate == null ||
+                  ptoRate == null ||
+                  eduRate == null ||
+                  trainingRate == null ||
+                  healthInsuranceDeduction == null
+                ) {
+                  continue;
+                }
+
+                employees.push({
+                  providerId,
+                  displayName,
+                  hourlyRate,
+                  minWageRate,
+                  incentivePay: parseBoolCell(get(r, "incentivePay")),
+                  paidHolidays: parseBoolCell(get(r, "paidHolidays")),
+                  travelRate,
+                  ptoRate,
+                  eduRate,
+                  trainingRate,
+                  healthInsuranceDeduction,
+                });
+              }
+            }
+
+            if (!sawEmployee) throw new Error("No employee rows found in the CSV.");
+
+            if (Object.keys(orgPatch).length) {
+              await apiJson(SETTINGS_API, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(orgPatch),
+              });
+            }
+
+            let n = 0;
+            for (const emp of employees) {
+              n += await upsertEmployeeFromBackup(emp);
+            }
+            flash(`CSV import complete (${n} row(s) upserted).`);
+            await render();
+          } catch (e) {
+            flash(e.message || "CSV import failed.", true);
+          }
+        };
+        reader.readAsText(file);
       });
 
       document.getElementById("exportBtn").addEventListener("click", async () => {
