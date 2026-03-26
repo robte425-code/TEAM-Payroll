@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Access management — TEAM Payroll</title>
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-title">
+        <img src="./assets/team-logo.png" alt="TEAM Vocational Services" class="brand-logo" />
+        <span class="brand-divider">|</span>
+        <span class="brand-product">Payroll</span>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="./index.html">Analyze spreadsheet</a>
+        <a href="./rates.html">Employee pay rates</a>
+        <a href="./access.html" aria-current="page">Access management</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+
+    <h1>Access management</h1>
+    <p class="muted page-subtitle">
+      Controls which email addresses are allowed to sign in to TEAM Payroll.
+      Only admins can view/update this list.
+    </p>
+
+    <div class="card" style="max-width: 760px">
+      <p class="muted" style="margin-top: 0">
+        Provide one email per line (e.g. <code>robert@team-voc.com</code>).
+        Sign-in access is granted only for emails in this allowlist.
+      </p>
+
+      <label for="allowedEmailsTextarea" class="muted" style="display: block; margin-top: 10px">
+        Allowed emails
+      </label>
+      <textarea
+        id="allowedEmailsTextarea"
+        rows="10"
+        spellcheck="false"
+        style="width: 100%; margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 13px"
+      ></textarea>
+
+      <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap">
+        <button type="button" id="loadAccessBtn">Load current list</button>
+        <button type="button" id="saveAccessBtn">Save</button>
+      </div>
+
+      <p id="msg" class="muted" aria-live="polite" style="margin-top: 10px"></p>
+      <p id="err" class="error" style="margin-top: 6px"></p>
+    </div>
+
+    <script>
+      const API = "/api/access";
+      const textarea = document.getElementById("allowedEmailsTextarea");
+      const msg = document.getElementById("msg");
+      const err = document.getElementById("err");
+
+      function flash(text, isError) {
+        msg.textContent = isError ? "" : text;
+        err.textContent = isError ? text : "";
+        if (!isError && text) {
+          setTimeout(() => {
+            if (msg.textContent === text) msg.textContent = "";
+          }, 3500);
+        }
+      }
+
+      async function apiJson(url, options) {
+        const r = await fetch(url, options);
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { error: text || "Invalid response" };
+        }
+        if (!r.ok) {
+          const m = data.error || data.message || text || `HTTP ${r.status}`;
+          throw new Error(m);
+        }
+        return data;
+      }
+
+      async function loadAccess() {
+        flash("Loading...", false);
+        try {
+          const d = await apiJson(API, { method: "GET" });
+          const list = Array.isArray(d.allowedEmails) ? d.allowedEmails : [];
+          textarea.value = list.join("\n");
+          flash("Loaded.");
+        } catch (e) {
+          flash(e.message || "Load failed.", true);
+        }
+      }
+
+      async function saveAccess() {
+        err.textContent = "";
+        msg.textContent = "";
+        const lines = String(textarea.value || "")
+          .split(/\r?\n/g)
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const allowedEmails = Array.from(
+          new Set(
+            lines
+              .map((s) => s.toLowerCase())
+              .filter((s) => s.includes("@"))
+          )
+        );
+
+        try {
+          await apiJson(API, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ allowedEmails }),
+          });
+          flash("Saved.");
+          await loadAccess();
+        } catch (e) {
+          flash(e.message || "Save failed.", true);
+        }
+      }
+
+      document.getElementById("loadAccessBtn").addEventListener("click", loadAccess);
+      document.getElementById("saveAccessBtn").addEventListener("click", saveAccess);
+
+      loadAccess();
+    </script>
+  </body>
+</html>
+

@@ -25,8 +25,10 @@ export const config = {
     "/",
     "/index.html",
     "/rates.html",
+    "/access.html",
     "/api/employees/:path*",
     "/api/settings",
+    "/api/access",
   ],
 };
 
