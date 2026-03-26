@@ -80,7 +80,9 @@
     </div>
 
     <div class="card" id="payroll10Card" hidden>
-      <h3>Payroll 1.0</h3>
+      <h3 id="payroll10Title">
+        Payroll 1.0 <span id="payroll10EndDate"></span>
+      </h3>
       <p class="muted" id="payroll10Intro">
         Incentive threshold = working days × 8 (hours). Enter working days and holiday days for this pay period.
         Pay rates come from
@@ -109,6 +111,13 @@
           class="rate-input"
           style="width: 6.5rem"
         />
+        <label for="payrollEndDateInput">Payroll end date</label>
+        <input
+          type="date"
+          id="payrollEndDateInput"
+          class="rate-input"
+          style="width: 9.5rem"
+        />
         <button type="button" id="generatePayroll10Btn">Generate Payroll 1.0</button>
         <button type="button" id="exportPayroll10CsvBtn" hidden disabled>Export CSV</button>
         <button type="button" id="printPayroll10Btn" hidden disabled>Print</button>
@@ -136,7 +145,9 @@
     </div>
 
     <div class="card" id="payroll20Card" hidden>
-      <h3>Payroll 2.0</h3>
+      <h3 id="payroll20Title">
+        Payroll 2.0 <span id="payroll20EndDate"></span>
+      </h3>
       <p class="muted" id="payroll20Intro">
         After Payroll 1.0 is generated, upload the <strong>non-bill time</strong> spreadsheet. Only rows whose
         <strong>Activity Type</strong> starts with <strong>NB</strong> or <strong>Z</strong> are used (see below).
@@ -256,6 +267,35 @@
       const REPORT_RATE_CODES = new Set(["0910V"]);
       const REQUIRED_HEADERS = ["Work Done By", "Provider ID", "Rate Code", "Units", "Adj/ Resub"];
       const NONBILL_HEADERS = ["Timekeeper VRC", "Prof. Hours", "Activity Type"];
+
+      function formatEndDateForTitle(endDateRaw) {
+        const raw = String(endDateRaw ?? "").trim();
+        if (!raw) return "";
+        // Expect YYYY-MM-DD from `<input type="date">`.
+        const d = new Date(`${raw}T00:00:00`);
+        if (!isNaN(d) && d instanceof Date) {
+          return d.toLocaleDateString("en-US");
+        }
+        // Fallback to raw string if parsing fails.
+        return raw;
+      }
+
+      function updatePayrollTitles() {
+        const endDateInput = document.getElementById("payrollEndDateInput");
+        const endDateRaw = endDateInput ? endDateInput.value : "";
+        const formatted = formatEndDateForTitle(endDateRaw);
+
+        const e10 = document.getElementById("payroll10EndDate");
+        if (e10) e10.textContent = formatted ? ` (${formatted})` : "";
+        const e20 = document.getElementById("payroll20EndDate");
+        if (e20) e20.textContent = formatted ? ` (${formatted})` : "";
+      }
+
+      const endDateInput = document.getElementById("payrollEndDateInput");
+      if (endDateInput) {
+        endDateInput.addEventListener("change", updatePayrollTitles);
+        updatePayrollTitles();
+      }
 
       function getRateCodeCategory(rateCode) {
         const code = String(rateCode || "").trim().toUpperCase();
