@@ -32,6 +32,8 @@ export const config = {
     "/api/access",
     "/api/leave-record",
     "/api/leave-ytd",
+    "/api/leave-logs",
+    "/api/leave-rollback",
   ],
 };
 

@@ -79,9 +79,33 @@ export default async function handler(req, res) {
       if (!rows.length) return res.status(400).json({ error: "rows[] is required" });
 
       await pool.query("BEGIN");
+      const batchInserted = await pool.query(
+        `INSERT INTO payroll.leave_change_batches (operation_type)
+         VALUES ('manual_update')
+         RETURNING id`
+      );
+      const batchId = batchInserted.rows[0]?.id;
       for (const row of rows) {
         const id = String(row.id || "").trim();
         if (!id) continue;
+
+        const beforeR = await pool.query(
+          `SELECT id,
+                  pto_ytd_hours_accrued, pto_ytd_hours_used,
+                  sick_ytd_hours_accrued, sick_ytd_hours_used
+           FROM payroll.employees
+           WHERE id = $1::uuid
+           FOR UPDATE`,
+          [id]
+        );
+        const before = beforeR.rows[0];
+        if (!before) continue;
+
+        const afterPtoAccrued = toNonNegativeNumber(row.ptoYtdHoursAccrued);
+        const afterPtoUsed = toNonNegativeNumber(row.ptoYtdHoursUsed);
+        const afterSickAccrued = toNonNegativeNumber(row.sickYtdHoursAccrued);
+        const afterSickUsed = toNonNegativeNumber(row.sickYtdHoursUsed);
+
         await pool.query(
           `UPDATE payroll.employees
            SET pto_ytd_hours_accrued = $1,
@@ -91,16 +115,44 @@ export default async function handler(req, res) {
                updated_at = now()
            WHERE id = $5::uuid`,
           [
-            toNonNegativeNumber(row.ptoYtdHoursAccrued),
-            toNonNegativeNumber(row.ptoYtdHoursUsed),
-            toNonNegativeNumber(row.sickYtdHoursAccrued),
-            toNonNegativeNumber(row.sickYtdHoursUsed),
+            afterPtoAccrued,
+            afterPtoUsed,
+            afterSickAccrued,
+            afterSickUsed,
             id,
+          ]
+        );
+
+        await pool.query(
+          `INSERT INTO payroll.leave_change_batch_details (
+             batch_id, employee_id,
+             pto_ytd_hours_accrued_before, pto_ytd_hours_used_before,
+             sick_ytd_hours_accrued_before, sick_ytd_hours_used_before,
+             pto_ytd_hours_accrued_after, pto_ytd_hours_used_after,
+             sick_ytd_hours_accrued_after, sick_ytd_hours_used_after
+           ) VALUES (
+             $1, $2,
+             $3, $4,
+             $5, $6,
+             $7, $8,
+             $9, $10
+           )`,
+          [
+            batchId,
+            before.id,
+            Number(before.pto_ytd_hours_accrued) || 0,
+            Number(before.pto_ytd_hours_used) || 0,
+            Number(before.sick_ytd_hours_accrued) || 0,
+            Number(before.sick_ytd_hours_used) || 0,
+            afterPtoAccrued,
+            afterPtoUsed,
+            afterSickAccrued,
+            afterSickUsed,
           ]
         );
       }
       await pool.query("COMMIT");
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, batchId });
     }
 
     res.setHeader("Allow", "GET, PATCH, OPTIONS");

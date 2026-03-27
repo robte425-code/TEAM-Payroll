@@ -53,11 +53,60 @@
       </p>
     </div>
 
+    <div class="card">
+      <h3 style="margin-top: 0">PTO logs</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <label for="logEmployeeSelect">Employee</label>
+        <select id="logEmployeeSelect"></select>
+        <label for="logStartDate">Start date</label>
+        <input type="date" id="logStartDate" class="rate-input" />
+        <label for="logEndDate">End date</label>
+        <input type="date" id="logEndDate" class="rate-input" />
+        <button type="button" id="loadLogsBtn">Load logs</button>
+      </div>
+      <div class="rates-table-scroll" style="margin-top: 10px">
+        <table class="rates-table" id="ptoLogTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Action</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="ptoLogBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0">Sick time logs</h3>
+      <div class="rates-table-scroll" style="margin-top: 10px">
+        <table class="rates-table" id="sickLogTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Action</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="sickLogBody"></tbody>
+        </table>
+      </div>
+      <p style="margin-top: 14px; margin-bottom: 0">
+        <button type="button" id="rollbackBtn" class="btn-secondary">Roll back last change</button>
+      </p>
+    </div>
+
     <script>
       const API = "/api/leave-ytd";
+      const LOGS_API = "/api/leave-logs";
+      const ROLLBACK_API = "/api/leave-rollback";
       const tbody = document.getElementById("leaveBody");
+      const ptoLogBody = document.getElementById("ptoLogBody");
+      const sickLogBody = document.getElementById("sickLogBody");
       const msg = document.getElementById("msg");
       const err = document.getElementById("err");
+      let employeesCache = [];
 
       function flash(text, isError) {
         msg.textContent = isError ? "" : text;
@@ -111,16 +160,78 @@
         return { id, ptoYtdHoursAccrued, ptoYtdHoursUsed, sickYtdHoursAccrued, sickYtdHoursUsed };
       }
 
+      function clearLogs() {
+        ptoLogBody.innerHTML = "";
+        sickLogBody.innerHTML = "";
+      }
+
+      function fillEmployeeSelect(list) {
+        const sel = document.getElementById("logEmployeeSelect");
+        if (!sel) return;
+        sel.innerHTML = "";
+        for (const e of list) {
+          const opt = document.createElement("option");
+          opt.value = e.id;
+          opt.textContent = `${e.displayName || "(No name)"} (${e.providerId || "-"})`;
+          sel.appendChild(opt);
+        }
+      }
+
+      function renderLogsTable(tbodyEl, rows) {
+        tbodyEl.innerHTML = "";
+        if (!rows.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="3" class="muted">No logs found for selected filters.</td>';
+          tbodyEl.appendChild(tr);
+          return;
+        }
+        for (const r of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${String(r.action_date || "").slice(0, 10)}</td>
+            <td>${String(r.action || "")}</td>
+            <td>${String(r.reason || "")}</td>
+          `;
+          tbodyEl.appendChild(tr);
+        }
+      }
+
+      async function loadLogs() {
+        err.textContent = "";
+        const sel = document.getElementById("logEmployeeSelect");
+        const employeeId = sel ? String(sel.value || "").trim() : "";
+        if (!employeeId) {
+          clearLogs();
+          return;
+        }
+        const startDate = String(document.getElementById("logStartDate")?.value || "").trim();
+        const endDate = String(document.getElementById("logEndDate")?.value || "").trim();
+        const q = new URLSearchParams({ employeeId });
+        if (startDate) q.set("startDate", startDate);
+        if (endDate) q.set("endDate", endDate);
+        try {
+          const d = await apiJson(`${LOGS_API}?${q.toString()}`, { method: "GET" });
+          renderLogsTable(ptoLogBody, d.ptoLogs || []);
+          renderLogsTable(sickLogBody, d.sickLogs || []);
+        } catch (e) {
+          clearLogs();
+          flash(e.message || "Failed to load logs.", true);
+        }
+      }
+
       async function render() {
         err.textContent = "";
         msg.textContent = "Loading...";
         try {
           const d = await apiJson(API, { method: "GET" });
           const list = d.employees || [];
+          employeesCache = list;
           tbody.innerHTML = "";
           for (const e of list) {
             tbody.appendChild(rowTemplate(e));
           }
+          fillEmployeeSelect(list);
+          await loadLogs();
           msg.textContent = "";
         } catch (e) {
           msg.textContent = "";
@@ -160,6 +271,25 @@
           await render();
         } catch (e) {
           flash(e.message || "Save failed.", true);
+        }
+      });
+
+      document.getElementById("loadLogsBtn").addEventListener("click", loadLogs);
+      document.getElementById("logEmployeeSelect").addEventListener("change", loadLogs);
+
+      document.getElementById("rollbackBtn").addEventListener("click", async () => {
+        err.textContent = "";
+        if (!confirm("Roll back the last PTO/Sick change batch?")) return;
+        try {
+          const d = await apiJson(ROLLBACK_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          flash(`Rolled back last change (${d.operationType || "batch"}).`);
+          await render();
+        } catch (e) {
+          flash(e.message || "Rollback failed.", true);
         }
       });
 
