@@ -29,6 +29,11 @@
 
     <div class="card">
       <button type="button" id="loadBtn">Reload</button>
+      <button type="button" id="exportCsvBtn">Export CSV</button>
+      <label style="display: inline-block; margin-right: 8px">
+        Import CSV
+        <input id="importCsvFile" type="file" accept=".csv,text/csv" style="margin-left: 4px" />
+      </label>
       <p id="msg" class="muted" aria-live="polite"></p>
       <p id="err" class="error"></p>
     </div>
@@ -80,6 +85,15 @@
 
     <div class="card">
       <h3 style="margin-top: 0">Sick time logs</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <label for="sickLogEmployeeSelect">Employee</label>
+        <select id="sickLogEmployeeSelect"></select>
+        <label for="sickLogStartDate">Start date</label>
+        <input type="date" id="sickLogStartDate" class="rate-input" />
+        <label for="sickLogEndDate">End date</label>
+        <input type="date" id="sickLogEndDate" class="rate-input" />
+        <button type="button" id="loadSickLogsBtn">Load logs</button>
+      </div>
       <div class="rates-table-scroll" style="margin-top: 10px">
         <table class="rates-table" id="sickLogTable">
           <thead>
@@ -165,15 +179,86 @@
         sickLogBody.innerHTML = "";
       }
 
+      function csvEscape(value) {
+        const s = value == null ? "" : String(value);
+        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      }
+
+      function parseCsv(text) {
+        const out = [];
+        const t = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        let row = [];
+        let cell = "";
+        let inQuotes = false;
+        for (let i = 0; i < t.length; i += 1) {
+          const ch = t[i];
+          if (inQuotes) {
+            if (ch === '"') {
+              if (t[i + 1] === '"') {
+                cell += '"';
+                i += 1;
+              } else {
+                inQuotes = false;
+              }
+            } else {
+              cell += ch;
+            }
+            continue;
+          }
+          if (ch === '"') {
+            inQuotes = true;
+            continue;
+          }
+          if (ch === ",") {
+            row.push(cell);
+            cell = "";
+            continue;
+          }
+          if (ch === "\n") {
+            row.push(cell);
+            cell = "";
+            if (row.some((c) => String(c).trim() !== "")) out.push(row);
+            row = [];
+            continue;
+          }
+          cell += ch;
+        }
+        if (cell !== "" || row.length) {
+          row.push(cell);
+          if (row.some((c) => String(c).trim() !== "")) out.push(row);
+        }
+        return out;
+      }
+
+      function parseNonNegativeNumberCell(value) {
+        const n = Number(String(value ?? "").trim());
+        if (!Number.isFinite(n) || n < 0) return null;
+        return n;
+      }
+
+      function downloadTextFile(filename, mimeType, text) {
+        const blob = new Blob([text], { type: mimeType || "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
       function fillEmployeeSelect(list) {
-        const sel = document.getElementById("logEmployeeSelect");
-        if (!sel) return;
-        sel.innerHTML = "";
-        for (const e of list) {
-          const opt = document.createElement("option");
-          opt.value = e.id;
-          opt.textContent = `${e.displayName || "(No name)"} (${e.providerId || "-"})`;
-          sel.appendChild(opt);
+        const selects = [
+          document.getElementById("logEmployeeSelect"),
+          document.getElementById("sickLogEmployeeSelect"),
+        ].filter(Boolean);
+        for (const sel of selects) {
+          sel.innerHTML = "";
+          for (const e of list) {
+            const opt = document.createElement("option");
+            opt.value = e.id;
+            opt.textContent = `${e.displayName || "(No name)"} (${e.providerId || "-"})`;
+            sel.appendChild(opt);
+          }
         }
       }
 
@@ -196,26 +281,46 @@
         }
       }
 
-      async function loadLogs() {
+      async function fetchLogs(employeeId, startDate, endDate) {
+        const q = new URLSearchParams({ employeeId });
+        if (startDate) q.set("startDate", startDate);
+        if (endDate) q.set("endDate", endDate);
+        return apiJson(`${LOGS_API}?${q.toString()}`, { method: "GET" });
+      }
+
+      async function loadPtoLogs() {
         err.textContent = "";
-        const sel = document.getElementById("logEmployeeSelect");
-        const employeeId = sel ? String(sel.value || "").trim() : "";
+        const employeeId = String(document.getElementById("logEmployeeSelect")?.value || "").trim();
         if (!employeeId) {
-          clearLogs();
+          ptoLogBody.innerHTML = "";
           return;
         }
         const startDate = String(document.getElementById("logStartDate")?.value || "").trim();
         const endDate = String(document.getElementById("logEndDate")?.value || "").trim();
-        const q = new URLSearchParams({ employeeId });
-        if (startDate) q.set("startDate", startDate);
-        if (endDate) q.set("endDate", endDate);
         try {
-          const d = await apiJson(`${LOGS_API}?${q.toString()}`, { method: "GET" });
+          const d = await fetchLogs(employeeId, startDate, endDate);
           renderLogsTable(ptoLogBody, d.ptoLogs || []);
+        } catch (e) {
+          ptoLogBody.innerHTML = "";
+          flash(e.message || "Failed to load PTO logs.", true);
+        }
+      }
+
+      async function loadSickLogs() {
+        err.textContent = "";
+        const employeeId = String(document.getElementById("sickLogEmployeeSelect")?.value || "").trim();
+        if (!employeeId) {
+          sickLogBody.innerHTML = "";
+          return;
+        }
+        const startDate = String(document.getElementById("sickLogStartDate")?.value || "").trim();
+        const endDate = String(document.getElementById("sickLogEndDate")?.value || "").trim();
+        try {
+          const d = await fetchLogs(employeeId, startDate, endDate);
           renderLogsTable(sickLogBody, d.sickLogs || []);
         } catch (e) {
-          clearLogs();
-          flash(e.message || "Failed to load logs.", true);
+          sickLogBody.innerHTML = "";
+          flash(e.message || "Failed to load Sick logs.", true);
         }
       }
 
@@ -231,7 +336,7 @@
             tbody.appendChild(rowTemplate(e));
           }
           fillEmployeeSelect(list);
-          await loadLogs();
+          await Promise.all([loadPtoLogs(), loadSickLogs()]);
           msg.textContent = "";
         } catch (e) {
           msg.textContent = "";
@@ -274,8 +379,10 @@
         }
       });
 
-      document.getElementById("loadLogsBtn").addEventListener("click", loadLogs);
-      document.getElementById("logEmployeeSelect").addEventListener("change", loadLogs);
+      document.getElementById("loadLogsBtn").addEventListener("click", loadPtoLogs);
+      document.getElementById("logEmployeeSelect").addEventListener("change", loadPtoLogs);
+      document.getElementById("loadSickLogsBtn").addEventListener("click", loadSickLogs);
+      document.getElementById("sickLogEmployeeSelect").addEventListener("change", loadSickLogs);
 
       document.getElementById("rollbackBtn").addEventListener("click", async () => {
         err.textContent = "";
@@ -291,6 +398,112 @@
         } catch (e) {
           flash(e.message || "Rollback failed.", true);
         }
+      });
+
+      document.getElementById("exportCsvBtn").addEventListener("click", () => {
+        try {
+          const rows = Array.from(tbody.querySelectorAll("tr[data-id]")).map((tr) => readRow(tr));
+          const header = [
+            "id",
+            "providerId",
+            "displayName",
+            "ptoYtdHoursAccrued",
+            "ptoYtdHoursUsed",
+            "sickYtdHoursAccrued",
+            "sickYtdHoursUsed",
+          ];
+          const employeeById = new Map(
+            (employeesCache || []).map((e) => [String(e.id), e])
+          );
+          const lines = [header.map(csvEscape).join(",")];
+          for (const r of rows) {
+            const emp = employeeById.get(String(r.id)) || {};
+            lines.push(
+              [
+                r.id,
+                emp.providerId || "",
+                emp.displayName || "",
+                r.ptoYtdHoursAccrued,
+                r.ptoYtdHoursUsed,
+                r.sickYtdHoursAccrued,
+                r.sickYtdHoursUsed,
+              ]
+                .map(csvEscape)
+                .join(",")
+            );
+          }
+          downloadTextFile("team-payroll-leave-ytd.csv", "text/csv;charset=utf-8", lines.join("\n"));
+          flash("CSV export started.");
+        } catch (e) {
+          flash(e.message || "CSV export failed.", true);
+        }
+      });
+
+      document.getElementById("importCsvFile").addEventListener("change", (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        ev.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const text = String(reader.result || "");
+            const rows = parseCsv(text);
+            if (!rows.length) throw new Error("CSV is empty.");
+            const header = rows[0].map((h) => String(h || "").trim());
+            const idx = {};
+            header.forEach((h, i) => (idx[h] = i));
+
+            const required = [
+              "id",
+              "ptoYtdHoursAccrued",
+              "ptoYtdHoursUsed",
+              "sickYtdHoursAccrued",
+              "sickYtdHoursUsed",
+            ];
+            for (const col of required) {
+              if (idx[col] == null) throw new Error(`CSV missing required column: ${col}`);
+            }
+
+            const get = (r, col) => (idx[col] != null ? r[idx[col]] : "");
+            const payloadRows = [];
+            for (let i = 1; i < rows.length; i += 1) {
+              const r = rows[i];
+              const id = String(get(r, "id") || "").trim();
+              if (!id) continue;
+              const ptoYtdHoursAccrued = parseNonNegativeNumberCell(get(r, "ptoYtdHoursAccrued"));
+              const ptoYtdHoursUsed = parseNonNegativeNumberCell(get(r, "ptoYtdHoursUsed"));
+              const sickYtdHoursAccrued = parseNonNegativeNumberCell(get(r, "sickYtdHoursAccrued"));
+              const sickYtdHoursUsed = parseNonNegativeNumberCell(get(r, "sickYtdHoursUsed"));
+              if (
+                ptoYtdHoursAccrued == null ||
+                ptoYtdHoursUsed == null ||
+                sickYtdHoursAccrued == null ||
+                sickYtdHoursUsed == null
+              ) {
+                continue;
+              }
+              payloadRows.push({
+                id,
+                ptoYtdHoursAccrued,
+                ptoYtdHoursUsed,
+                sickYtdHoursAccrued,
+                sickYtdHoursUsed,
+              });
+            }
+            if (!payloadRows.length) throw new Error("No valid employee rows found in CSV.");
+
+            await apiJson(API, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rows: payloadRows }),
+            });
+            flash(`CSV import complete (${payloadRows.length} row(s) saved).`);
+            await render();
+          } catch (e) {
+            flash(e.message || "CSV import failed.", true);
+          }
+        };
+        reader.readAsText(file);
       });
 
       render();
