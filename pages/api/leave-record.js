@@ -35,6 +35,42 @@ function toNonNegativeNumber(value) {
   return n;
 }
 
+async function resolveEmployeeForUpdate(pool, providerId, employeeName) {
+  const pid = String(providerId || "").trim();
+  const name = String(employeeName || "").trim();
+
+  if (pid) {
+    const byProvider = await pool.query(
+      `SELECT id, provider_id,
+              pto_ytd_hours_accrued, pto_ytd_hours_used,
+              sick_ytd_hours_accrued, sick_ytd_hours_used
+       FROM payroll.employees
+       WHERE provider_id = $1
+       FOR UPDATE`,
+      [pid]
+    );
+    if (byProvider.rows[0]) return byProvider.rows[0];
+  }
+
+  if (name) {
+    const byName = await pool.query(
+      `SELECT id, provider_id,
+              pto_ytd_hours_accrued, pto_ytd_hours_used,
+              sick_ytd_hours_accrued, sick_ytd_hours_used
+       FROM payroll.employees
+       WHERE lower(regexp_replace(trim(display_name), '\s+', ' ', 'g')) =
+             lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+       ORDER BY updated_at DESC NULLS LAST, created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [name]
+    );
+    if (byName.rows[0]) return byName.rows[0];
+  }
+
+  return null;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
@@ -80,16 +116,7 @@ export default async function handler(req, res) {
       const sickAccrual = toNonNegativeNumber(r.sickAccrualHours);
       const sickUsed = toNonNegativeNumber(r.sickUsedHours);
 
-      const beforeR = await pool.query(
-        `SELECT id,
-                pto_ytd_hours_accrued, pto_ytd_hours_used,
-                sick_ytd_hours_accrued, sick_ytd_hours_used
-         FROM payroll.employees
-         WHERE provider_id = $1
-         FOR UPDATE`,
-        [providerId]
-      );
-      const before = beforeR.rows[0];
+      const before = await resolveEmployeeForUpdate(pool, providerId, employeeName);
       if (!before) continue;
 
       const beforePtoAccrued = Number(before.pto_ytd_hours_accrued) || 0;
@@ -109,8 +136,8 @@ export default async function handler(req, res) {
              sick_ytd_hours_accrued = $3,
              sick_ytd_hours_used = $4,
              updated_at = now()
-         WHERE provider_id = $5`,
-        [afterPtoAccrued, afterPtoUsed, afterSickAccrued, afterSickUsed, providerId]
+         WHERE id = $5::uuid`,
+        [afterPtoAccrued, afterPtoUsed, afterSickAccrued, afterSickUsed, before.id]
       );
 
       const ptoLogIds = [];
