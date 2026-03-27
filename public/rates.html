@@ -14,6 +14,7 @@
         <span class="brand-product">Payroll</span>
       </div>
       <nav class="site-nav" aria-label="Main">
+        <a href="./my-leave.html">My PTO &amp; Sick</a>
         <a href="./index.html">Analyze spreadsheet</a>
         <a href="./rates.html" aria-current="page">Employee pay rates</a>
         <a href="./access.html">Access management</a>
@@ -99,6 +100,7 @@
           <thead>
             <tr>
               <th>Employee name</th>
+              <th>Sign-in email</th>
               <th>Rate ($ / hour)</th>
               <th>Min wage ($ / hr)</th>
               <th>Incentive Pay</th>
@@ -164,6 +166,7 @@
           : '<input type="hidden" class="js-pid" /><input type="text" class="js-name" />';
         tr.innerHTML = `
           <td>${pidField}</td>
+          <td><input type="email" class="js-login-email rate-input" placeholder="Azure AD email" title="Must match sign-in email for My PTO &amp; Sick" autocomplete="email" /></td>
           <td><input type="number" class="js-rate rate-input" min="0" step="0.01" /></td>
           <td><input type="number" class="js-min-wage-rate rate-input" min="0" step="0.01" title="Minimum wage rate" /></td>
           <td><input type="checkbox" class="js-incentive" /></td>
@@ -179,6 +182,8 @@
         `;
         tr.querySelector(".js-name").value = emp.displayName || "";
         tr.querySelector(".js-pid").value = emp.providerId || "";
+        const le = tr.querySelector(".js-login-email");
+        if (le) le.value = emp.loginEmail || "";
         const rate = emp.hourlyRate;
         tr.querySelector(".js-rate").value =
           rate === 0 || rate == null ? "" : String(rate);
@@ -212,6 +217,9 @@
         const isNew = tr.dataset.new === "1";
         const displayName = tr.querySelector(".js-name").value.trim();
         const providerId = tr.querySelector(".js-pid").value.trim();
+        const loginEmail = tr.querySelector(".js-login-email")
+          ? tr.querySelector(".js-login-email").value.trim()
+          : "";
         const rateRaw = tr.querySelector(".js-rate").value;
         const hourlyRate = rateRaw === "" ? 0 : Number(rateRaw);
         const minWageRaw = tr.querySelector(".js-min-wage-rate").value;
@@ -233,6 +241,7 @@
           isNew,
           displayName,
           providerId,
+          loginEmail,
           hourlyRate,
           incentivePay,
           paidHolidays,
@@ -269,7 +278,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="11" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="12" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
         tbody.appendChild(tr);
       }
 
@@ -318,7 +327,7 @@
             "Could not load employees. Check DATABASE_URL and run the SQL migration.";
           tbody.innerHTML = "";
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="11" class="muted">Fix the error above, then refresh.</td>`;
+          tr.innerHTML = `<td colspan="12" class="muted">Fix the error above, then refresh.</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -340,6 +349,7 @@
             trainingRate: 0,
             minWageRate: 0,
             healthInsuranceDeduction: 0,
+            loginEmail: "",
           },
           true
         );
@@ -398,6 +408,7 @@
                 body: JSON.stringify({
                   providerId: data.providerId,
                   displayName: data.displayName,
+                  loginEmail: data.loginEmail,
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
                   paidHolidays: data.paidHolidays,
@@ -417,6 +428,7 @@
                   id: data.id,
                   providerId: data.providerId,
                   displayName: data.displayName,
+                  loginEmail: data.loginEmail,
                   hourlyRate: data.hourlyRate,
                   incentivePay: data.incentivePay,
                   paidHolidays: data.paidHolidays,
@@ -479,6 +491,7 @@
         "lniRate",
         "providerId",
         "displayName",
+        "loginEmail",
         "hourlyRate",
         "minWageRate",
         "incentivePay",
@@ -587,6 +600,7 @@
           .map((r) => ({
             providerId: r.providerId,
             displayName: r.displayName,
+            loginEmail: r.loginEmail,
             hourlyRate: r.hourlyRate,
             minWageRate: r.minWageRate,
             incentivePay: r.incentivePay,
@@ -621,6 +635,7 @@
             "",
             "",
             "",
+            "",
           ].map(toCsvCell).join(",")
         );
         for (const e of employees) {
@@ -632,6 +647,7 @@
               "",
               e.providerId,
               e.displayName,
+              e.loginEmail,
               e.hourlyRate,
               e.minWageRate,
               e.incentivePay ? 1 : 0,
@@ -671,6 +687,7 @@
               <tr>
                 <td>${escapeHtml(e.providerId)}</td>
                 <td>${escapeHtml(e.displayName)}</td>
+                <td>${escapeHtml(e.loginEmail)}</td>
                 <td>${escapeHtml(e.hourlyRate)}</td>
                 <td>${escapeHtml(e.minWageRate)}</td>
                 <td>${e.incentivePay ? "Yes" : "No"}</td>
@@ -723,6 +740,7 @@
         <tr>
           <th>Provider ID</th>
           <th>Employee name</th>
+          <th>Sign-in email</th>
           <th>Hourly rate</th>
           <th>Min wage rate</th>
           <th>Incentive Pay</th>
@@ -761,6 +779,7 @@
           const eduRate = Number(emp.eduRate) || 0;
           const trainingRate = Number(emp.trainingRate) || 0;
           const healthInsuranceDeduction = Number(emp.healthInsuranceDeduction) || 0;
+          const loginEmail = String(emp.loginEmail ?? "").trim();
 
           // Basic non-negative validation; invalid numbers skip the row.
           const nums = [
@@ -781,6 +800,7 @@
               body: JSON.stringify({
                 providerId,
                 displayName,
+                loginEmail,
                 hourlyRate,
                 incentivePay,
                 paidHolidays,
@@ -807,6 +827,7 @@
                     id: found.id,
                     providerId,
                     displayName,
+                    loginEmail,
                     hourlyRate,
                     incentivePay,
                     paidHolidays,
@@ -861,7 +882,7 @@
             const idx = {};
             header.forEach((h, i) => (idx[h] = i));
 
-            const required = CSV_HEADER;
+            const required = CSV_HEADER.filter((k) => k !== "loginEmail");
             for (const k of required) {
               if (idx[k] == null) {
                 throw new Error(`CSV missing required column: ${k}`);
@@ -889,6 +910,8 @@
                 sawEmployee = true;
                 const providerId = String(get(r, "providerId") ?? "").trim();
                 const displayName = String(get(r, "displayName") ?? "").trim();
+                const loginEmail =
+                  idx.loginEmail != null ? String(get(r, "loginEmail") ?? "").trim() : "";
                 if (!providerId) continue;
 
                 const hourlyRate = parseNonNegativeNumberCell(get(r, "hourlyRate"));
@@ -916,6 +939,7 @@
                 employees.push({
                   providerId,
                   displayName,
+                  loginEmail,
                   hourlyRate,
                   minWageRate,
                   incentivePay: parseBoolCell(get(r, "incentivePay")),
@@ -1018,6 +1042,7 @@
               const displayName = String(
                 raw.displayName ?? raw.name ?? ""
               ).trim();
+              const loginEmail = String(raw.loginEmail ?? raw.login_email ?? "").trim();
               const hourlyRate = Number(raw.hourlyRate ?? raw.ratePerHour ?? 0);
               const incentivePay = Boolean(
                 raw.incentivePay ?? raw.incentive_pay ?? false
@@ -1054,6 +1079,7 @@
                   body: JSON.stringify({
                     providerId,
                     displayName,
+                    loginEmail,
                     hourlyRate,
                     incentivePay,
                     paidHolidays,
@@ -1080,6 +1106,7 @@
                         id: found.id,
                         providerId,
                         displayName,
+                        loginEmail,
                         hourlyRate,
                         incentivePay,
                         paidHolidays,

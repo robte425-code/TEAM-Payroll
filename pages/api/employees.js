@@ -6,6 +6,7 @@ function rowToClient(row) {
     id: row.id,
     providerId: row.provider_id,
     displayName: row.display_name,
+    loginEmail: row.login_email != null ? String(row.login_email) : "",
     hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : 0,
     incentivePay: Boolean(row.incentive_pay),
     paidHolidays: Boolean(row.paid_holidays),
@@ -104,7 +105,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const result = await pool.query(
-        `SELECT id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays,
+        `SELECT id, provider_id, display_name, login_email, hourly_rate, incentive_pay, paid_holidays,
                 travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate,
                 pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used,
                 health_insurance_deduction,
@@ -120,6 +121,8 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const providerId = String(body.providerId || "").trim();
       const displayName = String(body.displayName ?? "").trim();
+      const loginEmailRaw = String(body.loginEmail ?? body.login_email ?? "").trim();
+      const loginEmail = loginEmailRaw ? loginEmailRaw : null;
       const hourlyRate = Number(body.hourlyRate);
       const incentivePay = toBool(body.incentivePay);
       const paidHolidays = toBool(body.paidHolidays);
@@ -142,12 +145,13 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction, created_at, updated_at`,
+        `INSERT INTO payroll.employees (provider_id, display_name, login_email, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         RETURNING id, provider_id, display_name, login_email, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction, created_at, updated_at`,
         [
           providerId,
           displayName,
+          loginEmail,
           hourlyRate,
           incentivePay,
           paidHolidays,
@@ -177,6 +181,8 @@ export default async function handler(req, res) {
       }
       const providerId = String(body.providerId || "").trim();
       const displayName = String(body.displayName ?? "").trim();
+      const loginEmailRaw = String(body.loginEmail ?? body.login_email ?? "").trim();
+      const loginEmail = loginEmailRaw ? loginEmailRaw : null;
       const hourlyRate = Number(body.hourlyRate);
       const incentivePay = toBool(body.incentivePay);
       const paidHolidays = toBool(body.paidHolidays);
@@ -202,25 +208,27 @@ export default async function handler(req, res) {
         `UPDATE payroll.employees
          SET provider_id = $1,
              display_name = $2,
-             hourly_rate = $3,
-             incentive_pay = $4,
-             paid_holidays = $5,
-             travel_rate = $6,
-             pto_rate = $7,
-             edu_rate = $8,
-             training_rate = $9,
-             min_wage_rate = $10,
-             pto_ytd_hours_accrued = $11,
-             pto_ytd_hours_used = $12,
-             sick_ytd_hours_accrued = $13,
-             sick_ytd_hours_used = $14,
-             health_insurance_deduction = $15,
+             login_email = $3,
+             hourly_rate = $4,
+             incentive_pay = $5,
+             paid_holidays = $6,
+             travel_rate = $7,
+             pto_rate = $8,
+             edu_rate = $9,
+             training_rate = $10,
+             min_wage_rate = $11,
+             pto_ytd_hours_accrued = $12,
+             pto_ytd_hours_used = $13,
+             sick_ytd_hours_accrued = $14,
+             sick_ytd_hours_used = $15,
+             health_insurance_deduction = $16,
              updated_at = now()
-         WHERE id = $16::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction, created_at, updated_at`,
+         WHERE id = $17::uuid
+         RETURNING id, provider_id, display_name, login_email, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction, created_at, updated_at`,
         [
           providerId,
           displayName,
+          loginEmail,
           hourlyRate,
           incentivePay,
           paidHolidays,
@@ -265,6 +273,9 @@ export default async function handler(req, res) {
   } catch (e) {
     const msg = e && e.message ? e.message : "Request failed";
     if (/unique|duplicate/i.test(msg)) {
+      if (/login_email|login email/i.test(msg)) {
+        return res.status(409).json({ error: "Sign-in email already assigned to another employee" });
+      }
       return res.status(409).json({ error: "Provider ID already exists" });
     }
     return res.status(500).json({ error: msg });

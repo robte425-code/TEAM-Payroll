@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My PTO &amp; Sick time — TEAM Payroll</title>
+    <link rel="stylesheet" href="./css/app.css" />
+    <style>
+      .my-leave-greeting {
+        font-size: clamp(1.15rem, 2.5vw, 1.45rem);
+        font-weight: 600;
+        margin: 10px 0 18px;
+        letter-spacing: -0.02em;
+      }
+      .my-leave-grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: 1fr;
+      }
+      @media (min-width: 840px) {
+        .my-leave-grid {
+          grid-template-columns: 1fr 1fr;
+          align-items: start;
+        }
+      }
+      .my-leave-stat {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        margin: 0 0 12px;
+        font-size: 0.95rem;
+      }
+      .my-leave-stat dt {
+        margin: 0;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .my-leave-stat dd {
+        margin: 0;
+        font-weight: 600;
+        text-align: right;
+      }
+      .my-leave-log-wrap {
+        max-height: 280px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-top: 8px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .my-leave-log-wrap table {
+        margin: 0;
+        font-size: 0.85rem;
+        width: 100%;
+      }
+      .my-leave-log-wrap th,
+      .my-leave-log-wrap td {
+        padding: 6px 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-title">
+        <img src="./assets/team-logo.png" alt="TEAM Vocational Services" class="brand-logo" />
+        <span class="brand-divider">|</span>
+        <span class="brand-product">Payroll</span>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="./my-leave.html" aria-current="page">My PTO &amp; Sick</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+
+    <h1>My PTO &amp; Sick time</h1>
+    <p id="greetingLine" class="my-leave-greeting" aria-live="polite"></p>
+    <p id="pageErr" class="error"></p>
+    <p id="pageMsg" class="muted" aria-live="polite"></p>
+
+    <div id="contentWrap" hidden>
+      <div class="my-leave-grid">
+        <div class="card">
+          <h3 style="margin-top: 0">PTO</h3>
+          <dl class="my-leave-stat">
+            <dt>PTO YTD hours accrued</dt>
+            <dd id="ptoAccrued">—</dd>
+            <dt>PTO YTD hours used</dt>
+            <dd id="ptoUsed">—</dd>
+            <dt>PTO available for use (hr)</dt>
+            <dd id="ptoAvail">—</dd>
+          </dl>
+          <h4 class="muted" style="margin: 12px 0 6px; font-size: 0.9rem; font-weight: 600">PTO log</h4>
+          <div class="my-leave-log-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Action</th>
+                  <th>Hours</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="ptoLogBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top: 0">Sick time</h3>
+          <dl class="my-leave-stat">
+            <dt>Sick YTD hours accrued</dt>
+            <dd id="sickAccrued">—</dd>
+            <dt>Sick YTD hours used</dt>
+            <dd id="sickUsed">—</dd>
+            <dt>Sick time available for use (hr)</dt>
+            <dd id="sickAvail">—</dd>
+          </dl>
+          <h4 class="muted" style="margin: 12px 0 6px; font-size: 0.9rem; font-weight: 600">Sick time log</h4>
+          <div class="my-leave-log-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Action</th>
+                  <th>Hours</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="sickLogBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function money2(n) {
+        const x = Number(n);
+        if (!Number.isFinite(x)) return "0.00";
+        return x.toFixed(2);
+      }
+
+      function formatDate(d) {
+        if (d == null || d === "") return "—";
+        const s = String(d);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          const [y, m, day] = s.slice(0, 10).split("-");
+          return `${m}/${day}/${y}`;
+        }
+        return s;
+      }
+
+      function greetingPrefix() {
+        const h = new Date().getHours();
+        if (h < 12) return "Good morning";
+        if (h < 17) return "Good afternoon";
+        return "Good evening";
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function renderLogRows(tbody, rows) {
+        tbody.innerHTML = "";
+        if (!rows || !rows.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="4" class="muted">No log entries yet.</td>';
+          tbody.appendChild(tr);
+          return;
+        }
+        for (const r of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDate(r.action_date))}</td>
+            <td>${escapeHtml(r.action)}</td>
+            <td>${escapeHtml(money2(r.hours))}</td>
+            <td>${escapeHtml(r.reason || "")}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      (async () => {
+        const errEl = document.getElementById("pageErr");
+        const greetEl = document.getElementById("greetingLine");
+        const wrap = document.getElementById("contentWrap");
+
+        try {
+          const r = await fetch("/api/my-leave", { credentials: "same-origin" });
+          const text = await r.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = { error: text || "Invalid response" };
+          }
+          if (!r.ok) {
+            throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
+          }
+
+          const name = data.employeeName || "there";
+          greetEl.textContent = `${greetingPrefix()}, ${name}`;
+
+          document.getElementById("ptoAccrued").textContent = money2(data.ptoYtdHoursAccrued);
+          document.getElementById("ptoUsed").textContent = money2(data.ptoYtdHoursUsed);
+          document.getElementById("ptoAvail").textContent = money2(data.ptoAvailableHours);
+          document.getElementById("sickAccrued").textContent = money2(data.sickYtdHoursAccrued);
+          document.getElementById("sickUsed").textContent = money2(data.sickYtdHoursUsed);
+          document.getElementById("sickAvail").textContent = money2(data.sickAvailableHours);
+
+          renderLogRows(document.getElementById("ptoLogBody"), data.ptoLogs);
+          renderLogRows(document.getElementById("sickLogBody"), data.sickLogs);
+
+          wrap.hidden = false;
+        } catch (e) {
+          greetEl.textContent = "";
+          errEl.textContent = e.message || "Could not load your leave data.";
+        }
+      })();
+    </script>
+  </body>
+</html>
