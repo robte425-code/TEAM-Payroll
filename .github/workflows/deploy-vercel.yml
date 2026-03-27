@@ -1,0 +1,30 @@
+# Deploys to Vercel when native Git integration does not run.
+# Add these repository secrets (GitHub → Settings → Secrets → Actions):
+#   VERCEL_TOKEN        — Vercel → Account Settings → Tokens → Create
+#   VERCEL_ORG_ID       — Project → Settings → General (or .vercel/project.json after vercel link)
+#   VERCEL_PROJECT_ID   — same
+#
+# If you use Vercel’s built-in GitHub integration successfully, you can delete this file
+# to avoid double deployments.
+
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod"
+          working-directory: ./
