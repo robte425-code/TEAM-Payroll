@@ -2169,8 +2169,14 @@
           if (!r.ok) {
             throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
           }
+          const updatedEmployees = Number(data.updatedEmployees) || 0;
+          if (updatedEmployees <= 0) {
+            throw new Error(
+              "No employees were recorded. Please regenerate Payroll 2.0 and verify employee Provider IDs."
+            );
+          }
           setLeaveRecordLocked(true);
-          if (msgEl) msgEl.textContent = `Recorded for ${Number(data.updatedEmployees) || 0} employee(s).`;
+          if (msgEl) msgEl.textContent = `Recorded for ${updatedEmployees} employee(s).`;
         } catch (e) {
           if (msgEl) msgEl.textContent = "";
           if (errEl) errEl.textContent = e.message || "Failed to record PTO/Sick time.";

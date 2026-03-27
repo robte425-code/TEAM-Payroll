@@ -186,6 +186,14 @@ export default async function handler(req, res) {
       updatedEmployees += 1;
     }
 
+    if (updatedEmployees <= 0) {
+      await pool.query("ROLLBACK");
+      return res.status(400).json({
+        error:
+          "No employees were recorded. Please regenerate Payroll 2.0 and ensure employee Provider IDs are present.",
+      });
+    }
+
     await pool.query("COMMIT");
     return res.status(200).json({ ok: true, updatedEmployees, batchId });
   } catch (e) {
