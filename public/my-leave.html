@@ -157,6 +157,13 @@
         return "Good evening";
       }
 
+      /** First word of display name for greetings (e.g. "Jane Doe" → "Jane"). */
+      function firstNameFromDisplayName(fullName) {
+        const s = String(fullName ?? "").trim().replace(/\s+/g, " ");
+        if (!s) return "there";
+        return s.split(" ")[0] || "there";
+      }
+
       function escapeHtml(s) {
         return String(s ?? "")
           .replace(/&/g, "&amp;")
@@ -204,8 +211,8 @@
             throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
           }
 
-          const name = data.employeeName || "there";
-          greetEl.textContent = `${greetingPrefix()}, ${name}`;
+          const firstName = firstNameFromDisplayName(data.employeeName);
+          greetEl.textContent = `${greetingPrefix()}, ${firstName}`;
 
           document.getElementById("ptoAccrued").textContent = money2(data.ptoYtdHoursAccrued);
           document.getElementById("ptoUsed").textContent = money2(data.ptoYtdHoursUsed);
