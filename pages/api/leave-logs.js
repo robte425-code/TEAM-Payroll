@@ -36,35 +36,69 @@ export default async function handler(req, res) {
     if (!displayName) return res.status(404).json({ error: "Employee not found" });
 
     const dateClause = [];
-    const params = [displayName];
+    const params = [];
     if (startDate) {
       params.push(startDate);
-      dateClause.push(`action_date >= $${params.length}::date`);
+      dateClause.push(`l.action_date >= $${params.length + 1}::date`);
     }
     if (endDate) {
       params.push(endDate);
-      dateClause.push(`action_date <= $${params.length}::date`);
+      dateClause.push(`l.action_date <= $${params.length + 1}::date`);
     }
     const whereDate = dateClause.length ? `AND ${dateClause.join(" AND ")}` : "";
+    const whereDateByName = whereDate.replace(/\$(\d+)/g, (_, n) => `$${Math.max(1, Number(n) - 1)}`);
 
+    // Prefer ID-based linkage via leave change batches (most reliable).
     const pto = await pool.query(
-      `SELECT id, employee_name, action_date, action, hours, reason, created_at
-       FROM payroll.pto_log
-       WHERE lower(regexp_replace(trim(employee_name), '\s+', ' ', 'g')) =
-             lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+      `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
+       FROM payroll.pto_log l
+       WHERE l.id IN (
+         SELECT DISTINCT unnest(d.pto_log_ids)
+         FROM payroll.leave_change_batch_details d
+         WHERE d.employee_id = $1::uuid
+       )
        ${whereDate}
-       ORDER BY action_date DESC, created_at DESC`,
-      params
+       ORDER BY l.action_date DESC, l.created_at DESC`,
+      [employeeId, ...params]
     );
     const sick = await pool.query(
-      `SELECT id, employee_name, action_date, action, hours, reason, created_at
-       FROM payroll.sick_time_log
-       WHERE lower(regexp_replace(trim(employee_name), '\s+', ' ', 'g')) =
-             lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+      `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
+       FROM payroll.sick_time_log l
+       WHERE l.id IN (
+         SELECT DISTINCT unnest(d.sick_log_ids)
+         FROM payroll.leave_change_batch_details d
+         WHERE d.employee_id = $1::uuid
+       )
        ${whereDate}
-       ORDER BY action_date DESC, created_at DESC`,
-      params
+       ORDER BY l.action_date DESC, l.created_at DESC`,
+      [employeeId, ...params]
     );
+
+    // Fallback for older rows not captured in batch detail arrays: name-normalized match.
+    if (pto.rows.length === 0) {
+      const fallback = await pool.query(
+        `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
+         FROM payroll.pto_log l
+         WHERE lower(regexp_replace(trim(l.employee_name), '\s+', ' ', 'g')) =
+               lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+         ${whereDateByName}
+         ORDER BY l.action_date DESC, l.created_at DESC`,
+        [displayName, ...params]
+      );
+      pto.rows.push(...fallback.rows);
+    }
+    if (sick.rows.length === 0) {
+      const fallback = await pool.query(
+        `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
+         FROM payroll.sick_time_log l
+         WHERE lower(regexp_replace(trim(l.employee_name), '\s+', ' ', 'g')) =
+               lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+         ${whereDateByName}
+         ORDER BY l.action_date DESC, l.created_at DESC`,
+        [displayName, ...params]
+      );
+      sick.rows.push(...fallback.rows);
+    }
 
     return res.status(200).json({
       employeeName: displayName,

@@ -818,6 +818,8 @@
       let lastPayroll20Results = null;
       /** Prevent duplicate leave recording in same browser session. */
       let leaveRecordLocked = false;
+      /** Prevent duplicate submissions while request is running. */
+      let leaveRecordInFlight = false;
 
       const SESSION_STORAGE_KEY = "TEAM_PAYROLL_SESSION_V1";
       const LEAVE_RECORD_LOCK_KEY = "TEAM_PAYROLL_LEAVE_RECORD_LOCK_V1";
@@ -826,10 +828,15 @@
         leaveRecordLocked = Boolean(locked);
         const btn = document.getElementById("recordLeaveBtn");
         if (btn) {
-          btn.disabled = leaveRecordLocked;
+          // Keep button clickable so user can see why recording is blocked.
+          btn.disabled = false;
           btn.title = leaveRecordLocked
             ? "Already recorded in this session."
             : "";
+        }
+        const msgEl = document.getElementById("leaveRecordMsg");
+        if (msgEl && leaveRecordLocked) {
+          msgEl.textContent = "PTO/Sick time has already been recorded in this session.";
         }
         try {
           if (leaveRecordLocked) sessionStorage.setItem(LEAVE_RECORD_LOCK_KEY, "1");
@@ -2133,17 +2140,22 @@
       document.getElementById("recordLeaveBtn").addEventListener("click", async () => {
         const msgEl = document.getElementById("leaveRecordMsg");
         const errEl = document.getElementById("payroll20Error");
+        const btn = document.getElementById("recordLeaveBtn");
         if (msgEl) msgEl.textContent = "";
         if (errEl) errEl.textContent = "";
         if (leaveRecordLocked) {
+          if (msgEl) msgEl.textContent = "PTO/Sick time has already been recorded in this session.";
           if (errEl) errEl.textContent = "PTO/Sick time has already been recorded in this session.";
           return;
         }
+        if (leaveRecordInFlight) return;
 
         if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.leaveRows)) {
           if (errEl) errEl.textContent = "Generate Payroll 2.0 before recording PTO/Sick time.";
           return;
         }
+        leaveRecordInFlight = true;
+        if (btn) btn.disabled = true;
         if (msgEl) msgEl.textContent = "Recording...";
         try {
           const r = await fetch("/api/leave-record", {
@@ -2166,6 +2178,10 @@
         } catch (e) {
           if (msgEl) msgEl.textContent = "";
           if (errEl) errEl.textContent = e.message || "Failed to record PTO/Sick time.";
+          if (!leaveRecordLocked && btn) btn.disabled = false;
+        } finally {
+          leaveRecordInFlight = false;
+          if (btn && !leaveRecordLocked) btn.disabled = false;
         }
       });
 
