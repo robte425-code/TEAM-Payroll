@@ -17,6 +17,7 @@
         <a href="./index.html" aria-current="page">Analyze spreadsheet</a>
         <a href="./rates.html">Employee pay rates</a>
         <a href="./access.html">Access management</a>
+        <a href="./leave.html">PTO/Sick management</a>
         <a href="/logout">Logout</a>
       </nav>
     </header>
@@ -250,6 +251,31 @@
           <p class="muted" id="payroll20HeatherCommissionFromP10" style="margin: 0; font-weight: 600"></p>
           <p class="muted" id="payroll20ManagementFeeFromP10" style="margin: 6px 0 0"></p>
         </div>
+      </div>
+      <div id="leaveRecordSection" class="card" style="margin-top: 12px" hidden>
+        <h4 style="margin: 0 0 8px; font-size: 1rem">PTO and Sick time recording</h4>
+        <p class="muted" style="margin-top: 0">
+          PTO accrual = (case work + report + travel &amp; wait) × 0.058 · Sick accrual = (case work + report +
+          travel &amp; wait + NB time) × 0.025
+        </p>
+        <div class="payroll20-table-scroll">
+          <table id="leaveRecordTable">
+            <thead>
+              <tr>
+                <th>Employee name</th>
+                <th>PTO accrual (hr)</th>
+                <th>PTO used (hr)</th>
+                <th>Sick time accrual (hr)</th>
+                <th>Sick time used (hr)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p style="margin: 12px 0 0">
+          <button type="button" id="recordLeaveBtn">Record PTO and Sick time</button>
+        </p>
+        <p id="leaveRecordMsg" class="muted" aria-live="polite"></p>
       </div>
     </div>
 
@@ -927,6 +953,7 @@
         const wrap = document.getElementById("payroll20ResultsWrap");
         if (wrap) wrap.hidden = false;
         setPayroll20ExtrasEnabled(true);
+        renderLeaveRecordTable(p.leaveRows || []);
 
         // Add Heather summary from Payroll 1.0 (as requested).
         const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
@@ -1056,8 +1083,39 @@
         if (mf) mf.textContent = "";
         const err = document.getElementById("payroll20Error");
         if (err) err.textContent = "";
+        const leaveWrap = document.getElementById("leaveRecordSection");
+        if (leaveWrap) leaveWrap.hidden = true;
+        const leaveBody = document.querySelector("#leaveRecordTable tbody");
+        if (leaveBody) leaveBody.innerHTML = "";
+        const leaveMsg = document.getElementById("leaveRecordMsg");
+        if (leaveMsg) leaveMsg.textContent = "";
         lastPayroll20Results = null;
         setPayroll20ExtrasEnabled(false);
+      }
+
+      function renderLeaveRecordTable(leaveRows) {
+        const wrap = document.getElementById("leaveRecordSection");
+        const tbody = document.querySelector("#leaveRecordTable tbody");
+        if (!wrap || !tbody) return;
+        const rows = Array.isArray(leaveRows) ? leaveRows : [];
+        if (!rows.length) {
+          wrap.hidden = true;
+          tbody.innerHTML = "";
+          return;
+        }
+        tbody.innerHTML = "";
+        for (const r of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(r.employeeName)}</td>
+            <td>${escapeHtml(money2(r.ptoAccrualHours))}</td>
+            <td>${escapeHtml(money2(r.ptoUsedHours))}</td>
+            <td>${escapeHtml(money2(r.sickAccrualHours))}</td>
+            <td>${escapeHtml(money2(r.sickUsedHours))}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+        wrap.hidden = false;
       }
 
       function clearPayroll20GeneralReimTbody() {
@@ -1653,6 +1711,7 @@
           const tbody = document.querySelector("#payroll20Table tbody");
           tbody.innerHTML = "";
           const rows20 = [];
+          const leaveRows = [];
           let sumRegular = 0;
           let sumOt = 0;
           let sumPto = 0;
@@ -1723,6 +1782,7 @@
             sumBonus += nonDiscBonus;
 
             const rowObj = {
+              providerId: pid,
               employeeName: r.employeeName,
               casePlusReports,
               nbTime: nbh.nb,
@@ -1743,6 +1803,17 @@
               nonDiscBonus,
             };
             rows20.push(rowObj);
+
+            const ptoAccrualHours = (casePlusReports + travelWait) * 0.058;
+            const sickAccrualHours = (casePlusReports + travelWait + nbh.nb) * 0.025;
+            leaveRows.push({
+              providerId: pid,
+              employeeName: r.employeeName,
+              ptoAccrualHours,
+              ptoUsedHours: nbh.pto,
+              sickAccrualHours,
+              sickUsedHours: nbh.sick,
+            });
 
             const tr = document.createElement("tr");
             tr.innerHTML = `
@@ -1793,12 +1864,14 @@
           }
           document.getElementById("payroll20Meta").textContent = metaText;
           document.getElementById("payroll20ResultsWrap").hidden = false;
+          renderLeaveRecordTable(leaveRows);
 
           lastPayroll20Results = {
             fileName: file.name,
             incentiveThreshold,
             unmatchedNonBillNames: unmatchedLabels,
             rows: rows20,
+            leaveRows,
             sums: {
               regularPay: sumRegular,
               overtimePay: sumOt,
@@ -1978,6 +2051,40 @@
             </body>
           </html>`);
         w.document.close();
+      });
+
+      document.getElementById("recordLeaveBtn").addEventListener("click", async () => {
+        const msgEl = document.getElementById("leaveRecordMsg");
+        const errEl = document.getElementById("payroll20Error");
+        if (msgEl) msgEl.textContent = "";
+        if (errEl) errEl.textContent = "";
+
+        if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.leaveRows)) {
+          if (errEl) errEl.textContent = "Generate Payroll 2.0 before recording PTO/Sick time.";
+          return;
+        }
+        if (msgEl) msgEl.textContent = "Recording...";
+        try {
+          const r = await fetch("/api/leave-record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows: lastPayroll20Results.leaveRows }),
+          });
+          const text = await r.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = { error: text || "Invalid response" };
+          }
+          if (!r.ok) {
+            throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
+          }
+          if (msgEl) msgEl.textContent = `Recorded for ${Number(data.updatedEmployees) || 0} employee(s).`;
+        } catch (e) {
+          if (msgEl) msgEl.textContent = "";
+          if (errEl) errEl.textContent = e.message || "Failed to record PTO/Sick time.";
+        }
       });
 
       // Restore analysis session when returning from another page (e.g. employee pay rates).

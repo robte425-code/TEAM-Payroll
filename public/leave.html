@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PTO/Sick management — TEAM Payroll</title>
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-title">
+        <img src="./assets/team-logo.png" alt="TEAM Vocational Services" class="brand-logo" />
+        <span class="brand-divider">|</span>
+        <span class="brand-product">Payroll</span>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="./index.html">Analyze spreadsheet</a>
+        <a href="./rates.html">Employee pay rates</a>
+        <a href="./access.html">Access management</a>
+        <a href="./leave.html" aria-current="page">PTO/Sick management</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+
+    <h1>PTO and Sick time management</h1>
+    <p class="muted page-subtitle">
+      Adjust employee YTD PTO/Sick accrued and used hours. Values are saved directly to the employees table.
+    </p>
+
+    <div class="card">
+      <button type="button" id="loadBtn">Reload</button>
+      <p id="msg" class="muted" aria-live="polite"></p>
+      <p id="err" class="error"></p>
+    </div>
+
+    <div class="card rates-employee-card">
+      <div class="rates-table-scroll">
+        <table class="rates-table" id="leaveTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>PTO YTD hours accrued</th>
+              <th>PTO YTD hours used</th>
+              <th>Sick YTD hours accrued</th>
+              <th>Sick YTD hours used</th>
+            </tr>
+          </thead>
+          <tbody id="leaveBody"></tbody>
+        </table>
+      </div>
+      <p style="margin-top: 14px; margin-bottom: 0">
+        <button type="button" id="saveBtn">Save</button>
+      </p>
+    </div>
+
+    <script>
+      const API = "/api/leave-ytd";
+      const tbody = document.getElementById("leaveBody");
+      const msg = document.getElementById("msg");
+      const err = document.getElementById("err");
+
+      function flash(text, isError) {
+        msg.textContent = isError ? "" : text;
+        err.textContent = isError ? text : "";
+        if (!isError && text) {
+          setTimeout(() => {
+            if (msg.textContent === text) msg.textContent = "";
+          }, 3500);
+        }
+      }
+
+      async function apiJson(url, options) {
+        const r = await fetch(url, options);
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { error: text || "Invalid response" };
+        }
+        if (!r.ok) {
+          const m = data.error || data.message || text || `HTTP ${r.status}`;
+          throw new Error(m);
+        }
+        return data;
+      }
+
+      function rowTemplate(e) {
+        const tr = document.createElement("tr");
+        tr.dataset.id = e.id;
+        tr.innerHTML = `
+          <td>${String(e.displayName || "")}</td>
+          <td><input type="number" class="js-pto-accrued rate-input" min="0" step="0.01" /></td>
+          <td><input type="number" class="js-pto-used rate-input" min="0" step="0.01" /></td>
+          <td><input type="number" class="js-sick-accrued rate-input" min="0" step="0.01" /></td>
+          <td><input type="number" class="js-sick-used rate-input" min="0" step="0.01" /></td>
+        `;
+        tr.querySelector(".js-pto-accrued").value = String(Number(e.ptoYtdHoursAccrued) || 0);
+        tr.querySelector(".js-pto-used").value = String(Number(e.ptoYtdHoursUsed) || 0);
+        tr.querySelector(".js-sick-accrued").value = String(Number(e.sickYtdHoursAccrued) || 0);
+        tr.querySelector(".js-sick-used").value = String(Number(e.sickYtdHoursUsed) || 0);
+        return tr;
+      }
+
+      function readRow(tr) {
+        const id = tr.dataset.id;
+        const ptoYtdHoursAccrued = Number(tr.querySelector(".js-pto-accrued").value || 0);
+        const ptoYtdHoursUsed = Number(tr.querySelector(".js-pto-used").value || 0);
+        const sickYtdHoursAccrued = Number(tr.querySelector(".js-sick-accrued").value || 0);
+        const sickYtdHoursUsed = Number(tr.querySelector(".js-sick-used").value || 0);
+        return { id, ptoYtdHoursAccrued, ptoYtdHoursUsed, sickYtdHoursAccrued, sickYtdHoursUsed };
+      }
+
+      async function render() {
+        err.textContent = "";
+        msg.textContent = "Loading...";
+        try {
+          const d = await apiJson(API, { method: "GET" });
+          const list = d.employees || [];
+          tbody.innerHTML = "";
+          for (const e of list) {
+            tbody.appendChild(rowTemplate(e));
+          }
+          msg.textContent = "";
+        } catch (e) {
+          msg.textContent = "";
+          flash(e.message || "Load failed.", true);
+        }
+      }
+
+      document.getElementById("loadBtn").addEventListener("click", render);
+      document.getElementById("saveBtn").addEventListener("click", async () => {
+        err.textContent = "";
+        const rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+        const payloadRows = [];
+        for (const tr of rows) {
+          const row = readRow(tr);
+          if (
+            !Number.isFinite(row.ptoYtdHoursAccrued) ||
+            row.ptoYtdHoursAccrued < 0 ||
+            !Number.isFinite(row.ptoYtdHoursUsed) ||
+            row.ptoYtdHoursUsed < 0 ||
+            !Number.isFinite(row.sickYtdHoursAccrued) ||
+            row.sickYtdHoursAccrued < 0 ||
+            !Number.isFinite(row.sickYtdHoursUsed) ||
+            row.sickYtdHoursUsed < 0
+          ) {
+            flash("All PTO/Sick values must be non-negative numbers.", true);
+            return;
+          }
+          payloadRows.push(row);
+        }
+        try {
+          await apiJson(API, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows: payloadRows }),
+          });
+          flash("Saved.");
+          await render();
+        } catch (e) {
+          flash(e.message || "Save failed.", true);
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
+

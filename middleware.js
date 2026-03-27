@@ -26,9 +26,12 @@ export const config = {
     "/index.html",
     "/rates.html",
     "/access.html",
+    "/leave.html",
     "/api/employees/:path*",
     "/api/settings",
     "/api/access",
+    "/api/leave-record",
+    "/api/leave-ytd",
   ],
 };
 

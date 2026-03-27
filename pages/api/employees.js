@@ -14,6 +14,10 @@ function rowToClient(row) {
     eduRate: row.edu_rate != null ? Number(row.edu_rate) : 0,
     trainingRate: row.training_rate != null ? Number(row.training_rate) : 0,
     minWageRate: row.min_wage_rate != null ? Number(row.min_wage_rate) : 0,
+    ptoYtdHoursAccrued: row.pto_ytd_hours_accrued != null ? Number(row.pto_ytd_hours_accrued) : 0,
+    ptoYtdHoursUsed: row.pto_ytd_hours_used != null ? Number(row.pto_ytd_hours_used) : 0,
+    sickYtdHoursAccrued: row.sick_ytd_hours_accrued != null ? Number(row.sick_ytd_hours_accrued) : 0,
+    sickYtdHoursUsed: row.sick_ytd_hours_used != null ? Number(row.sick_ytd_hours_used) : 0,
     healthInsuranceDeduction:
       row.health_insurance_deduction != null ? Number(row.health_insurance_deduction) : 0,
     createdAt: row.created_at,
@@ -101,7 +105,9 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const result = await pool.query(
         `SELECT id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays,
-                travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction,
+                travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate,
+                pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used,
+                health_insurance_deduction,
                 created_at, updated_at
          FROM payroll.employees
          ORDER BY display_name ASC, provider_id ASC`
@@ -122,6 +128,10 @@ export default async function handler(req, res) {
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
       const trainingRate = toNonNegativeNumber(body.trainingRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
+      const ptoYtdHoursAccrued = toNonNegativeNumber(body.ptoYtdHoursAccrued, 0);
+      const ptoYtdHoursUsed = toNonNegativeNumber(body.ptoYtdHoursUsed, 0);
+      const sickYtdHoursAccrued = toNonNegativeNumber(body.sickYtdHoursAccrued, 0);
+      const sickYtdHoursUsed = toNonNegativeNumber(body.sickYtdHoursUsed, 0);
       const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
       if (!providerId) {
@@ -132,9 +142,9 @@ export default async function handler(req, res) {
       }
 
       const inserted = await pool.query(
-        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
+        `INSERT INTO payroll.employees (provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction, created_at, updated_at`,
         [
           providerId,
           displayName,
@@ -146,6 +156,10 @@ export default async function handler(req, res) {
           eduRate,
           trainingRate,
           minWageRate,
+          ptoYtdHoursAccrued,
+          ptoYtdHoursUsed,
+          sickYtdHoursAccrued,
+          sickYtdHoursUsed,
           healthInsuranceDeduction,
         ]
       );
@@ -171,6 +185,10 @@ export default async function handler(req, res) {
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
       const trainingRate = toNonNegativeNumber(body.trainingRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
+      const ptoYtdHoursAccrued = toNonNegativeNumber(body.ptoYtdHoursAccrued, 0);
+      const ptoYtdHoursUsed = toNonNegativeNumber(body.ptoYtdHoursUsed, 0);
+      const sickYtdHoursAccrued = toNonNegativeNumber(body.sickYtdHoursAccrued, 0);
+      const sickYtdHoursUsed = toNonNegativeNumber(body.sickYtdHoursUsed, 0);
       const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
       if (!providerId) {
@@ -192,10 +210,14 @@ export default async function handler(req, res) {
              edu_rate = $8,
              training_rate = $9,
              min_wage_rate = $10,
-             health_insurance_deduction = $11,
+             pto_ytd_hours_accrued = $11,
+             pto_ytd_hours_used = $12,
+             sick_ytd_hours_accrued = $13,
+             sick_ytd_hours_used = $14,
+             health_insurance_deduction = $15,
              updated_at = now()
-         WHERE id = $12::uuid
-         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, health_insurance_deduction, created_at, updated_at`,
+         WHERE id = $16::uuid
+         RETURNING id, provider_id, display_name, hourly_rate, incentive_pay, paid_holidays, travel_rate, pto_rate, edu_rate, training_rate, min_wage_rate, pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used, health_insurance_deduction, created_at, updated_at`,
         [
           providerId,
           displayName,
@@ -207,6 +229,10 @@ export default async function handler(req, res) {
           eduRate,
           trainingRate,
           minWageRate,
+          ptoYtdHoursAccrued,
+          ptoYtdHoursUsed,
+          sickYtdHoursAccrued,
+          sickYtdHoursUsed,
           healthInsuranceDeduction,
           id,
         ]
