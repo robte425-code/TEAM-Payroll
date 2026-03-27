@@ -255,7 +255,9 @@
     </div>
 
     <div id="leaveRecordSection" class="card" style="margin-top: 12px" hidden>
-      <h4 style="margin: 0 0 8px; font-size: 1rem">PTO and Sick time recording</h4>
+      <h4 id="leaveRecordTitle" style="margin: 0 0 8px; font-size: 1rem">
+        PTO and Sick time recording <span id="leaveRecordEndDate"></span>
+      </h4>
       <p class="muted" style="margin-top: 0">
         PTO accrual = (case work + report + travel &amp; wait) × 0.058 · Sick accrual = (case work + report +
         travel &amp; wait + NB time) × 0.025
@@ -264,10 +266,14 @@
         <table id="leaveRecordTable">
           <thead>
             <tr>
+                <th>Current PTO Available (hr)</th>
               <th>Employee name</th>
               <th>PTO accrual (hr)</th>
+                <th>New PTO Available (hr)</th>
+                <th>Current Sick time Available (hr)</th>
               <th>PTO used (hr)</th>
               <th>Sick time accrual (hr)</th>
+                <th>New Sick time Available (hr)</th>
               <th>Sick time used (hr)</th>
             </tr>
           </thead>
@@ -276,6 +282,8 @@
       </div>
       <p style="margin: 12px 0 0">
         <button type="button" id="recordLeaveBtn">Record PTO and Sick time</button>
+        <button type="button" id="exportLeaveCsvBtn" class="btn-secondary">Export CSV</button>
+        <button type="button" id="printLeaveBtn" class="btn-secondary">Print</button>
       </p>
       <p id="leaveRecordMsg" class="muted" aria-live="polite"></p>
     </div>
@@ -316,6 +324,8 @@
         if (e10) e10.textContent = formatted ? ` (${formatted})` : "";
         const e20 = document.getElementById("payroll20EndDate");
         if (e20) e20.textContent = formatted ? ` (${formatted})` : "";
+        const eLeave = document.getElementById("leaveRecordEndDate");
+        if (eLeave) eLeave.textContent = formatted ? ` (${formatted})` : "";
       }
 
       const endDateInput = document.getElementById("payrollEndDateInput");
@@ -690,6 +700,10 @@
               ptoRate: Number(e.ptoRate) || 0,
               eduRate: Number(e.eduRate) || 0,
               trainingRate: Number(e.trainingRate) || 0,
+              ptoYtdHoursAccrued: Number(e.ptoYtdHoursAccrued) || 0,
+              ptoYtdHoursUsed: Number(e.ptoYtdHoursUsed) || 0,
+              sickYtdHoursAccrued: Number(e.sickYtdHoursAccrued) || 0,
+              sickYtdHoursUsed: Number(e.sickYtdHoursUsed) || 0,
             });
           }
           return m;
@@ -1108,10 +1122,14 @@
         for (const r of rows) {
           const tr = document.createElement("tr");
           tr.innerHTML = `
+            <td>${escapeHtml(money2(r.currentPtoAvailableHours))}</td>
             <td>${escapeHtml(r.employeeName)}</td>
             <td>${escapeHtml(money2(r.ptoAccrualHours))}</td>
+            <td>${escapeHtml(money2(r.newPtoAvailableHours))}</td>
+            <td>${escapeHtml(money2(r.currentSickAvailableHours))}</td>
             <td>${escapeHtml(money2(r.ptoUsedHours))}</td>
             <td>${escapeHtml(money2(r.sickAccrualHours))}</td>
+            <td>${escapeHtml(money2(r.newSickAvailableHours))}</td>
             <td>${escapeHtml(money2(r.sickUsedHours))}</td>
           `;
           tbody.appendChild(tr);
@@ -1807,12 +1825,22 @@
 
             const ptoAccrualHours = (casePlusReports + travelWait) * 0.058;
             const sickAccrualHours = (casePlusReports + travelWait + nbh.nb) * 0.025;
+            const currentPtoAvailableHours =
+              (Number(det.ptoYtdHoursAccrued) || 0) - (Number(det.ptoYtdHoursUsed) || 0);
+            const newPtoAvailableHours = currentPtoAvailableHours + ptoAccrualHours - nbh.pto;
+            const currentSickAvailableHours =
+              (Number(det.sickYtdHoursAccrued) || 0) - (Number(det.sickYtdHoursUsed) || 0);
+            const newSickAvailableHours = currentSickAvailableHours + sickAccrualHours - nbh.sick;
             leaveRows.push({
               providerId: pid,
               employeeName: r.employeeName,
+              currentPtoAvailableHours,
               ptoAccrualHours,
+              newPtoAvailableHours,
+              currentSickAvailableHours,
               ptoUsedHours: nbh.pto,
               sickAccrualHours,
+              newSickAvailableHours,
               sickUsedHours: nbh.sick,
             });
 
@@ -2086,6 +2114,107 @@
           if (msgEl) msgEl.textContent = "";
           if (errEl) errEl.textContent = e.message || "Failed to record PTO/Sick time.";
         }
+      });
+
+      document.getElementById("exportLeaveCsvBtn").addEventListener("click", () => {
+        const msgEl = document.getElementById("leaveRecordMsg");
+        const errEl = document.getElementById("payroll20Error");
+        if (msgEl) msgEl.textContent = "";
+        if (errEl) errEl.textContent = "";
+        if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.leaveRows)) {
+          if (errEl) errEl.textContent = "Generate Payroll 2.0 before exporting PTO/Sick recording.";
+          return;
+        }
+
+        const lines = [];
+        lines.push(
+          [
+            "Current PTO Available (hr)",
+            "Employee",
+            "PTO accrual (hr)",
+            "New PTO Available (hr)",
+            "Current Sick time Available (hr)",
+            "PTO used (hr)",
+            "Sick time accrual (hr)",
+            "New Sick time Available (hr)",
+            "Sick time used (hr)",
+          ]
+            .map(csvEscape)
+            .join(",")
+        );
+        for (const r of lastPayroll20Results.leaveRows) {
+          lines.push(
+            [
+              money2(r.currentPtoAvailableHours),
+              r.employeeName,
+              money2(r.ptoAccrualHours),
+              money2(r.newPtoAvailableHours),
+              money2(r.currentSickAvailableHours),
+              money2(r.ptoUsedHours),
+              money2(r.sickAccrualHours),
+              money2(r.newSickAvailableHours),
+              money2(r.sickUsedHours),
+            ]
+              .map(csvEscape)
+              .join(",")
+          );
+        }
+
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        downloadTextFile(
+          `PTO_Sick_Recording_${yyyy}-${mm}-${dd}.csv`,
+          "text/csv;charset=utf-8",
+          lines.join("\n")
+        );
+        if (msgEl) msgEl.textContent = "CSV export started.";
+      });
+
+      document.getElementById("printLeaveBtn").addEventListener("click", () => {
+        const msgEl = document.getElementById("leaveRecordMsg");
+        const errEl = document.getElementById("payroll20Error");
+        if (msgEl) msgEl.textContent = "";
+        if (errEl) errEl.textContent = "";
+        if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.leaveRows)) {
+          if (errEl) errEl.textContent = "Generate Payroll 2.0 before printing PTO/Sick recording.";
+          return;
+        }
+        const endDateRaw = document.getElementById("payrollEndDateInput")?.value || "";
+        const formattedEndDate = formatEndDateForTitle(endDateRaw);
+        const title = `PTO and Sick time recording${formattedEndDate ? ` (${formattedEndDate})` : ""}`;
+        const tableHtml = document.getElementById("leaveRecordTable").outerHTML;
+
+        const w = window.open("", "_blank");
+        if (!w) {
+          if (errEl) errEl.textContent = "Pop-up blocked. Please allow pop-ups to print.";
+          return;
+        }
+        w.document.write(`<!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>${escapeHtml(title)}</title>
+              <style>
+                body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+                h2 { margin: 0 0 6px; }
+                .muted { color: #666; }
+                table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 12px; }
+                th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: right; }
+                th { background: #f6f6f6; }
+                th:first-child, td:first-child { text-align: left; }
+              </style>
+            </head>
+            <body>
+              <h2>${escapeHtml(title)}</h2>
+              ${tableHtml}
+              <script>
+                window.onload = function () { window.focus(); window.print(); };
+              <\/script>
+            </body>
+          </html>`);
+        w.document.close();
       });
 
       // Restore analysis session when returning from another page (e.g. employee pay rates).
