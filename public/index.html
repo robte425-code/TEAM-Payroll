@@ -687,11 +687,30 @@
 
       async function fetchEmployeeDetailMap() {
         try {
-          const r = await fetch("/api/employees");
-          if (!r.ok) return new Map();
-          const data = await r.json();
+          const [empResp, leaveResp] = await Promise.all([
+            fetch("/api/employees"),
+            fetch("/api/leave-ytd"),
+          ]);
+          if (!empResp.ok) return new Map();
+          const data = await empResp.json();
+          const leaveData = leaveResp.ok ? await leaveResp.json() : { employees: [] };
+
+          const leaveByProviderId = new Map();
+          for (const e of leaveData.employees || []) {
+            const key = String(e.providerId || "").trim();
+            if (!key) continue;
+            leaveByProviderId.set(key, {
+              ptoYtdHoursAccrued: Number(e.ptoYtdHoursAccrued) || 0,
+              ptoYtdHoursUsed: Number(e.ptoYtdHoursUsed) || 0,
+              sickYtdHoursAccrued: Number(e.sickYtdHoursAccrued) || 0,
+              sickYtdHoursUsed: Number(e.sickYtdHoursUsed) || 0,
+            });
+          }
+
           const m = new Map();
           for (const e of data.employees || []) {
+            const providerId = String(e.providerId || "").trim();
+            const leave = leaveByProviderId.get(providerId) || {};
             m.set(String(e.providerId), {
               hourlyRate: Number(e.hourlyRate) || 0,
               minWageRate: Number(e.minWageRate) || 0,
@@ -700,10 +719,14 @@
               ptoRate: Number(e.ptoRate) || 0,
               eduRate: Number(e.eduRate) || 0,
               trainingRate: Number(e.trainingRate) || 0,
-              ptoYtdHoursAccrued: Number(e.ptoYtdHoursAccrued) || 0,
-              ptoYtdHoursUsed: Number(e.ptoYtdHoursUsed) || 0,
-              sickYtdHoursAccrued: Number(e.sickYtdHoursAccrued) || 0,
-              sickYtdHoursUsed: Number(e.sickYtdHoursUsed) || 0,
+              ptoYtdHoursAccrued:
+                Number(leave.ptoYtdHoursAccrued) || Number(e.ptoYtdHoursAccrued) || 0,
+              ptoYtdHoursUsed:
+                Number(leave.ptoYtdHoursUsed) || Number(e.ptoYtdHoursUsed) || 0,
+              sickYtdHoursAccrued:
+                Number(leave.sickYtdHoursAccrued) || Number(e.sickYtdHoursAccrued) || 0,
+              sickYtdHoursUsed:
+                Number(leave.sickYtdHoursUsed) || Number(e.sickYtdHoursUsed) || 0,
             });
           }
           return m;
