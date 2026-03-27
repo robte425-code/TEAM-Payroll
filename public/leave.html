@@ -5,6 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PTO/Sick management — TEAM Payroll</title>
     <link rel="stylesheet" href="./css/app.css" />
+    <style>
+      /* Keep log tables readable inside card width. */
+      #ptoLogTable,
+      #sickLogTable {
+        table-layout: fixed;
+        width: 100%;
+      }
+      #ptoLogTable th:nth-child(1),
+      #ptoLogTable td:nth-child(1),
+      #sickLogTable th:nth-child(1),
+      #sickLogTable td:nth-child(1) {
+        width: 12%;
+      }
+      #ptoLogTable th:nth-child(2),
+      #ptoLogTable td:nth-child(2),
+      #sickLogTable th:nth-child(2),
+      #sickLogTable td:nth-child(2) {
+        width: 14%;
+      }
+      #ptoLogTable th:nth-child(3),
+      #ptoLogTable td:nth-child(3),
+      #sickLogTable th:nth-child(3),
+      #sickLogTable td:nth-child(3) {
+        width: 12%;
+      }
+      #ptoLogTable th:nth-child(4),
+      #ptoLogTable td:nth-child(4),
+      #sickLogTable th:nth-child(4),
+      #sickLogTable td:nth-child(4) {
+        width: 62%;
+      }
+    </style>
   </head>
   <body>
     <header class="site-header">
@@ -85,6 +117,9 @@
           <tbody id="ptoLogBody"></tbody>
         </table>
       </div>
+      <p class="muted" style="margin-top: 8px">
+        Older logs created before hours tracking may show <code>0.00</code> in Hours.
+      </p>
     </div>
 
     <div class="card">
@@ -277,7 +312,7 @@
           tr.innerHTML = `
             <td>${String(r.action_date || "").slice(0, 10)}</td>
             <td>${String(r.action || "")}</td>
-            <td>${Number.isFinite(Number(r.hours)) ? Number(r.hours).toFixed(2) : "0.00"}</td>
+            <td>${money2(r.hours)}</td>
             <td>${String(r.reason || "")}</td>
           `;
           tbodyEl.appendChild(tr);
