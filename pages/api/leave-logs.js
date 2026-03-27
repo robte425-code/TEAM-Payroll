@@ -50,7 +50,8 @@ export default async function handler(req, res) {
     const pto = await pool.query(
       `SELECT id, employee_name, action_date, action, hours, reason, created_at
        FROM payroll.pto_log
-       WHERE employee_name = $1
+       WHERE lower(regexp_replace(trim(employee_name), '\s+', ' ', 'g')) =
+             lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
        ${whereDate}
        ORDER BY action_date DESC, created_at DESC`,
       params
@@ -58,7 +59,8 @@ export default async function handler(req, res) {
     const sick = await pool.query(
       `SELECT id, employee_name, action_date, action, hours, reason, created_at
        FROM payroll.sick_time_log
-       WHERE employee_name = $1
+       WHERE lower(regexp_replace(trim(employee_name), '\s+', ' ', 'g')) =
+             lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
        ${whereDate}
        ORDER BY action_date DESC, created_at DESC`,
       params

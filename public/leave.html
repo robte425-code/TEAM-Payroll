@@ -117,9 +117,6 @@
           <tbody id="ptoLogBody"></tbody>
         </table>
       </div>
-      <p class="muted" style="margin-top: 8px">
-        Older logs created before hours tracking may show <code>0.00</code> in Hours.
-      </p>
     </div>
 
     <div class="card">
@@ -167,6 +164,12 @@
             if (msg.textContent === text) msg.textContent = "";
           }, 3500);
         }
+      }
+
+      function money2(n) {
+        const v = Number(n);
+        if (!Number.isFinite(v)) return "0.00";
+        return (Math.round((v + Number.EPSILON) * 100) / 100).toFixed(2);
       }
 
       async function apiJson(url, options) {

@@ -816,8 +816,28 @@
       let lastPayroll10Results = null;
       /** Last payroll 2.0 export snapshot. */
       let lastPayroll20Results = null;
+      /** Prevent duplicate leave recording in same browser session. */
+      let leaveRecordLocked = false;
 
       const SESSION_STORAGE_KEY = "TEAM_PAYROLL_SESSION_V1";
+      const LEAVE_RECORD_LOCK_KEY = "TEAM_PAYROLL_LEAVE_RECORD_LOCK_V1";
+
+      function setLeaveRecordLocked(locked) {
+        leaveRecordLocked = Boolean(locked);
+        const btn = document.getElementById("recordLeaveBtn");
+        if (btn) {
+          btn.disabled = leaveRecordLocked;
+          btn.title = leaveRecordLocked
+            ? "Already recorded in this session."
+            : "";
+        }
+        try {
+          if (leaveRecordLocked) sessionStorage.setItem(LEAVE_RECORD_LOCK_KEY, "1");
+          else sessionStorage.removeItem(LEAVE_RECORD_LOCK_KEY);
+        } catch {
+          // ignore
+        }
+      }
 
       function clearSessionStorage() {
         try {
@@ -1081,6 +1101,11 @@
       }
 
       window.addEventListener("beforeunload", () => saveSessionToStorage());
+      try {
+        setLeaveRecordLocked(sessionStorage.getItem(LEAVE_RECORD_LOCK_KEY) === "1");
+      } catch {
+        setLeaveRecordLocked(false);
+      }
 
       function setPayroll10ExtrasEnabled(enabled) {
         const exportBtn = document.getElementById("exportPayroll10CsvBtn");
@@ -2110,6 +2135,10 @@
         const errEl = document.getElementById("payroll20Error");
         if (msgEl) msgEl.textContent = "";
         if (errEl) errEl.textContent = "";
+        if (leaveRecordLocked) {
+          if (errEl) errEl.textContent = "PTO/Sick time has already been recorded in this session.";
+          return;
+        }
 
         if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.leaveRows)) {
           if (errEl) errEl.textContent = "Generate Payroll 2.0 before recording PTO/Sick time.";
@@ -2132,6 +2161,7 @@
           if (!r.ok) {
             throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
           }
+          setLeaveRecordLocked(true);
           if (msgEl) msgEl.textContent = `Recorded for ${Number(data.updatedEmployees) || 0} employee(s).`;
         } catch (e) {
           if (msgEl) msgEl.textContent = "";
