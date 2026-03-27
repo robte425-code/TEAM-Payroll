@@ -834,10 +834,6 @@
             ? "Already recorded in this session."
             : "";
         }
-        const msgEl = document.getElementById("leaveRecordMsg");
-        if (msgEl && leaveRecordLocked) {
-          msgEl.textContent = "PTO/Sick time has already been recorded in this session.";
-        }
         try {
           if (leaveRecordLocked) sessionStorage.setItem(LEAVE_RECORD_LOCK_KEY, "1");
           else sessionStorage.removeItem(LEAVE_RECORD_LOCK_KEY);
