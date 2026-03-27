@@ -61,6 +61,28 @@ export default function LoginPage() {
         >
           {loading ? "Signing in..." : "Sign in with Microsoft"}
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setLoading(true);
+            signIn("azure-ad", { callbackUrl: "/my-leave.html" });
+          }}
+          disabled={loading}
+          style={{
+            width: "100%",
+            marginTop: 10,
+            background: "#fafaf9",
+            color: "#292524",
+            border: "1px solid #e7e5e4",
+            borderRadius: 10,
+            padding: "12px 16px",
+            fontWeight: 600,
+            cursor: "pointer",
+            opacity: loading ? 0.65 : 1,
+          }}
+        >
+          Check my balances
+        </button>
       </section>
     </main>
   );
