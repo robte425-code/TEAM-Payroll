@@ -266,15 +266,15 @@
         <table id="leaveRecordTable">
           <thead>
             <tr>
+                <th>Employee name</th>
                 <th>Current PTO Available (hr)</th>
-              <th>Employee name</th>
-              <th>PTO accrual (hr)</th>
+                <th>PTO accrual (hr)</th>
+                <th>PTO used (hr)</th>
                 <th>New PTO Available (hr)</th>
                 <th>Current Sick time Available (hr)</th>
-              <th>PTO used (hr)</th>
-              <th>Sick time accrual (hr)</th>
+                <th>Sick time accrual (hr)</th>
+                <th>Sick time used (hr)</th>
                 <th>New Sick time Available (hr)</th>
-              <th>Sick time used (hr)</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -1122,15 +1122,15 @@
         for (const r of rows) {
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td>${escapeHtml(money2(r.currentPtoAvailableHours))}</td>
             <td>${escapeHtml(r.employeeName)}</td>
+            <td>${escapeHtml(money2(r.currentPtoAvailableHours))}</td>
             <td>${escapeHtml(money2(r.ptoAccrualHours))}</td>
+            <td>${escapeHtml(money2(r.ptoUsedHours))}</td>
             <td>${escapeHtml(money2(r.newPtoAvailableHours))}</td>
             <td>${escapeHtml(money2(r.currentSickAvailableHours))}</td>
-            <td>${escapeHtml(money2(r.ptoUsedHours))}</td>
             <td>${escapeHtml(money2(r.sickAccrualHours))}</td>
-            <td>${escapeHtml(money2(r.newSickAvailableHours))}</td>
             <td>${escapeHtml(money2(r.sickUsedHours))}</td>
+            <td>${escapeHtml(money2(r.newSickAvailableHours))}</td>
           `;
           tbody.appendChild(tr);
         }
@@ -2129,15 +2129,15 @@
         const lines = [];
         lines.push(
           [
-            "Current PTO Available (hr)",
             "Employee",
+            "Current PTO Available (hr)",
             "PTO accrual (hr)",
+            "PTO used (hr)",
             "New PTO Available (hr)",
             "Current Sick time Available (hr)",
-            "PTO used (hr)",
             "Sick time accrual (hr)",
-            "New Sick time Available (hr)",
             "Sick time used (hr)",
+            "New Sick time Available (hr)",
           ]
             .map(csvEscape)
             .join(",")
@@ -2145,15 +2145,15 @@
         for (const r of lastPayroll20Results.leaveRows) {
           lines.push(
             [
-              money2(r.currentPtoAvailableHours),
               r.employeeName,
+              money2(r.currentPtoAvailableHours),
               money2(r.ptoAccrualHours),
+              money2(r.ptoUsedHours),
               money2(r.newPtoAvailableHours),
               money2(r.currentSickAvailableHours),
-              money2(r.ptoUsedHours),
               money2(r.sickAccrualHours),
-              money2(r.newSickAvailableHours),
               money2(r.sickUsedHours),
+              money2(r.newSickAvailableHours),
             ]
               .map(csvEscape)
               .join(",")

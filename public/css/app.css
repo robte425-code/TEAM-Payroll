@@ -75,7 +75,7 @@ h3 {
   min-width: 0;
   width: 100%;
   table-layout: fixed;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 #leaveRecordTable th,
@@ -86,7 +86,7 @@ h3 {
 
 #leaveRecordTable th:nth-child(1),
 #leaveRecordTable td:nth-child(1) {
-  width: 32%;
+  width: 22%;
 }
 
 #leaveRecordTable th:nth-child(2),
@@ -96,8 +96,16 @@ h3 {
 #leaveRecordTable th:nth-child(4),
 #leaveRecordTable td:nth-child(4),
 #leaveRecordTable th:nth-child(5),
-#leaveRecordTable td:nth-child(5) {
-  width: 17%;
+#leaveRecordTable td:nth-child(5),
+#leaveRecordTable th:nth-child(6),
+#leaveRecordTable td:nth-child(6),
+#leaveRecordTable th:nth-child(7),
+#leaveRecordTable td:nth-child(7),
+#leaveRecordTable th:nth-child(8),
+#leaveRecordTable td:nth-child(8),
+#leaveRecordTable th:nth-child(9),
+#leaveRecordTable td:nth-child(9) {
+  width: 9.75%;
 }
 
 .payroll20-genreim-scroll {
