@@ -70,6 +70,36 @@ h3 {
   font-size: 0.88rem;
 }
 
+/* PTO/Sick record table should fit card width without horizontal overflow */
+#leaveRecordSection .payroll20-table-scroll table#leaveRecordTable {
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.85rem;
+}
+
+#leaveRecordTable th,
+#leaveRecordTable td {
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+}
+
+#leaveRecordTable th:nth-child(1),
+#leaveRecordTable td:nth-child(1) {
+  width: 32%;
+}
+
+#leaveRecordTable th:nth-child(2),
+#leaveRecordTable td:nth-child(2),
+#leaveRecordTable th:nth-child(3),
+#leaveRecordTable td:nth-child(3),
+#leaveRecordTable th:nth-child(4),
+#leaveRecordTable td:nth-child(4),
+#leaveRecordTable th:nth-child(5),
+#leaveRecordTable td:nth-child(5) {
+  width: 17%;
+}
+
 .payroll20-genreim-scroll {
   overflow-x: auto;
   max-width: 100%;
