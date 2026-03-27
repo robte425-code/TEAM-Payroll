@@ -251,32 +251,32 @@
           <p class="muted" id="payroll20HeatherCommissionFromP10" style="margin: 0; font-weight: 600"></p>
           <p class="muted" id="payroll20ManagementFeeFromP10" style="margin: 6px 0 0"></p>
         </div>
+    </div>
+
+    <div id="leaveRecordSection" class="card" style="margin-top: 12px" hidden>
+      <h4 style="margin: 0 0 8px; font-size: 1rem">PTO and Sick time recording</h4>
+      <p class="muted" style="margin-top: 0">
+        PTO accrual = (case work + report + travel &amp; wait) × 0.058 · Sick accrual = (case work + report +
+        travel &amp; wait + NB time) × 0.025
+      </p>
+      <div class="payroll20-table-scroll">
+        <table id="leaveRecordTable">
+          <thead>
+            <tr>
+              <th>Employee name</th>
+              <th>PTO accrual (hr)</th>
+              <th>PTO used (hr)</th>
+              <th>Sick time accrual (hr)</th>
+              <th>Sick time used (hr)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div id="leaveRecordSection" class="card" style="margin-top: 12px" hidden>
-        <h4 style="margin: 0 0 8px; font-size: 1rem">PTO and Sick time recording</h4>
-        <p class="muted" style="margin-top: 0">
-          PTO accrual = (case work + report + travel &amp; wait) × 0.058 · Sick accrual = (case work + report +
-          travel &amp; wait + NB time) × 0.025
-        </p>
-        <div class="payroll20-table-scroll">
-          <table id="leaveRecordTable">
-            <thead>
-              <tr>
-                <th>Employee name</th>
-                <th>PTO accrual (hr)</th>
-                <th>PTO used (hr)</th>
-                <th>Sick time accrual (hr)</th>
-                <th>Sick time used (hr)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p style="margin: 12px 0 0">
-          <button type="button" id="recordLeaveBtn">Record PTO and Sick time</button>
-        </p>
-        <p id="leaveRecordMsg" class="muted" aria-live="polite"></p>
-      </div>
+      <p style="margin: 12px 0 0">
+        <button type="button" id="recordLeaveBtn">Record PTO and Sick time</button>
+      </p>
+      <p id="leaveRecordMsg" class="muted" aria-live="polite"></p>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
