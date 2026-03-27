@@ -78,6 +78,7 @@
             <tr>
               <th>Date</th>
               <th>Action</th>
+              <th>Hours</th>
               <th>Reason</th>
             </tr>
           </thead>
@@ -103,6 +104,7 @@
             <tr>
               <th>Date</th>
               <th>Action</th>
+              <th>Hours</th>
               <th>Reason</th>
             </tr>
           </thead>
@@ -266,7 +268,7 @@
         tbodyEl.innerHTML = "";
         if (!rows.length) {
           const tr = document.createElement("tr");
-          tr.innerHTML = '<td colspan="3" class="muted">No logs found for selected filters.</td>';
+          tr.innerHTML = '<td colspan="4" class="muted">No logs found for selected filters.</td>';
           tbodyEl.appendChild(tr);
           return;
         }
@@ -275,6 +277,7 @@
           tr.innerHTML = `
             <td>${String(r.action_date || "").slice(0, 10)}</td>
             <td>${String(r.action || "")}</td>
+            <td>${Number.isFinite(Number(r.hours)) ? Number(r.hours).toFixed(2) : "0.00"}</td>
             <td>${String(r.reason || "")}</td>
           `;
           tbodyEl.appendChild(tr);

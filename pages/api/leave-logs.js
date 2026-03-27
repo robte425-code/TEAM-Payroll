@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     const whereDate = dateClause.length ? `AND ${dateClause.join(" AND ")}` : "";
 
     const pto = await pool.query(
-      `SELECT id, employee_name, action_date, action, reason, created_at
+      `SELECT id, employee_name, action_date, action, hours, reason, created_at
        FROM payroll.pto_log
        WHERE employee_name = $1
        ${whereDate}
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       params
     );
     const sick = await pool.query(
-      `SELECT id, employee_name, action_date, action, reason, created_at
+      `SELECT id, employee_name, action_date, action, hours, reason, created_at
        FROM payroll.sick_time_log
        WHERE employee_name = $1
        ${whereDate}

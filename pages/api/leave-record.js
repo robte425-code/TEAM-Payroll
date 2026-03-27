@@ -117,37 +117,37 @@ export default async function handler(req, res) {
       const sickLogIds = [];
       if (ptoAccrual > 0) {
         const ins = await pool.query(
-          `INSERT INTO payroll.pto_log (employee_name, action_date, action, reason)
-           VALUES ($1, CURRENT_DATE, 'Accrual', $2)
+          `INSERT INTO payroll.pto_log (employee_name, action_date, action, hours, reason)
+           VALUES ($1, CURRENT_DATE, 'Accrual', $2, $3)
            RETURNING id`,
-          [employeeName, "PTO accrual from billable hours"]
+          [employeeName, ptoAccrual, "PTO accrual from billable hours"]
         );
         if (ins.rows[0]?.id) ptoLogIds.push(ins.rows[0].id);
       }
       if (ptoUsed > 0) {
         const ins = await pool.query(
-          `INSERT INTO payroll.pto_log (employee_name, action_date, action, reason)
-           VALUES ($1, CURRENT_DATE, 'Used', $2)
+          `INSERT INTO payroll.pto_log (employee_name, action_date, action, hours, reason)
+           VALUES ($1, CURRENT_DATE, 'Used', $2, $3)
            RETURNING id`,
-          [employeeName, "PTO used from non-bill file (Z PTO)"]
+          [employeeName, ptoUsed, "PTO used from non-bill file (Z PTO)"]
         );
         if (ins.rows[0]?.id) ptoLogIds.push(ins.rows[0].id);
       }
       if (sickAccrual > 0) {
         const ins = await pool.query(
-          `INSERT INTO payroll.sick_time_log (employee_name, action_date, action, reason)
-           VALUES ($1, CURRENT_DATE, 'Accrual', $2)
+          `INSERT INTO payroll.sick_time_log (employee_name, action_date, action, hours, reason)
+           VALUES ($1, CURRENT_DATE, 'Accrual', $2, $3)
            RETURNING id`,
-          [employeeName, "Sick time accrual from billable hours"]
+          [employeeName, sickAccrual, "Sick time accrual from billable hours"]
         );
         if (ins.rows[0]?.id) sickLogIds.push(ins.rows[0].id);
       }
       if (sickUsed > 0) {
         const ins = await pool.query(
-          `INSERT INTO payroll.sick_time_log (employee_name, action_date, action, reason)
-           VALUES ($1, CURRENT_DATE, 'Used', $2)
+          `INSERT INTO payroll.sick_time_log (employee_name, action_date, action, hours, reason)
+           VALUES ($1, CURRENT_DATE, 'Used', $2, $3)
            RETURNING id`,
-          [employeeName, "Sick time used from non-bill file (Z Sick time)"]
+          [employeeName, sickUsed, "Sick time used from non-bill file (Z Sick time)"]
         );
         if (ins.rows[0]?.id) sickLogIds.push(ins.rows[0].id);
       }
