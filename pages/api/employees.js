@@ -43,6 +43,10 @@ function toBool(value) {
   return false;
 }
 
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
 function getQueryId(req) {
   if (req.query && req.query.id) return String(req.query.id).trim();
   try {
@@ -179,6 +183,17 @@ export default async function handler(req, res) {
       if (!id) {
         return res.status(400).json({ error: "id is required" });
       }
+      const existing = await pool.query(
+        `SELECT pto_ytd_hours_accrued, pto_ytd_hours_used, sick_ytd_hours_accrued, sick_ytd_hours_used
+         FROM payroll.employees
+         WHERE id = $1::uuid
+         LIMIT 1`,
+        [id]
+      );
+      if (!existing.rows.length) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      const prev = existing.rows[0];
       const providerId = String(body.providerId || "").trim();
       const displayName = String(body.displayName ?? "").trim();
       const loginEmailRaw = String(body.loginEmail ?? body.login_email ?? "").trim();
@@ -191,10 +206,22 @@ export default async function handler(req, res) {
       const eduRate = toNonNegativeNumber(body.eduRate, 0);
       const trainingRate = toNonNegativeNumber(body.trainingRate, 0);
       const minWageRate = toNonNegativeNumber(body.minWageRate, 0);
-      const ptoYtdHoursAccrued = toNonNegativeNumber(body.ptoYtdHoursAccrued, 0);
-      const ptoYtdHoursUsed = toNonNegativeNumber(body.ptoYtdHoursUsed, 0);
-      const sickYtdHoursAccrued = toNonNegativeNumber(body.sickYtdHoursAccrued, 0);
-      const sickYtdHoursUsed = toNonNegativeNumber(body.sickYtdHoursUsed, 0);
+      const ptoYtdHoursAccrued =
+        hasOwn(body, "ptoYtdHoursAccrued") || hasOwn(body, "pto_ytd_hours_accrued")
+          ? toNonNegativeNumber(body.ptoYtdHoursAccrued ?? body.pto_ytd_hours_accrued, 0)
+          : Number(prev.pto_ytd_hours_accrued) || 0;
+      const ptoYtdHoursUsed =
+        hasOwn(body, "ptoYtdHoursUsed") || hasOwn(body, "pto_ytd_hours_used")
+          ? toNonNegativeNumber(body.ptoYtdHoursUsed ?? body.pto_ytd_hours_used, 0)
+          : Number(prev.pto_ytd_hours_used) || 0;
+      const sickYtdHoursAccrued =
+        hasOwn(body, "sickYtdHoursAccrued") || hasOwn(body, "sick_ytd_hours_accrued")
+          ? toNonNegativeNumber(body.sickYtdHoursAccrued ?? body.sick_ytd_hours_accrued, 0)
+          : Number(prev.sick_ytd_hours_accrued) || 0;
+      const sickYtdHoursUsed =
+        hasOwn(body, "sickYtdHoursUsed") || hasOwn(body, "sick_ytd_hours_used")
+          ? toNonNegativeNumber(body.sickYtdHoursUsed ?? body.sick_ytd_hours_used, 0)
+          : Number(prev.sick_ytd_hours_used) || 0;
       const healthInsuranceDeduction = toNonNegativeNumber(body.healthInsuranceDeduction, 0);
 
       if (!providerId) {
