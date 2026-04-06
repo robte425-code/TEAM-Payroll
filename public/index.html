@@ -408,6 +408,23 @@
           .toLowerCase();
       }
 
+      function lastNameSortKey(name) {
+        const s = String(name || "").trim();
+        if (!s) return "";
+        const comma = s.indexOf(",");
+        if (comma !== -1) return s.slice(0, comma).trim().toLowerCase();
+        const parts = s.split(/\s+/).filter(Boolean);
+        return (parts[parts.length - 1] || "").toLowerCase();
+      }
+
+      function compareEmployeeByLastName(aName, bName) {
+        const c = lastNameSortKey(aName).localeCompare(lastNameSortKey(bName), undefined, {
+          sensitivity: "base",
+        });
+        if (c !== 0) return c;
+        return String(aName || "").localeCompare(String(bName || ""), undefined, { sensitivity: "base" });
+      }
+
       /**
        * Non-bill rows: NB* (incl. NB TT training), Z PTO, Z Sick time, Z Education*.
        * @returns {"nb"|"training"|"pto"|"sick"|"edu"|null}
@@ -929,7 +946,9 @@
         const tbody = document.querySelector("#payroll20Table tbody");
         if (tbody) {
           tbody.innerHTML = "";
-          const rows = Array.isArray(p.rows) ? p.rows : [];
+          const rows = Array.isArray(p.rows)
+            ? [...p.rows].sort((a, b) => compareEmployeeByLastName(a.employeeName, b.employeeName))
+            : [];
           for (const r of rows) {
             const tr = document.createElement("tr");
             tr.innerHTML = `
@@ -956,11 +975,47 @@
           }
 
           const s = p.sums || {};
+          const hourTotals =
+            s.casePlusReports != null &&
+            s.nbTime != null &&
+            s.travelWaitHours != null &&
+            s.totalHoursWorked != null &&
+            s.overtimeHours != null &&
+            s.ptoTime != null &&
+            s.sickTime != null
+              ? s
+              : rows.reduce(
+                  (acc, r) => {
+                    acc.casePlusReports += Number(r.casePlusReports) || 0;
+                    acc.nbTime += Number(r.nbTime) || 0;
+                    acc.travelWaitHours += Number(r.travelWaitHours) || 0;
+                    acc.totalHoursWorked += Number(r.totalHoursWorked) || 0;
+                    acc.overtimeHours += Number(r.overtimeHours) || 0;
+                    acc.ptoTime += Number(r.ptoTime) || 0;
+                    acc.sickTime += Number(r.sickTime) || 0;
+                    return acc;
+                  },
+                  {
+                    casePlusReports: 0,
+                    nbTime: 0,
+                    travelWaitHours: 0,
+                    totalHoursWorked: 0,
+                    overtimeHours: 0,
+                    ptoTime: 0,
+                    sickTime: 0,
+                  }
+                );
           const trTotal = document.createElement("tr");
           trTotal.style.fontWeight = "700";
           trTotal.innerHTML = `
             <td>Total</td>
-            <td colspan="7"></td>
+            <td>${escapeHtml(money2(hourTotals.casePlusReports))}</td>
+            <td>${escapeHtml(money2(hourTotals.nbTime))}</td>
+            <td>${escapeHtml(money2(hourTotals.travelWaitHours))}</td>
+            <td>${escapeHtml(money2(hourTotals.totalHoursWorked))}</td>
+            <td>${escapeHtml(money2(hourTotals.overtimeHours))}</td>
+            <td>${escapeHtml(money2(hourTotals.ptoTime))}</td>
+            <td>${escapeHtml(money2(hourTotals.sickTime))}</td>
             <td>${escapeHtml(money2(s.regularPay))}</td>
             <td>${escapeHtml(money2(s.overtimePay))}</td>
             <td>${escapeHtml(money2(s.ptoPay))}</td>
@@ -992,7 +1047,10 @@
         const wrap = document.getElementById("payroll20ResultsWrap");
         if (wrap) wrap.hidden = false;
         setPayroll20ExtrasEnabled(true);
-        renderLeaveRecordTable(p.leaveRows || []);
+        const leaveSorted = Array.isArray(p.leaveRows)
+          ? [...p.leaveRows].sort((a, b) => compareEmployeeByLastName(a.employeeName, b.employeeName))
+          : [];
+        renderLeaveRecordTable(leaveSorted);
 
         // Add Heather summary from Payroll 1.0 (as requested).
         const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
@@ -1765,7 +1823,15 @@
           let sumMileage = 0;
           let sumGenReim = 0;
           let sumBonus = 0;
+          let sumCasePlusReports = 0;
+          let sumNbTime = 0;
+          let sumTravelWait = 0;
+          let sumTotalRegHrs = 0;
+          let sumOvertimeHrs = 0;
+          let sumPtoTimeHrs = 0;
+          let sumSickTimeHrs = 0;
 
+          const payroll20Pairs = [];
           lastPayroll10Results.rows.forEach((r, rowIdx) => {
             const generalReimbursement = Number(generalReimByRow[rowIdx]) || 0;
             const nameKey = normalizeEmployeeName(r.employeeName);
@@ -1823,6 +1889,13 @@
             sumMileage += mileageUnits;
             sumGenReim += generalReimbursement;
             sumBonus += nonDiscBonus;
+            sumCasePlusReports += casePlusReports;
+            sumNbTime += nbh.nb;
+            sumTravelWait += travelWait;
+            sumTotalRegHrs += totalHoursWorked;
+            sumOvertimeHrs += overtimeHours;
+            sumPtoTimeHrs += nbh.pto;
+            sumSickTimeHrs += nbh.sick;
 
             const rowObj = {
               providerId: pid,
@@ -1845,7 +1918,6 @@
               generalReimbursement,
               nonDiscBonus,
             };
-            rows20.push(rowObj);
 
             const ptoAccrualHours = (casePlusReports + travelWait) * 0.058;
             const sickAccrualHours = (casePlusReports + travelWait + nbh.nb) * 0.025;
@@ -1855,7 +1927,7 @@
             const currentSickAvailableHours =
               (Number(det.sickYtdHoursAccrued) || 0) - (Number(det.sickYtdHoursUsed) || 0);
             const newSickAvailableHours = currentSickAvailableHours + sickAccrualHours - nbh.sick;
-            leaveRows.push({
+            const leaveRow = {
               providerId: pid,
               employeeName: r.employeeName,
               currentPtoAvailableHours,
@@ -1866,37 +1938,52 @@
               sickAccrualHours,
               newSickAvailableHours,
               sickUsedHours: nbh.sick,
-            });
+            };
+            payroll20Pairs.push({ rowObj, leaveRow });
+          });
 
+          payroll20Pairs.sort((a, b) =>
+            compareEmployeeByLastName(a.rowObj.employeeName, b.rowObj.employeeName)
+          );
+          for (const { rowObj, leaveRow } of payroll20Pairs) {
+            rows20.push(rowObj);
+            leaveRows.push(leaveRow);
+            const o = rowObj;
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td>${escapeHtml(r.employeeName)}</td>
-              <td>${escapeHtml(money2(casePlusReports))}</td>
-              <td>${escapeHtml(money2(nbh.nb))}</td>
-              <td>${escapeHtml(money2(travelWait))}</td>
-              <td>${escapeHtml(money2(totalHoursWorked))}</td>
-              <td>${escapeHtml(money2(overtimeHours))}</td>
-              <td>${escapeHtml(money2(nbh.pto))}</td>
-              <td>${escapeHtml(money2(nbh.sick))}</td>
-              <td>${escapeHtml(money2(regularPay))}</td>
-              <td>${escapeHtml(money2(overtimePay))}</td>
-              <td>${escapeHtml(money2(ptoPay))}</td>
-              <td>${escapeHtml(money2(sickPay))}</td>
-              <td>${escapeHtml(money2(holidayPay))}</td>
-              <td>${escapeHtml(money2(trainingPay))}</td>
-              <td>${escapeHtml(money2(eduPay))}</td>
-              <td>${escapeHtml(money2(mileageUnits))}</td>
-              <td>${escapeHtml(money2(generalReimbursement))}</td>
-              <td>${escapeHtml(money2(nonDiscBonus))}</td>
+              <td>${escapeHtml(o.employeeName)}</td>
+              <td>${escapeHtml(money2(o.casePlusReports))}</td>
+              <td>${escapeHtml(money2(o.nbTime))}</td>
+              <td>${escapeHtml(money2(o.travelWaitHours))}</td>
+              <td>${escapeHtml(money2(o.totalHoursWorked))}</td>
+              <td>${escapeHtml(money2(o.overtimeHours))}</td>
+              <td>${escapeHtml(money2(o.ptoTime))}</td>
+              <td>${escapeHtml(money2(o.sickTime))}</td>
+              <td>${escapeHtml(money2(o.regularPay))}</td>
+              <td>${escapeHtml(money2(o.overtimePay))}</td>
+              <td>${escapeHtml(money2(o.ptoPay))}</td>
+              <td>${escapeHtml(money2(o.sickPay))}</td>
+              <td>${escapeHtml(money2(o.holidayPay))}</td>
+              <td>${escapeHtml(money2(o.trainingPay))}</td>
+              <td>${escapeHtml(money2(o.eduPay))}</td>
+              <td>${escapeHtml(money2(o.mileage))}</td>
+              <td>${escapeHtml(money2(o.generalReimbursement))}</td>
+              <td>${escapeHtml(money2(o.nonDiscBonus))}</td>
             `;
             tbody.appendChild(tr);
-          });
+          }
 
           const trTotal = document.createElement("tr");
           trTotal.style.fontWeight = "700";
           trTotal.innerHTML = `
             <td>Total</td>
-            <td colspan="7"></td>
+            <td>${escapeHtml(money2(sumCasePlusReports))}</td>
+            <td>${escapeHtml(money2(sumNbTime))}</td>
+            <td>${escapeHtml(money2(sumTravelWait))}</td>
+            <td>${escapeHtml(money2(sumTotalRegHrs))}</td>
+            <td>${escapeHtml(money2(sumOvertimeHrs))}</td>
+            <td>${escapeHtml(money2(sumPtoTimeHrs))}</td>
+            <td>${escapeHtml(money2(sumSickTimeHrs))}</td>
             <td>${escapeHtml(money2(sumRegular))}</td>
             <td>${escapeHtml(money2(sumOt))}</td>
             <td>${escapeHtml(money2(sumPto))}</td>
@@ -1926,6 +2013,13 @@
             rows: rows20,
             leaveRows,
             sums: {
+              casePlusReports: sumCasePlusReports,
+              nbTime: sumNbTime,
+              travelWaitHours: sumTravelWait,
+              totalHoursWorked: sumTotalRegHrs,
+              overtimeHours: sumOvertimeHrs,
+              ptoTime: sumPtoTimeHrs,
+              sickTime: sumSickTimeHrs,
               regularPay: sumRegular,
               overtimePay: sumOt,
               ptoPay: sumPto,
