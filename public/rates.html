@@ -95,6 +95,13 @@
     </div>
 
     <div class="card rates-employee-card">
+      <div
+        class="rates-employee-toolbar"
+        style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px"
+      >
+        <h3 class="rates-section-title" style="margin: 0; font-size: 1rem; flex: 1 1 auto">Employees</h3>
+        <button type="button" id="addEmployeeTableBtn">Add employee</button>
+      </div>
       <div class="rates-table-scroll">
         <table id="ratesTable" class="rates-table">
           <thead>
@@ -295,7 +302,7 @@
         tbody.innerHTML = "";
         const tr = document.createElement("tr");
         tr.innerHTML =
-          '<td colspan="12" class="muted">No employees yet. Click <strong>Add employee</strong>.</td>';
+          '<td colspan="12" class="muted">No employees yet. Click <strong>Add employee</strong> (above the table or in the toolbar at the top of the page).</td>';
         tbody.appendChild(tr);
       }
 
@@ -351,7 +358,7 @@
         }
       }
 
-      document.getElementById("addBtn").addEventListener("click", () => {
+      function appendNewEmployeeRow() {
         if (tbody.querySelector("tr") && tbody.querySelector("td[colspan]")) {
           tbody.innerHTML = "";
         }
@@ -375,7 +382,10 @@
         tbody.appendChild(tr);
         tr.querySelector(".js-name").focus();
         flash("New row — enter details, then click Save below the table.");
-      });
+      }
+
+      document.getElementById("addBtn").addEventListener("click", appendNewEmployeeRow);
+      document.getElementById("addEmployeeTableBtn").addEventListener("click", appendNewEmployeeRow);
 
       document.getElementById("saveEmployeesBtn").addEventListener("click", async () => {
         err.textContent = "";

@@ -1939,6 +1939,7 @@
                 travelPay: 0,
                 holidayPay: 0,
                 mileage: 0,
+                nbOnlyFromNonBill: true,
               },
             });
           });
@@ -1987,13 +1988,17 @@
             const eduPay = nbh.edu * (Number(det.eduRate) || 0);
             const mileageUnits = Number(r.mileage) || 0;
             // Non-discretionary bonus: billable + travel + training + edu pay - regular - overtime pay.
-            const nonDiscBonus =
+            // NB-only rows (non-bill file only, no P1 invoice): bonus column is 0 — residual formula does not apply.
+            let nonDiscBonus =
               Number(r.billablePay) +
               Number(r.travelPay) +
               trainingPay +
               eduPay -
               regularPay -
               overtimePay;
+            if (r.nbOnlyFromNonBill) {
+              nonDiscBonus = 0;
+            }
 
             sumRegular += regularPay;
             sumOt += overtimePay;
