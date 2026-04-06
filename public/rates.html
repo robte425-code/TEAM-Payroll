@@ -154,6 +154,23 @@
         return data;
       }
 
+      function lastNameSortKey(name) {
+        const s = String(name || "").trim();
+        if (!s) return "";
+        const comma = s.indexOf(",");
+        if (comma !== -1) return s.slice(0, comma).trim().toLowerCase();
+        const parts = s.split(/\s+/).filter(Boolean);
+        return (parts[parts.length - 1] || "").toLowerCase();
+      }
+
+      function compareEmployeeByLastName(aName, bName) {
+        const c = lastNameSortKey(aName).localeCompare(lastNameSortKey(bName), undefined, {
+          sensitivity: "base",
+        });
+        if (c !== 0) return c;
+        return String(aName || "").localeCompare(String(bName || ""), undefined, { sensitivity: "base" });
+      }
+
       function rowTemplate(emp, isNew) {
         const tr = document.createElement("tr");
         if (isNew) {
@@ -313,7 +330,9 @@
         try {
           await loadGlobalSettings();
           const data = await apiJson(API, { method: "GET" });
-          const list = data.employees || [];
+          const list = [...(data.employees || [])].sort((a, b) =>
+            compareEmployeeByLastName(a.displayName, b.displayName)
+          );
           tbody.innerHTML = "";
           for (const emp of list) {
             tbody.appendChild(rowTemplate(emp, false));

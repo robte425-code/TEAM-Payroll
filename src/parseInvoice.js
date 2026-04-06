@@ -31,6 +31,23 @@ function formatDateCell(val) {
   return String(val).trim();
 }
 
+function lastNameSortKey(name) {
+  const s = String(name || "").trim();
+  if (!s) return "";
+  const comma = s.indexOf(",");
+  if (comma !== -1) return s.slice(0, comma).trim().toLowerCase();
+  const parts = s.split(/\s+/).filter(Boolean);
+  return (parts[parts.length - 1] || "").toLowerCase();
+}
+
+function compareEmployeeByLastName(aName, bName) {
+  const c = lastNameSortKey(aName).localeCompare(lastNameSortKey(bName), undefined, {
+    sensitivity: "base",
+  });
+  if (c !== 0) return c;
+  return String(aName || "").localeCompare(String(bName || ""), undefined, { sensitivity: "base" });
+}
+
 function normalizeRow(rawRow = {}) {
   const employeeName = String(rawRow["Work Done By"] || "").trim();
   const providerId = String(rawRow["Provider ID"] || "").trim();
@@ -137,11 +154,9 @@ function summarizeByEmployeeAndCategory(normalizedRows = []) {
     current.rowCount += 1;
   }
 
-  return Array.from(summaryMap.values()).sort((a, b) => {
-    if (a.employeeName < b.employeeName) return -1;
-    if (a.employeeName > b.employeeName) return 1;
-    return 0;
-  });
+  return Array.from(summaryMap.values()).sort((a, b) =>
+    compareEmployeeByLastName(a.employeeName, b.employeeName)
+  );
 }
 
 module.exports = {

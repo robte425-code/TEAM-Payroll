@@ -575,7 +575,7 @@
         }
 
         return Array.from(byEmployee.values()).sort((a, b) =>
-          a.employeeName.localeCompare(b.employeeName)
+          compareEmployeeByLastName(a.employeeName, b.employeeName)
         );
       }
 
@@ -630,7 +630,7 @@
           item.rowCount += 1;
         }
 
-        return merged.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+        return merged.sort((a, b) => compareEmployeeByLastName(a.employeeName, b.employeeName));
       }
 
       function escapeHtml(s) {
@@ -884,7 +884,9 @@
         const tbody = document.querySelector("#payroll10Table tbody");
         if (tbody) {
           tbody.innerHTML = "";
-          const rows = Array.isArray(p.rows) ? p.rows : [];
+          const rows = Array.isArray(p.rows)
+            ? [...p.rows].sort((a, b) => compareEmployeeByLastName(a.employeeName, b.employeeName))
+            : [];
           for (const row of rows) {
             const tr = document.createElement("tr");
             tr.innerHTML = `
@@ -1047,10 +1049,7 @@
         const wrap = document.getElementById("payroll20ResultsWrap");
         if (wrap) wrap.hidden = false;
         setPayroll20ExtrasEnabled(true);
-        const leaveSorted = Array.isArray(p.leaveRows)
-          ? [...p.leaveRows].sort((a, b) => compareEmployeeByLastName(a.employeeName, b.employeeName))
-          : [];
-        renderLeaveRecordTable(leaveSorted);
+        renderLeaveRecordTable(p.leaveRows || []);
 
         // Add Heather summary from Payroll 1.0 (as requested).
         const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
@@ -1194,7 +1193,9 @@
         const wrap = document.getElementById("leaveRecordSection");
         const tbody = document.querySelector("#leaveRecordTable tbody");
         if (!wrap || !tbody) return;
-        const rows = Array.isArray(leaveRows) ? leaveRows : [];
+        const rows = Array.isArray(leaveRows)
+          ? [...leaveRows].sort((a, b) => compareEmployeeByLastName(a.employeeName, b.employeeName))
+          : [];
         if (!rows.length) {
           wrap.hidden = true;
           tbody.innerHTML = "";
@@ -1228,7 +1229,10 @@
         const tb = document.getElementById("payroll20GenReimTbody");
         if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) return;
         tb.innerHTML = "";
-        lastPayroll10Results.rows.forEach((r, idx) => {
+        const genreimOrder = lastPayroll10Results.rows
+          .map((r, idx) => ({ r, idx }))
+          .sort((a, b) => compareEmployeeByLastName(a.r.employeeName, b.r.employeeName));
+        for (const { r, idx } of genreimOrder) {
           const tr = document.createElement("tr");
           const tdName = document.createElement("td");
           tdName.textContent = r.employeeName;
@@ -1245,7 +1249,7 @@
           tr.appendChild(tdName);
           tr.appendChild(tdAmt);
           tb.appendChild(tr);
-        });
+        }
       }
 
       function readPayroll20GeneralReimbursements() {
@@ -1313,7 +1317,7 @@
         }
         card.hidden = false;
         const sorted = [...adjRows].sort((a, b) => {
-          const byName = a.employeeName.localeCompare(b.employeeName);
+          const byName = compareEmployeeByLastName(a.employeeName, b.employeeName);
           if (byName !== 0) return byName;
           const byFile = a.sourceFile.localeCompare(b.sourceFile);
           if (byFile !== 0) return byFile;
@@ -1666,7 +1670,10 @@
           ["Payroll 1.0 inputs", "Working days", wdCsv, "Holiday days", hdCsv].map(csvEscape).join(","),
           headers.map(csvEscape).join(","),
         ];
-        for (const row of lastPayroll10Results.rows) {
+        const p10RowsSorted = [...lastPayroll10Results.rows].sort((a, b) =>
+          compareEmployeeByLastName(a.employeeName, b.employeeName)
+        );
+        for (const row of p10RowsSorted) {
           lines.push(
             [
               row.employeeName,
@@ -2261,7 +2268,10 @@
             .map(csvEscape)
             .join(",")
         );
-        for (const r of lastPayroll20Results.leaveRows) {
+        const leaveExportRows = [...lastPayroll20Results.leaveRows].sort((a, b) =>
+          compareEmployeeByLastName(a.employeeName, b.employeeName)
+        );
+        for (const r of leaveExportRows) {
           lines.push(
             [
               r.employeeName,

@@ -173,6 +173,23 @@
         return (Math.round((v + Number.EPSILON) * 100) / 100).toFixed(2);
       }
 
+      function lastNameSortKey(name) {
+        const s = String(name || "").trim();
+        if (!s) return "";
+        const comma = s.indexOf(",");
+        if (comma !== -1) return s.slice(0, comma).trim().toLowerCase();
+        const parts = s.split(/\s+/).filter(Boolean);
+        return (parts[parts.length - 1] || "").toLowerCase();
+      }
+
+      function compareEmployeeByLastName(aName, bName) {
+        const c = lastNameSortKey(aName).localeCompare(lastNameSortKey(bName), undefined, {
+          sensitivity: "base",
+        });
+        if (c !== 0) return c;
+        return String(aName || "").localeCompare(String(bName || ""), undefined, { sensitivity: "base" });
+      }
+
       async function apiJson(url, options) {
         const r = await fetch(url, options);
         const text = await r.text();
@@ -371,7 +388,9 @@
         msg.textContent = "Loading...";
         try {
           const d = await apiJson(API, { method: "GET" });
-          const list = d.employees || [];
+          const list = [...(d.employees || [])].sort((a, b) =>
+            compareEmployeeByLastName(a.displayName, b.displayName)
+          );
           employeesCache = list;
           tbody.innerHTML = "";
           for (const e of list) {
