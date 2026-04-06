@@ -153,8 +153,10 @@
       <p class="muted" id="payroll20Intro">
         After Payroll 1.0 is generated, upload the <strong>non-bill time</strong> spreadsheet. Only rows whose
         <strong>Activity Type</strong> starts with <strong>NB</strong> or <strong>Z</strong> are used (see below).
-        Employee names in <strong>Timekeeper VRC</strong> are matched to Payroll 1.0 employees (same spelling,
-        spacing ignored).
+        <strong>Timekeeper VRC</strong> is matched to Payroll 1.0 by name (spacing ignored). Employees who appear
+        only on the non-bill file are still added to Payroll 2.0, general reimbursement, and PTO/Sick recording when
+        they exist in
+        <a href="./rates.html">Employee pay rates</a> (matched by display name).
       </p>
       <p class="muted" style="margin-top: 8px">
         <strong>NB time</strong> — sum of <strong>Prof. Hours</strong> where activity starts with NB (includes
@@ -168,8 +170,8 @@
       </p>
       <div id="payroll20GenReimSection" style="margin: 14px 0">
         <p class="muted" style="margin: 0 0 8px">
-          <strong>General reimbursement ($)</strong> — per employee (blank or 0 if none). Filled from Payroll 1.0
-          employee list.
+          <strong>General reimbursement ($)</strong> — per employee (blank or 0 if none). Lists Payroll 1.0
+          employees plus anyone who appears only on the non-bill file (after you select that file).
         </p>
         <div class="payroll20-genreim-scroll">
           <table class="payroll20-genreim-table" aria-label="General reimbursement by employee">
@@ -500,6 +502,23 @@
         return map;
       }
 
+      /**
+       * Employees present on the non-bill file but not on Payroll 1.0 (normalized Timekeeper VRC vs invoice names).
+       * @returns {{ normKey: string, displayName: string }[]}
+       */
+      function collectNbOnlyEmployees(parsedRows, p1Keys) {
+        const byKey = new Map();
+        for (const row of parsedRows) {
+          const raw = String(row.timekeeper || "").trim();
+          const k = normalizeEmployeeName(raw);
+          if (!k || p1Keys.has(k)) continue;
+          if (!byKey.has(k)) byKey.set(k, raw);
+        }
+        return [...byKey.entries()]
+          .map(([normKey, displayName]) => ({ normKey, displayName }))
+          .sort((a, b) => compareEmployeeByLastName(a.displayName, b.displayName));
+      }
+
       function parseWorkbook(workbook) {
         const firstSheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[firstSheetName];
@@ -726,6 +745,7 @@
           }
 
           const m = new Map();
+          const providerIdByNormName = new Map();
           for (const e of data.employees || []) {
             const providerId = String(e.providerId || "").trim();
             const leave = leaveByProviderId.get(providerId) || {};
@@ -746,10 +766,14 @@
               sickYtdHoursUsed:
                 Number(leave.sickYtdHoursUsed) || Number(e.sickYtdHoursUsed) || 0,
             });
+            const nk = normalizeEmployeeName(e.displayName);
+            if (nk && providerId && !providerIdByNormName.has(nk)) {
+              providerIdByNormName.set(nk, providerId);
+            }
           }
-          return m;
+          return { detailMap: m, providerIdByNormName };
         } catch {
-          return new Map();
+          return { detailMap: new Map(), providerIdByNormName: new Map() };
         }
       }
 
@@ -1037,11 +1061,13 @@
           let metaText = `Non-bill file: ${p.fileName || ""} · Incentive threshold (from Payroll 1.0): ${money2(
             p.incentiveThreshold
           )} hr · General reimbursement: per-employee amounts per table above`;
-          const unmatched = Array.isArray(p.unmatchedNonBillNames) ? p.unmatchedNonBillNames : [];
-          if (unmatched.length) {
-            metaText += ` · Note: non-bill rows for names not in Payroll 1.0 (${unmatched.length}): ${unmatched.join(
-              "; "
-            )}`;
+          const nbOnlyMeta = Array.isArray(p.nbOnlyEmployeeNames)
+            ? p.nbOnlyEmployeeNames
+            : Array.isArray(p.unmatchedNonBillNames)
+              ? p.unmatchedNonBillNames
+              : [];
+          if (nbOnlyMeta.length) {
+            metaText += ` · Non-bill only (not on LNI invoice this period): ${nbOnlyMeta.join("; ")}`;
           }
           metaEl.textContent = metaText;
         }
@@ -1075,11 +1101,21 @@
         }
 
         // Rebuild the reimbursement input table and fill amounts if Payroll 1.0 snapshot exists.
-        renderPayroll20GeneralReimInputs();
-        if (lastPayroll20Results && lastPayroll10Results && Array.isArray(p.rows)) {
-          const inputs = document.querySelectorAll("input.js-p20-genreim");
-          inputs.forEach((inp, idx) => {
-            const v = p.rows[idx]?.generalReimbursement;
+        const nbOnlyForReim = Array.isArray(p.nbOnlyEmployeeNames)
+          ? p.nbOnlyEmployeeNames.map((displayName) => ({
+              normKey: normalizeEmployeeName(displayName),
+              displayName,
+            }))
+          : [];
+        renderPayroll20GeneralReimInputs(nbOnlyForReim);
+        if (lastPayroll10Results && Array.isArray(p.rows)) {
+          const grByName = new Map(
+            p.rows.map((row) => [normalizeEmployeeName(row.employeeName), row.generalReimbursement])
+          );
+          document.querySelectorAll("input.js-p20-genreim").forEach((inp) => {
+            const label = inp.closest("tr")?.querySelector("td")?.textContent?.trim() || "";
+            const k = normalizeEmployeeName(label);
+            const v = grByName.get(k);
             if (v == null || !Number.isFinite(Number(v))) return;
             inp.value = String(Number(v));
           });
@@ -1135,6 +1171,8 @@
         }
         if (lastPayroll20Results && lastPayroll10Results) {
           renderPayroll20FromSnapshot(lastPayroll20Results);
+        } else if (lastPayroll10Results) {
+          await refreshPayroll20GenReimFromNbFile();
         }
       }
 
@@ -1225,17 +1263,26 @@
         if (tb) tb.innerHTML = "";
       }
 
-      function renderPayroll20GeneralReimInputs() {
+      /**
+       * @param {{ normKey: string, displayName: string }[]} [nbOnlyList] — from non-bill file only (after Payroll 1.0).
+       */
+      function renderPayroll20GeneralReimInputs(nbOnlyList) {
         const tb = document.getElementById("payroll20GenReimTbody");
         if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) return;
+        const extras = Array.isArray(nbOnlyList) ? nbOnlyList : [];
+        const preserved = new Map();
+        tb.querySelectorAll("input.js-p20-genreim").forEach((inp) => {
+          const i = Number(inp.dataset.p20RowIndex);
+          if (Number.isFinite(i)) preserved.set(i, inp.value);
+        });
         tb.innerHTML = "";
-        const genreimOrder = lastPayroll10Results.rows
+        const genreimP1 = lastPayroll10Results.rows
           .map((r, idx) => ({ r, idx }))
           .sort((a, b) => compareEmployeeByLastName(a.r.employeeName, b.r.employeeName));
-        for (const { r, idx } of genreimOrder) {
+        const appendRow = (label, rowIndex) => {
           const tr = document.createElement("tr");
           const tdName = document.createElement("td");
-          tdName.textContent = r.employeeName;
+          tdName.textContent = label;
           const tdAmt = document.createElement("td");
           const inp = document.createElement("input");
           inp.type = "number";
@@ -1243,12 +1290,47 @@
           inp.step = "0.01";
           inp.className = "rate-input js-p20-genreim";
           inp.style.width = "7rem";
-          inp.dataset.p20RowIndex = String(idx);
-          inp.setAttribute("aria-label", `General reimbursement for ${r.employeeName}`);
+          inp.dataset.p20RowIndex = String(rowIndex);
+          inp.setAttribute("aria-label", `General reimbursement for ${label}`);
+          if (preserved.has(rowIndex)) inp.value = preserved.get(rowIndex);
           tdAmt.appendChild(inp);
           tr.appendChild(tdName);
           tr.appendChild(tdAmt);
           tb.appendChild(tr);
+        };
+        for (const { r, idx } of genreimP1) {
+          appendRow(r.employeeName, idx);
+        }
+        const baseLen = lastPayroll10Results.rows.length;
+        extras.forEach((entry, j) => {
+          appendRow(entry.displayName, baseLen + j);
+        });
+      }
+
+      async function refreshPayroll20GenReimFromNbFile() {
+        const fi = document.getElementById("nonBillFileInput");
+        const f = fi?.files?.[0];
+        const errEl = document.getElementById("payroll20Error");
+        if (errEl) errEl.textContent = "";
+        if (!lastPayroll10Results?.rows?.length) {
+          renderPayroll20GeneralReimInputs([]);
+          return;
+        }
+        if (!f) {
+          renderPayroll20GeneralReimInputs([]);
+          return;
+        }
+        try {
+          const workbook = XLSX.read(await f.arrayBuffer(), { type: "array" });
+          const parsed = parseNonBillWorkbook(workbook);
+          const p1Keys = new Set(
+            lastPayroll10Results.rows.map((r) => normalizeEmployeeName(r.employeeName))
+          );
+          const nbOnly = collectNbOnlyEmployees(parsed.rows, p1Keys);
+          renderPayroll20GeneralReimInputs(nbOnly);
+        } catch (e) {
+          if (errEl) errEl.textContent = e.message || "Could not read non-bill file.";
+          renderPayroll20GeneralReimInputs([]);
         }
       }
 
@@ -1257,16 +1339,23 @@
         if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) {
           return { error: "Generate Payroll 1.0 first." };
         }
-        const n = lastPayroll10Results.rows.length;
-        const amounts = new Array(n).fill(0);
         const inputs = tb.querySelectorAll("input.js-p20-genreim");
+        let n = lastPayroll10Results.rows.length;
+        for (const inp of inputs) {
+          const i = Number(inp.dataset.p20RowIndex);
+          if (Number.isFinite(i)) n = Math.max(n, i + 1);
+        }
+        const amounts = new Array(n).fill(0);
         for (const inp of inputs) {
           const i = Number(inp.dataset.p20RowIndex);
           if (!Number.isFinite(i) || i < 0 || i >= n) continue;
           const t = String(inp.value).trim();
           const v = t === "" ? 0 : parseFloat(t);
           if (!Number.isFinite(v) || v < 0) {
-            const name = lastPayroll10Results.rows[i]?.employeeName || "Employee";
+            const name =
+              lastPayroll10Results.rows[i]?.employeeName ||
+              inp.closest("tr")?.querySelector("td")?.textContent?.trim() ||
+              "Employee";
             return { error: `Invalid general reimbursement for ${name} (enter 0 or more).` };
           }
           amounts[i] = v;
@@ -1503,10 +1592,11 @@
           return;
         }
 
-        const [detailMap, orgRates] = await Promise.all([
+        const [empDetails, orgRates] = await Promise.all([
           fetchEmployeeDetailMap(),
           fetchOrgRates(),
         ]);
+        const detailMap = empDetails.detailMap;
 
         const tbody = document.querySelector("#payroll10Table tbody");
         tbody.innerHTML = "";
@@ -1623,8 +1713,12 @@
         };
         setPayroll10ExtrasEnabled(true);
         updatePayroll20Visibility();
-        renderPayroll20GeneralReimInputs();
+        await refreshPayroll20GenReimFromNbFile();
         saveSessionToStorage();
+      });
+
+      document.getElementById("nonBillFileInput")?.addEventListener("change", () => {
+        void refreshPayroll20GenReimFromNbFile();
       });
 
       function csvEscape(value) {
@@ -1800,21 +1894,12 @@
           const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
           const parsed = parseNonBillWorkbook(workbook);
           const nbMap = aggregateNonBillByEmployee(parsed.rows);
-          const detailMap = await fetchEmployeeDetailMap();
+          const { detailMap, providerIdByNormName } = await fetchEmployeeDetailMap();
           const incentiveThreshold = Number(lastPayroll10Results.incentiveThreshold) || 0;
           const p1Keys = new Set(
             lastPayroll10Results.rows.map((r) => normalizeEmployeeName(r.employeeName))
           );
-          const unmatchedLabels = [];
-          const seenU = new Set();
-          for (const row of parsed.rows) {
-            const k = normalizeEmployeeName(row.timekeeper);
-            if (!k || p1Keys.has(k)) continue;
-            if (!seenU.has(k)) {
-              seenU.add(k);
-              unmatchedLabels.push(String(row.timekeeper).trim());
-            }
-          }
+          const nbOnlyList = collectNbOnlyEmployees(parsed.rows, p1Keys);
 
           const tbody = document.querySelector("#payroll20Table tbody");
           tbody.innerHTML = "";
@@ -1838,8 +1923,29 @@
           let sumPtoTimeHrs = 0;
           let sumSickTimeHrs = 0;
 
+          const workItems = lastPayroll10Results.rows.map((r, rowIdx) => ({ rowIdx, r }));
+          nbOnlyList.forEach((entry, nbIdx) => {
+            const pid = String(providerIdByNormName.get(entry.normKey) || "").trim();
+            workItems.push({
+              rowIdx: lastPayroll10Results.rows.length + nbIdx,
+              r: {
+                employeeName: entry.displayName,
+                providerId: pid,
+                caseWork: 0,
+                report: 0,
+                travelWait: 0,
+                casePlusReports: NaN,
+                billablePay: 0,
+                travelPay: 0,
+                holidayPay: 0,
+                mileage: 0,
+              },
+            });
+          });
+          workItems.sort((a, b) => compareEmployeeByLastName(a.r.employeeName, b.r.employeeName));
+
           const payroll20Pairs = [];
-          lastPayroll10Results.rows.forEach((r, rowIdx) => {
+          for (const { rowIdx, r } of workItems) {
             const generalReimbursement = Number(generalReimByRow[rowIdx]) || 0;
             const nameKey = normalizeEmployeeName(r.employeeName);
             const nbh = nbMap.get(nameKey) || { nb: 0, pto: 0, sick: 0, training: 0, edu: 0 };
@@ -1859,7 +1965,10 @@
               overtimeHours = 0;
             }
 
-            const pid = String(r.providerId || "").trim();
+            let pid = String(r.providerId || "").trim();
+            if (!pid) {
+              pid = String(providerIdByNormName.get(nameKey) || "").trim();
+            }
             const det = detailMap.get(pid) || {
               hourlyRate: 0,
               minWageRate: 0,
@@ -1947,11 +2056,7 @@
               sickUsedHours: nbh.sick,
             };
             payroll20Pairs.push({ rowObj, leaveRow });
-          });
-
-          payroll20Pairs.sort((a, b) =>
-            compareEmployeeByLastName(a.rowObj.employeeName, b.rowObj.employeeName)
-          );
+          }
           for (const { rowObj, leaveRow } of payroll20Pairs) {
             rows20.push(rowObj);
             leaveRows.push(leaveRow);
@@ -2006,8 +2111,10 @@
 
           let metaText =
             `Non-bill file: ${file.name} · Incentive threshold (from Payroll 1.0): ${money2(incentiveThreshold)} hr · General reimbursement: per-employee amounts per table above`;
-          if (unmatchedLabels.length) {
-            metaText += ` · Note: non-bill rows for names not in Payroll 1.0 (${unmatchedLabels.length}): ${unmatchedLabels.join("; ")}`;
+          if (nbOnlyList.length) {
+            metaText += ` · Non-bill only (not on LNI invoice this period): ${nbOnlyList
+              .map((e) => e.displayName)
+              .join("; ")}`;
           }
           document.getElementById("payroll20Meta").textContent = metaText;
           document.getElementById("payroll20ResultsWrap").hidden = false;
@@ -2016,7 +2123,7 @@
           lastPayroll20Results = {
             fileName: file.name,
             incentiveThreshold,
-            unmatchedNonBillNames: unmatchedLabels,
+            nbOnlyEmployeeNames: nbOnlyList.map((e) => e.displayName),
             rows: rows20,
             leaveRows,
             sums: {

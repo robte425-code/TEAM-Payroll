@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     for (const r of rows) {
       const providerId = String(r.providerId || "").trim();
       const employeeName = String(r.employeeName || "").trim();
-      if (!providerId || !employeeName) continue;
+      if (!employeeName) continue;
 
       const ptoAccrual = toNonNegativeNumber(r.ptoAccrualHours);
       const ptoUsed = toNonNegativeNumber(r.ptoUsedHours);
