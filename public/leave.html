@@ -57,7 +57,9 @@
 
     <h1>PTO and Sick time management</h1>
     <p class="muted page-subtitle">
-      Adjust employee YTD PTO/Sick accrued and used hours. Values are saved directly to the employees table.
+      Adjust employee YTD PTO/Sick accrued and used hours. Values are saved directly to the employees table. New
+      employees need a <strong>Provider ID</strong> and name (same as
+      <a href="./rates.html">Employee pay rates</a>); pay rates default to 0 until you edit them there.
     </p>
 
     <div class="card">
@@ -74,11 +76,19 @@
     </div>
 
     <div class="card rates-employee-card">
+      <div
+        class="leave-employee-toolbar"
+        style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px"
+      >
+        <h3 class="rates-section-title" style="margin: 0; font-size: 1rem; flex: 1 1 auto">Employees</h3>
+        <button type="button" id="addEmployeeLeaveBtn">Add employee</button>
+      </div>
       <div class="rates-table-scroll">
         <table class="rates-table" id="leaveTable">
           <thead>
             <tr>
               <th>Name</th>
+              <th>Provider ID</th>
               <th>PTO YTD hours accrued</th>
               <th>PTO YTD hours used</th>
               <th>Sick YTD hours accrued</th>
@@ -206,11 +216,38 @@
         return data;
       }
 
-      function rowTemplate(e) {
+      const EMPLOYEES_API = "/api/employees";
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function rowTemplate(e, isNew) {
         const tr = document.createElement("tr");
+        if (isNew) {
+          tr.dataset.new = "1";
+          tr.innerHTML = `
+            <td><input type="text" class="js-name rate-input" placeholder="Display name" autocomplete="name" style="width:100%;min-width:6rem;max-width:100%;box-sizing:border-box" /></td>
+            <td><input type="text" class="js-pid rate-input" placeholder="Provider ID" style="width:100%;min-width:5rem;max-width:100%;box-sizing:border-box" /></td>
+            <td><input type="number" class="js-pto-accrued rate-input" min="0" step="0.01" /></td>
+            <td><input type="number" class="js-pto-used rate-input" min="0" step="0.01" /></td>
+            <td><input type="number" class="js-sick-accrued rate-input" min="0" step="0.01" /></td>
+            <td><input type="number" class="js-sick-used rate-input" min="0" step="0.01" /></td>
+          `;
+          tr.querySelector(".js-pto-accrued").value = "0";
+          tr.querySelector(".js-pto-used").value = "0";
+          tr.querySelector(".js-sick-accrued").value = "0";
+          tr.querySelector(".js-sick-used").value = "0";
+          return tr;
+        }
         tr.dataset.id = e.id;
         tr.innerHTML = `
-          <td>${String(e.displayName || "")}</td>
+          <td>${escapeHtml(String(e.displayName || ""))}</td>
+          <td>${escapeHtml(String(e.providerId || ""))}</td>
           <td><input type="number" class="js-pto-accrued rate-input" min="0" step="0.01" /></td>
           <td><input type="number" class="js-pto-used rate-input" min="0" step="0.01" /></td>
           <td><input type="number" class="js-sick-accrued rate-input" min="0" step="0.01" /></td>
@@ -224,12 +261,38 @@
       }
 
       function readRow(tr) {
-        const id = tr.dataset.id;
         const ptoYtdHoursAccrued = Number(tr.querySelector(".js-pto-accrued").value || 0);
         const ptoYtdHoursUsed = Number(tr.querySelector(".js-pto-used").value || 0);
         const sickYtdHoursAccrued = Number(tr.querySelector(".js-sick-accrued").value || 0);
         const sickYtdHoursUsed = Number(tr.querySelector(".js-sick-used").value || 0);
-        return { id, ptoYtdHoursAccrued, ptoYtdHoursUsed, sickYtdHoursAccrued, sickYtdHoursUsed };
+        if (tr.dataset.new === "1") {
+          return {
+            isNew: true,
+            displayName: String(tr.querySelector(".js-name")?.value || "").trim(),
+            providerId: String(tr.querySelector(".js-pid")?.value || "").trim(),
+            ptoYtdHoursAccrued,
+            ptoYtdHoursUsed,
+            sickYtdHoursAccrued,
+            sickYtdHoursUsed,
+          };
+        }
+        return {
+          id: tr.dataset.id,
+          ptoYtdHoursAccrued,
+          ptoYtdHoursUsed,
+          sickYtdHoursAccrued,
+          sickYtdHoursUsed,
+        };
+      }
+
+      function appendNewEmployeeLeaveRow() {
+        if (tbody.querySelector("tr td[colspan]")) {
+          tbody.innerHTML = "";
+        }
+        tbody.appendChild(rowTemplate({}, true));
+        const last = tbody.querySelector("tr:last-child .js-name");
+        if (last) last.focus();
+        flash("New row — enter name, Provider ID, and YTD hours, then Save.");
       }
 
       function clearLogs() {
@@ -393,8 +456,15 @@
           );
           employeesCache = list;
           tbody.innerHTML = "";
-          for (const e of list) {
-            tbody.appendChild(rowTemplate(e));
+          if (!list.length) {
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              '<td colspan="6" class="muted">No employees yet. Click <strong>Add employee</strong>, or add them on <a href="./rates.html">Employee pay rates</a>.</td>';
+            tbody.appendChild(tr);
+          } else {
+            for (const e of list) {
+              tbody.appendChild(rowTemplate(e, false));
+            }
           }
           fillEmployeeSelect(list);
           await Promise.all([loadPtoLogs(), loadSickLogs()]);
@@ -406,12 +476,18 @@
       }
 
       document.getElementById("loadBtn").addEventListener("click", render);
+      document.getElementById("addEmployeeLeaveBtn").addEventListener("click", appendNewEmployeeLeaveRow);
       document.getElementById("saveBtn").addEventListener("click", async () => {
         err.textContent = "";
-        const rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
-        const payloadRows = [];
-        for (const tr of rows) {
-          const row = readRow(tr);
+        const rows = Array.from(tbody.querySelectorAll("tr[data-id], tr[data-new]")).filter(
+          (tr) => !tr.querySelector("td[colspan]")
+        );
+        if (!rows.length) {
+          flash("Nothing to save.", true);
+          return;
+        }
+        const patchRows = [];
+        function validateYtd(row) {
           if (
             !Number.isFinite(row.ptoYtdHoursAccrued) ||
             row.ptoYtdHoursAccrued < 0 ||
@@ -423,16 +499,60 @@
             row.sickYtdHoursUsed < 0
           ) {
             flash("All PTO/Sick values must be non-negative numbers.", true);
-            return;
+            return false;
           }
-          payloadRows.push(row);
+          return true;
         }
         try {
-          await apiJson(API, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rows: payloadRows }),
-          });
+          for (const tr of rows) {
+            const row = readRow(tr);
+            if (row.isNew) {
+              if (!row.providerId) {
+                flash("Each new row needs a Provider ID.", true);
+                return;
+              }
+              if (!row.displayName) {
+                flash("Each new row needs a display name.", true);
+                return;
+              }
+              if (!validateYtd(row)) return;
+              await apiJson(EMPLOYEES_API, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  providerId: row.providerId,
+                  displayName: row.displayName,
+                  hourlyRate: 0,
+                  minWageRate: 0,
+                  travelRate: 0,
+                  ptoRate: 0,
+                  eduRate: 0,
+                  trainingRate: 0,
+                  healthInsuranceDeduction: 0,
+                  ptoYtdHoursAccrued: row.ptoYtdHoursAccrued,
+                  ptoYtdHoursUsed: row.ptoYtdHoursUsed,
+                  sickYtdHoursAccrued: row.sickYtdHoursAccrued,
+                  sickYtdHoursUsed: row.sickYtdHoursUsed,
+                }),
+              });
+            } else {
+              if (!validateYtd(row)) return;
+              patchRows.push({
+                id: row.id,
+                ptoYtdHoursAccrued: row.ptoYtdHoursAccrued,
+                ptoYtdHoursUsed: row.ptoYtdHoursUsed,
+                sickYtdHoursAccrued: row.sickYtdHoursAccrued,
+                sickYtdHoursUsed: row.sickYtdHoursUsed,
+              });
+            }
+          }
+          if (patchRows.length) {
+            await apiJson(API, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rows: patchRows }),
+            });
+          }
           flash("Saved.");
           await render();
         } catch (e) {

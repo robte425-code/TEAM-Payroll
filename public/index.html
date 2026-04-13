@@ -159,8 +159,8 @@
         <a href="./rates.html">Employee pay rates</a> (matched by display name).
       </p>
       <p class="muted" style="margin-top: 8px">
-        <strong>NB time</strong> — sum of <strong>Prof. Hours</strong> where activity starts with NB (includes
-        <strong>NB TT</strong> training activities).
+        <strong>NB time</strong> — sum of <strong>Prof. Hours</strong> where activity starts with <strong>NB</strong>
+        but not <strong>NB TT</strong> (training uses its own rate and is excluded from this column).
         <strong>PTO time</strong> — activity <strong>Z PTO</strong>.
         <strong>Sick time</strong> — activity <strong>Z Sick time</strong>.
         <strong>Training pay</strong> — Prof. Hours where activity starts with <strong>NB TT</strong> × employee
@@ -428,7 +428,7 @@
       }
 
       /**
-       * Non-bill rows: NB* (incl. NB TT training), Z PTO, Z Sick time, Z Education*.
+       * Non-bill rows: NB* except NB TT (training), NB TT training, Z PTO, Z Sick time, Z Education*.
        * @returns {"nb"|"training"|"pto"|"sick"|"edu"|null}
        */
       function nonBillActivityBucket(activityRaw) {
@@ -493,7 +493,6 @@
           const cur = map.get(key);
           if (row.bucket === "training") {
             cur.training += row.profHours;
-            cur.nb += row.profHours;
           } else if (row.bucket === "nb") cur.nb += row.profHours;
           else if (row.bucket === "pto") cur.pto += row.profHours;
           else if (row.bucket === "sick") cur.sick += row.profHours;
@@ -1955,7 +1954,8 @@
             const travelWait = Number(r.travelWait) || 0;
             const casePlusReportsStored = Number(r.casePlusReports);
             const casePlusReports = Number.isFinite(casePlusReportsStored) ? casePlusReportsStored : caseWork + report;
-            const totalForOT = nbh.nb + casePlusReports + travelWait;
+            // NB time column excludes NB TT; training hours still count toward OT like before.
+            const totalForOT = nbh.nb + nbh.training + casePlusReports + travelWait;
             let totalHoursWorked;
             let overtimeHours;
             if (totalForOT > incentiveThreshold) {
@@ -2041,7 +2041,8 @@
             };
 
             const ptoAccrualHours = (casePlusReports + travelWait) * 0.058;
-            const sickAccrualHours = (casePlusReports + travelWait + nbh.nb) * 0.025;
+            const sickAccrualHours =
+              (casePlusReports + travelWait + nbh.nb + nbh.training) * 0.025;
             const currentPtoAvailableHours =
               (Number(det.ptoYtdHoursAccrued) || 0) - (Number(det.ptoYtdHoursUsed) || 0);
             const newPtoAvailableHours = currentPtoAvailableHours + ptoAccrualHours - nbh.pto;
