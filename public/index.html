@@ -1954,8 +1954,8 @@
             const travelWait = Number(r.travelWait) || 0;
             const casePlusReportsStored = Number(r.casePlusReports);
             const casePlusReports = Number.isFinite(casePlusReportsStored) ? casePlusReportsStored : caseWork + report;
-            // NB time column excludes NB TT; training hours still count toward OT like before.
-            const totalForOT = nbh.nb + nbh.training + casePlusReports + travelWait;
+            // Regular/OT hours: case + report + travel/wait + NB (excl. NB TT). Training (NB TT) is excluded.
+            const totalForOT = nbh.nb + casePlusReports + travelWait;
             let totalHoursWorked;
             let overtimeHours;
             if (totalForOT > incentiveThreshold) {
