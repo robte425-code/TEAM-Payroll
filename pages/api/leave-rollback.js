@@ -2,6 +2,7 @@ const { getPool } = require("../../lib/db");
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
@@ -45,13 +46,20 @@ export default async function handler(req, res) {
     let batch = null;
     let detailsR = null;
     for (let guard = 0; guard < 500; guard += 1) {
+      // "Latest" batch = the one whose detail rows were inserted last (detail.id is BIGSERIAL).
+      // Do not use batch UUID order — gen_random_uuid() is not chronological.
       const lastBatchR = await client.query(
-        `SELECT id, operation_type, created_at
-         FROM payroll.leave_change_batches
-         WHERE rolled_back_at IS NULL
-         ORDER BY created_at DESC, id DESC
+        `SELECT b.id, b.operation_type, b.created_at
+         FROM payroll.leave_change_batches b
+         WHERE b.rolled_back_at IS NULL
+         ORDER BY (
+           SELECT COALESCE(MAX(d2.id), 0)
+           FROM payroll.leave_change_batch_details d2
+           WHERE d2.batch_id = b.id
+         ) DESC,
+         b.created_at DESC
          LIMIT 1
-         FOR UPDATE`
+         FOR UPDATE OF b`
       );
       batch = lastBatchR.rows[0];
       if (!batch) {
@@ -99,7 +107,7 @@ export default async function handler(req, res) {
           Number(d.pto_ytd_hours_used_before) || 0,
           Number(d.sick_ytd_hours_accrued_before) || 0,
           Number(d.sick_ytd_hours_used_before) || 0,
-          d.employee_id,
+          String(d.employee_id),
         ]
       );
       if ((upd.rowCount || 0) > 0) {

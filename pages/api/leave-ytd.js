@@ -53,6 +53,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
+      res.setHeader("Cache-Control", "no-store, max-age=0");
       const r = await pool.query(
         `SELECT id, provider_id, display_name,
                 pto_ytd_hours_accrued, pto_ytd_hours_used,
