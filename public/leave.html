@@ -504,6 +504,7 @@
           return true;
         }
         try {
+          let createdNewEmployee = false;
           for (const tr of rows) {
             const row = readRow(tr);
             if (row.isNew) {
@@ -535,6 +536,7 @@
                   sickYtdHoursUsed: row.sickYtdHoursUsed,
                 }),
               });
+              createdNewEmployee = true;
             } else {
               if (!validateYtd(row)) return;
               patchRows.push({
@@ -547,13 +549,19 @@
             }
           }
           if (patchRows.length) {
-            await apiJson(API, {
+            const patchRes = await apiJson(API, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ rows: patchRows }),
             });
+            if (patchRes && patchRes.unchanged && !createdNewEmployee) {
+              flash(patchRes.message || "No PTO/Sick YTD values changed.");
+            } else {
+              flash("Saved.");
+            }
+          } else {
+            flash("Saved.");
           }
-          flash("Saved.");
           await render();
         } catch (e) {
           flash(e.message || "Save failed.", true);
@@ -574,7 +582,12 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
           });
-          flash(`Rolled back last change (${d.operationType || "batch"}).`);
+          const n = Number(d.employeesUpdated) || 0;
+          flash(
+            n > 0
+              ? `Rolled back last change (${d.operationType || "batch"}); restored ${n} employee row(s).`
+              : `Rolled back last change (${d.operationType || "batch"}).`
+          );
           await render();
         } catch (e) {
           flash(e.message || "Rollback failed.", true);
@@ -673,12 +686,16 @@
             }
             if (!payloadRows.length) throw new Error("No valid employee rows found in CSV.");
 
-            await apiJson(API, {
+            const impRes = await apiJson(API, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ rows: payloadRows }),
             });
-            flash(`CSV import complete (${payloadRows.length} row(s) saved).`);
+            if (impRes && impRes.unchanged) {
+              flash(impRes.message || "CSV matched database — no YTD changes.");
+            } else {
+              flash(`CSV import complete (${payloadRows.length} row(s) saved).`);
+            }
             await render();
           } catch (e) {
             flash(e.message || "CSV import failed.", true);

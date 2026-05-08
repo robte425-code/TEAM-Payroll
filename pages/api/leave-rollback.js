@@ -16,6 +16,15 @@ export default async function handler(req, res) {
 
   try {
     await pool.query("BEGIN");
+    // Orphan batches (no detail rows) block rollback of real changes — close them out.
+    await pool.query(
+      `UPDATE payroll.leave_change_batches b
+       SET rolled_back_at = now()
+       WHERE b.rolled_back_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM payroll.leave_change_batch_details d WHERE d.batch_id = b.id
+         )`
+    );
     const lastBatchR = await pool.query(
       `SELECT id, operation_type, created_at
        FROM payroll.leave_change_batches

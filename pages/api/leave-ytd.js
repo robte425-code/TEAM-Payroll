@@ -85,6 +85,7 @@ export default async function handler(req, res) {
          RETURNING id`
       );
       const batchId = batchInserted.rows[0]?.id;
+      let detailRowsInserted = 0;
       for (const row of rows) {
         const id = String(row.id || "").trim();
         if (!id) continue;
@@ -105,6 +106,18 @@ export default async function handler(req, res) {
         const afterPtoUsed = toNonNegativeNumber(row.ptoYtdHoursUsed);
         const afterSickAccrued = toNonNegativeNumber(row.sickYtdHoursAccrued);
         const afterSickUsed = toNonNegativeNumber(row.sickYtdHoursUsed);
+
+        const beforePtoAccrued = Number(before.pto_ytd_hours_accrued) || 0;
+        const beforePtoUsed = Number(before.pto_ytd_hours_used) || 0;
+        const beforeSickAccrued = Number(before.sick_ytd_hours_accrued) || 0;
+        const beforeSickUsed = Number(before.sick_ytd_hours_used) || 0;
+
+        const unchanged =
+          afterPtoAccrued === beforePtoAccrued &&
+          afterPtoUsed === beforePtoUsed &&
+          afterSickAccrued === beforeSickAccrued &&
+          afterSickUsed === beforeSickUsed;
+        if (unchanged) continue;
 
         await pool.query(
           `UPDATE payroll.employees
@@ -140,16 +153,25 @@ export default async function handler(req, res) {
           [
             batchId,
             before.id,
-            Number(before.pto_ytd_hours_accrued) || 0,
-            Number(before.pto_ytd_hours_used) || 0,
-            Number(before.sick_ytd_hours_accrued) || 0,
-            Number(before.sick_ytd_hours_used) || 0,
+            beforePtoAccrued,
+            beforePtoUsed,
+            beforeSickAccrued,
+            beforeSickUsed,
             afterPtoAccrued,
             afterPtoUsed,
             afterSickAccrued,
             afterSickUsed,
           ]
         );
+        detailRowsInserted += 1;
+      }
+      if (detailRowsInserted === 0) {
+        await pool.query("ROLLBACK");
+        return res.status(200).json({
+          ok: true,
+          unchanged: true,
+          message: "No PTO/Sick YTD values changed; nothing saved.",
+        });
       }
       await pool.query("COMMIT");
       return res.status(200).json({ ok: true, batchId });
