@@ -41,31 +41,52 @@ export default async function handler(req, res) {
          )`
     );
 
-    const lastBatchR = await client.query(
-      `SELECT id, operation_type, created_at
-       FROM payroll.leave_change_batches
-       WHERE rolled_back_at IS NULL
-       ORDER BY created_at DESC, id DESC
-       LIMIT 1
-       FOR UPDATE`
-    );
-    const batch = lastBatchR.rows[0];
-    if (!batch) {
+    /** Latest batch that actually has detail rows (skip corrupt / empty batches). */
+    let batch = null;
+    let detailsR = null;
+    for (let guard = 0; guard < 500; guard += 1) {
+      const lastBatchR = await client.query(
+        `SELECT id, operation_type, created_at
+         FROM payroll.leave_change_batches
+         WHERE rolled_back_at IS NULL
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+         FOR UPDATE`
+      );
+      batch = lastBatchR.rows[0];
+      if (!batch) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "No change batch to roll back" });
+      }
+
+      detailsR = await client.query(
+        `SELECT *
+         FROM payroll.leave_change_batch_details
+         WHERE batch_id = $1
+         ORDER BY id DESC`,
+        [batch.id]
+      );
+
+      if (detailsR.rows.length === 0) {
+        await client.query(
+          `UPDATE payroll.leave_change_batches SET rolled_back_at = now() WHERE id = $1`,
+          [batch.id]
+        );
+        batch = null;
+        detailsR = null;
+        continue;
+      }
+      break;
+    }
+
+    if (!batch || !detailsR || !detailsR.rows.length) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "No change batch to roll back" });
     }
 
-    const detailsR = await client.query(
-      `SELECT *
-       FROM payroll.leave_change_batch_details
-       WHERE batch_id = $1
-       ORDER BY id DESC`,
-      [batch.id]
-    );
-
     let employeesUpdated = 0;
     for (const d of detailsR.rows) {
-      await client.query(
+      const upd = await client.query(
         `UPDATE payroll.employees
          SET pto_ytd_hours_accrued = $1,
              pto_ytd_hours_used = $2,
@@ -81,6 +102,9 @@ export default async function handler(req, res) {
           d.employee_id,
         ]
       );
+      if ((upd.rowCount || 0) > 0) {
+        employeesUpdated += 1;
+      }
 
       const ptoIds = asUuidArray(d.pto_log_ids);
       if (ptoIds.length) {
@@ -92,7 +116,6 @@ export default async function handler(req, res) {
           sickIds,
         ]);
       }
-      employeesUpdated += 1;
     }
 
     await client.query(
@@ -107,6 +130,8 @@ export default async function handler(req, res) {
       ok: true,
       batchId: batch.id,
       operationType: batch.operation_type,
+      batchCreatedAt: batch.created_at,
+      detailRows: detailsR.rows.length,
       employeesUpdated,
     });
   } catch (e) {

@@ -583,11 +583,20 @@
             body: JSON.stringify({}),
           });
           const n = Number(d.employeesUpdated) || 0;
-          flash(
-            n > 0
-              ? `Rolled back last change (${d.operationType || "batch"}); restored ${n} employee row(s).`
-              : `Rolled back last change (${d.operationType || "batch"}).`
-          );
+          const detailRows = Number(d.detailRows) || 0;
+          const batchWhen = d.batchCreatedAt ? String(d.batchCreatedAt).slice(0, 19).replace("T", " ") : "";
+          if (n > 0) {
+            flash(
+              `Rolled back ${d.operationType || "batch"} (${batchWhen} UTC): restored ${n} employee row(s).`
+            );
+          } else if (detailRows > 0) {
+            flash(
+              `Rollback ran on ${d.operationType || "batch"} (${batchWhen} UTC) but no employee rows matched (IDs changed?). Click Reload from database.`,
+              true
+            );
+          } else {
+            flash("Rollback found nothing to apply.", true);
+          }
           await render();
         } catch (e) {
           flash(e.message || "Rollback failed.", true);
