@@ -35,12 +35,12 @@ function toNonNegativeNumber(value) {
   return n;
 }
 
-async function resolveEmployeeForUpdate(pool, providerId, employeeName) {
+async function resolveEmployeeForUpdate(client, providerId, employeeName) {
   const pid = String(providerId || "").trim();
   const name = String(employeeName || "").trim();
 
   if (pid) {
-    const byProvider = await pool.query(
+    const byProvider = await client.query(
       `SELECT id, provider_id,
               pto_ytd_hours_accrued, pto_ytd_hours_used,
               sick_ytd_hours_accrued, sick_ytd_hours_used
@@ -53,7 +53,7 @@ async function resolveEmployeeForUpdate(pool, providerId, employeeName) {
   }
 
   if (name) {
-    const byName = await pool.query(
+    const byName = await client.query(
       `SELECT id, provider_id,
               pto_ytd_hours_accrued, pto_ytd_hours_used,
               sick_ytd_hours_accrued, sick_ytd_hours_used
@@ -92,13 +92,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message || "Database not configured" });
   }
 
+  const client = await pool.connect();
   try {
     const body = await readJsonBody(req);
     const rows = Array.isArray(body.rows) ? body.rows : [];
     if (!rows.length) return res.status(400).json({ error: "rows[] is required" });
 
-    await pool.query("BEGIN");
-    const batchInserted = await pool.query(
+    await client.query("BEGIN");
+    const batchInserted = await client.query(
       `INSERT INTO payroll.leave_change_batches (operation_type)
        VALUES ('record')
        RETURNING id`
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
       const sickAccrual = toNonNegativeNumber(r.sickAccrualHours);
       const sickUsed = toNonNegativeNumber(r.sickUsedHours);
 
-      const before = await resolveEmployeeForUpdate(pool, providerId, employeeName);
+      const before = await resolveEmployeeForUpdate(client, providerId, employeeName);
       if (!before) continue;
 
       const beforePtoAccrued = Number(before.pto_ytd_hours_accrued) || 0;
@@ -129,7 +130,7 @@ export default async function handler(req, res) {
       const afterSickAccrued = beforeSickAccrued + sickAccrual;
       const afterSickUsed = beforeSickUsed + sickUsed;
 
-      await pool.query(
+      await client.query(
         `UPDATE payroll.employees
          SET pto_ytd_hours_accrued = $1,
              pto_ytd_hours_used = $2,
@@ -143,7 +144,7 @@ export default async function handler(req, res) {
       const ptoLogIds = [];
       const sickLogIds = [];
       if (ptoAccrual > 0) {
-        const ins = await pool.query(
+        const ins = await client.query(
           `INSERT INTO payroll.pto_log (employee_name, action_date, action, hours, reason)
            VALUES ($1, CURRENT_DATE, 'Accrual', $2, $3)
            RETURNING id`,
@@ -152,7 +153,7 @@ export default async function handler(req, res) {
         if (ins.rows[0]?.id) ptoLogIds.push(ins.rows[0].id);
       }
       if (ptoUsed > 0) {
-        const ins = await pool.query(
+        const ins = await client.query(
           `INSERT INTO payroll.pto_log (employee_name, action_date, action, hours, reason)
            VALUES ($1, CURRENT_DATE, 'Used', $2, $3)
            RETURNING id`,
@@ -161,7 +162,7 @@ export default async function handler(req, res) {
         if (ins.rows[0]?.id) ptoLogIds.push(ins.rows[0].id);
       }
       if (sickAccrual > 0) {
-        const ins = await pool.query(
+        const ins = await client.query(
           `INSERT INTO payroll.sick_time_log (employee_name, action_date, action, hours, reason)
            VALUES ($1, CURRENT_DATE, 'Accrual', $2, $3)
            RETURNING id`,
@@ -170,7 +171,7 @@ export default async function handler(req, res) {
         if (ins.rows[0]?.id) sickLogIds.push(ins.rows[0].id);
       }
       if (sickUsed > 0) {
-        const ins = await pool.query(
+        const ins = await client.query(
           `INSERT INTO payroll.sick_time_log (employee_name, action_date, action, hours, reason)
            VALUES ($1, CURRENT_DATE, 'Used', $2, $3)
            RETURNING id`,
@@ -179,7 +180,7 @@ export default async function handler(req, res) {
         if (ins.rows[0]?.id) sickLogIds.push(ins.rows[0].id);
       }
 
-      await pool.query(
+      await client.query(
         `INSERT INTO payroll.leave_change_batch_details (
            batch_id, employee_id,
            pto_ytd_hours_accrued_before, pto_ytd_hours_used_before,
@@ -214,22 +215,24 @@ export default async function handler(req, res) {
     }
 
     if (updatedEmployees <= 0) {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
       return res.status(400).json({
         error:
           "No employees were recorded. Please regenerate Payroll 2.0 and ensure employee Provider IDs are present.",
       });
     }
 
-    await pool.query("COMMIT");
+    await client.query("COMMIT");
     return res.status(200).json({ ok: true, updatedEmployees, batchId });
   } catch (e) {
     try {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
     } catch {
       // ignore
     }
     return res.status(500).json({ error: e?.message || "Request failed" });
+  } finally {
+    client.release();
   }
 }
 

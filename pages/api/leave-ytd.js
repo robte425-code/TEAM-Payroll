@@ -78,113 +78,120 @@ export default async function handler(req, res) {
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (!rows.length) return res.status(400).json({ error: "rows[] is required" });
 
-      await pool.query("BEGIN");
-      const batchInserted = await pool.query(
-        `INSERT INTO payroll.leave_change_batches (operation_type)
-         VALUES ('manual_update')
-         RETURNING id`
-      );
-      const batchId = batchInserted.rows[0]?.id;
-      let detailRowsInserted = 0;
-      for (const row of rows) {
-        const id = String(row.id || "").trim();
-        if (!id) continue;
-
-        const beforeR = await pool.query(
-          `SELECT id,
-                  pto_ytd_hours_accrued, pto_ytd_hours_used,
-                  sick_ytd_hours_accrued, sick_ytd_hours_used
-           FROM payroll.employees
-           WHERE id = $1::uuid
-           FOR UPDATE`,
-          [id]
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const batchInserted = await client.query(
+          `INSERT INTO payroll.leave_change_batches (operation_type)
+           VALUES ('manual_update')
+           RETURNING id`
         );
-        const before = beforeR.rows[0];
-        if (!before) continue;
+        const batchId = batchInserted.rows[0]?.id;
+        let detailRowsInserted = 0;
+        for (const row of rows) {
+          const id = String(row.id || "").trim();
+          if (!id) continue;
 
-        const afterPtoAccrued = toNonNegativeNumber(row.ptoYtdHoursAccrued);
-        const afterPtoUsed = toNonNegativeNumber(row.ptoYtdHoursUsed);
-        const afterSickAccrued = toNonNegativeNumber(row.sickYtdHoursAccrued);
-        const afterSickUsed = toNonNegativeNumber(row.sickYtdHoursUsed);
+          const beforeR = await client.query(
+            `SELECT id,
+                    pto_ytd_hours_accrued, pto_ytd_hours_used,
+                    sick_ytd_hours_accrued, sick_ytd_hours_used
+             FROM payroll.employees
+             WHERE id = $1::uuid
+             FOR UPDATE`,
+            [id]
+          );
+          const before = beforeR.rows[0];
+          if (!before) continue;
 
-        const beforePtoAccrued = Number(before.pto_ytd_hours_accrued) || 0;
-        const beforePtoUsed = Number(before.pto_ytd_hours_used) || 0;
-        const beforeSickAccrued = Number(before.sick_ytd_hours_accrued) || 0;
-        const beforeSickUsed = Number(before.sick_ytd_hours_used) || 0;
+          const afterPtoAccrued = toNonNegativeNumber(row.ptoYtdHoursAccrued);
+          const afterPtoUsed = toNonNegativeNumber(row.ptoYtdHoursUsed);
+          const afterSickAccrued = toNonNegativeNumber(row.sickYtdHoursAccrued);
+          const afterSickUsed = toNonNegativeNumber(row.sickYtdHoursUsed);
 
-        const unchanged =
-          afterPtoAccrued === beforePtoAccrued &&
-          afterPtoUsed === beforePtoUsed &&
-          afterSickAccrued === beforeSickAccrued &&
-          afterSickUsed === beforeSickUsed;
-        if (unchanged) continue;
+          const beforePtoAccrued = Number(before.pto_ytd_hours_accrued) || 0;
+          const beforePtoUsed = Number(before.pto_ytd_hours_used) || 0;
+          const beforeSickAccrued = Number(before.sick_ytd_hours_accrued) || 0;
+          const beforeSickUsed = Number(before.sick_ytd_hours_used) || 0;
 
-        await pool.query(
-          `UPDATE payroll.employees
-           SET pto_ytd_hours_accrued = $1,
-               pto_ytd_hours_used = $2,
-               sick_ytd_hours_accrued = $3,
-               sick_ytd_hours_used = $4,
-               updated_at = now()
-           WHERE id = $5::uuid`,
-          [
-            afterPtoAccrued,
-            afterPtoUsed,
-            afterSickAccrued,
-            afterSickUsed,
-            id,
-          ]
-        );
+          const unchanged =
+            afterPtoAccrued === beforePtoAccrued &&
+            afterPtoUsed === beforePtoUsed &&
+            afterSickAccrued === beforeSickAccrued &&
+            afterSickUsed === beforeSickUsed;
+          if (unchanged) continue;
 
-        await pool.query(
-          `INSERT INTO payroll.leave_change_batch_details (
-             batch_id, employee_id,
-             pto_ytd_hours_accrued_before, pto_ytd_hours_used_before,
-             sick_ytd_hours_accrued_before, sick_ytd_hours_used_before,
-             pto_ytd_hours_accrued_after, pto_ytd_hours_used_after,
-             sick_ytd_hours_accrued_after, sick_ytd_hours_used_after
-           ) VALUES (
-             $1, $2,
-             $3, $4,
-             $5, $6,
-             $7, $8,
-             $9, $10
-           )`,
-          [
-            batchId,
-            before.id,
-            beforePtoAccrued,
-            beforePtoUsed,
-            beforeSickAccrued,
-            beforeSickUsed,
-            afterPtoAccrued,
-            afterPtoUsed,
-            afterSickAccrued,
-            afterSickUsed,
-          ]
-        );
-        detailRowsInserted += 1;
+          await client.query(
+            `UPDATE payroll.employees
+             SET pto_ytd_hours_accrued = $1,
+                 pto_ytd_hours_used = $2,
+                 sick_ytd_hours_accrued = $3,
+                 sick_ytd_hours_used = $4,
+                 updated_at = now()
+             WHERE id = $5::uuid`,
+            [
+              afterPtoAccrued,
+              afterPtoUsed,
+              afterSickAccrued,
+              afterSickUsed,
+              id,
+            ]
+          );
+
+          await client.query(
+            `INSERT INTO payroll.leave_change_batch_details (
+               batch_id, employee_id,
+               pto_ytd_hours_accrued_before, pto_ytd_hours_used_before,
+               sick_ytd_hours_accrued_before, sick_ytd_hours_used_before,
+               pto_ytd_hours_accrued_after, pto_ytd_hours_used_after,
+               sick_ytd_hours_accrued_after, sick_ytd_hours_used_after
+             ) VALUES (
+               $1, $2,
+               $3, $4,
+               $5, $6,
+               $7, $8,
+               $9, $10
+             )`,
+            [
+              batchId,
+              before.id,
+              beforePtoAccrued,
+              beforePtoUsed,
+              beforeSickAccrued,
+              beforeSickUsed,
+              afterPtoAccrued,
+              afterPtoUsed,
+              afterSickAccrued,
+              afterSickUsed,
+            ]
+          );
+          detailRowsInserted += 1;
+        }
+        if (detailRowsInserted === 0) {
+          await client.query("ROLLBACK");
+          return res.status(200).json({
+            ok: true,
+            unchanged: true,
+            message: "No PTO/Sick YTD values changed; nothing saved.",
+          });
+        }
+        await client.query("COMMIT");
+        return res.status(200).json({ ok: true, batchId });
+      } catch (patchErr) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          // ignore
+        }
+        throw patchErr;
+      } finally {
+        client.release();
       }
-      if (detailRowsInserted === 0) {
-        await pool.query("ROLLBACK");
-        return res.status(200).json({
-          ok: true,
-          unchanged: true,
-          message: "No PTO/Sick YTD values changed; nothing saved.",
-        });
-      }
-      await pool.query("COMMIT");
-      return res.status(200).json({ ok: true, batchId });
     }
 
     res.setHeader("Allow", "GET, PATCH, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    try {
-      await pool.query("ROLLBACK");
-    } catch {
-      // ignore
-    }
     return res.status(500).json({ error: e?.message || "Request failed" });
   }
 }

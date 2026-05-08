@@ -14,10 +14,25 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message || "Database not configured" });
   }
 
+  function asUuidArray(v) {
+    if (Array.isArray(v)) return v;
+    if (v == null) return [];
+    if (typeof v === "string") {
+      try {
+        const p = JSON.parse(v);
+        return Array.isArray(p) ? p : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
-    // Orphan batches (no detail rows) block rollback of real changes — close them out.
-    await pool.query(
+    await client.query("BEGIN");
+
+    await client.query(
       `UPDATE payroll.leave_change_batches b
        SET rolled_back_at = now()
        WHERE b.rolled_back_at IS NULL
@@ -25,7 +40,8 @@ export default async function handler(req, res) {
            SELECT 1 FROM payroll.leave_change_batch_details d WHERE d.batch_id = b.id
          )`
     );
-    const lastBatchR = await pool.query(
+
+    const lastBatchR = await client.query(
       `SELECT id, operation_type, created_at
        FROM payroll.leave_change_batches
        WHERE rolled_back_at IS NULL
@@ -35,11 +51,11 @@ export default async function handler(req, res) {
     );
     const batch = lastBatchR.rows[0];
     if (!batch) {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "No change batch to roll back" });
     }
 
-    const detailsR = await pool.query(
+    const detailsR = await client.query(
       `SELECT *
        FROM payroll.leave_change_batch_details
        WHERE batch_id = $1
@@ -49,7 +65,7 @@ export default async function handler(req, res) {
 
     let employeesUpdated = 0;
     for (const d of detailsR.rows) {
-      await pool.query(
+      await client.query(
         `UPDATE payroll.employees
          SET pto_ytd_hours_accrued = $1,
              pto_ytd_hours_used = $2,
@@ -66,25 +82,27 @@ export default async function handler(req, res) {
         ]
       );
 
-      const ptoIds = Array.isArray(d.pto_log_ids) ? d.pto_log_ids : [];
+      const ptoIds = asUuidArray(d.pto_log_ids);
       if (ptoIds.length) {
-        await pool.query(`DELETE FROM payroll.pto_log WHERE id = ANY($1::uuid[])`, [ptoIds]);
+        await client.query(`DELETE FROM payroll.pto_log WHERE id = ANY($1::uuid[])`, [ptoIds]);
       }
-      const sickIds = Array.isArray(d.sick_log_ids) ? d.sick_log_ids : [];
+      const sickIds = asUuidArray(d.sick_log_ids);
       if (sickIds.length) {
-        await pool.query(`DELETE FROM payroll.sick_time_log WHERE id = ANY($1::uuid[])`, [sickIds]);
+        await client.query(`DELETE FROM payroll.sick_time_log WHERE id = ANY($1::uuid[])`, [
+          sickIds,
+        ]);
       }
       employeesUpdated += 1;
     }
 
-    await pool.query(
+    await client.query(
       `UPDATE payroll.leave_change_batches
        SET rolled_back_at = now()
        WHERE id = $1`,
       [batch.id]
     );
 
-    await pool.query("COMMIT");
+    await client.query("COMMIT");
     return res.status(200).json({
       ok: true,
       batchId: batch.id,
@@ -93,11 +111,12 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     try {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
     } catch {
       // ignore
     }
     return res.status(500).json({ error: e?.message || "Request failed" });
+  } finally {
+    client.release();
   }
 }
-

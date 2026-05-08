@@ -201,7 +201,7 @@
       }
 
       async function apiJson(url, options) {
-        const r = await fetch(url, options);
+        const r = await fetch(url, { credentials: "same-origin", ...options });
         const text = await r.text();
         let data = {};
         try {

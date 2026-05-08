@@ -85,18 +85,30 @@ export default async function handler(req, res) {
         )
       );
 
-      await pool.query("BEGIN");
-      await pool.query("DELETE FROM payroll.app_access_emails");
-      if (allowedEmails.length) {
-        await pool.query(
-          `INSERT INTO payroll.app_access_emails (email, is_enabled)
-           SELECT x, true
-           FROM unnest($1::text[]) AS x
-           ON CONFLICT (email) DO UPDATE SET is_enabled = EXCLUDED.is_enabled`,
-          [allowedEmails]
-        );
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("DELETE FROM payroll.app_access_emails");
+        if (allowedEmails.length) {
+          await client.query(
+            `INSERT INTO payroll.app_access_emails (email, is_enabled)
+             SELECT x, true
+             FROM unnest($1::text[]) AS x
+             ON CONFLICT (email) DO UPDATE SET is_enabled = EXCLUDED.is_enabled`,
+            [allowedEmails]
+          );
+        }
+        await client.query("COMMIT");
+      } catch (patchErr) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          // ignore
+        }
+        throw patchErr;
+      } finally {
+        client.release();
       }
-      await pool.query("COMMIT");
 
       return res.status(200).json({ allowedEmails });
     }
@@ -104,12 +116,6 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET, PATCH, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    // Best-effort rollback.
-    try {
-      await pool.query("ROLLBACK");
-    } catch {
-      // ignore
-    }
     return res.status(500).json({ error: e?.message || "Request failed" });
   }
 }
