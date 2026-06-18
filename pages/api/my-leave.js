@@ -21,6 +21,14 @@ function getQueryEmployeeId(req) {
   }
 }
 
+function viewerDisplayName(token, ownEmp) {
+  if (token?.name?.trim()) return token.name.trim();
+  if (ownEmp?.display_name?.trim()) return ownEmp.display_name.trim();
+  const addr = String(token?.email || "").trim();
+  if (addr.includes("@")) return addr.split("@")[0];
+  return "Yourself";
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
@@ -65,6 +73,13 @@ export default async function handler(req, res) {
   try {
     let emp;
     let impersonating = false;
+    const ownEmp = isAdmin ? await findEmployeeByEmail(pool, email) : null;
+    const viewerInfo = isAdmin
+      ? {
+          viewerEmployeeId: ownEmp?.id ?? null,
+          viewerDisplayName: viewerDisplayName(token, ownEmp),
+        }
+      : {};
 
     if (impersonateId) {
       emp = await findEmployeeById(pool, impersonateId);
@@ -73,12 +88,13 @@ export default async function handler(req, res) {
       }
       impersonating = true;
     } else {
-      emp = await findEmployeeByEmail(pool, email);
+      emp = ownEmp;
       if (!emp) {
         if (isAdmin) {
           return res.status(200).json({
             isAdmin: true,
             needsEmployeeSelection: true,
+            ...viewerInfo,
           });
         }
         return res.status(404).json({
@@ -93,6 +109,7 @@ export default async function handler(req, res) {
       ...payload,
       isAdmin,
       impersonating,
+      ...viewerInfo,
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Request failed" });

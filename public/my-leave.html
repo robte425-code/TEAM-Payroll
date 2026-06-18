@@ -13,6 +13,14 @@
     <link rel="stylesheet" href="./css/voc-shell.css" />
   </head>
   <body class="voc-page">
+    <div id="impersonationBanner" class="team-impersonation-banner" hidden>
+      <span>
+        Viewing as <strong id="impersonationBannerName"></strong>
+        <span class="team-impersonation-banner-email" id="impersonationBannerEmail"></span>
+        — you’re seeing exactly what they see.
+      </span>
+      <button type="button" id="impersonationBannerExit">Exit view-as</button>
+    </div>
     <header class="team-header">
       <div class="team-header-border">
         <div class="team-header-bar">
@@ -30,6 +38,21 @@
           </div>
           <div class="team-header-right">
             <span id="greetingLine" class="team-header-greeting" aria-live="polite"></span>
+            <div class="team-view-as" id="viewAsRoot" hidden>
+              <button
+                type="button"
+                class="team-view-as-trigger"
+                id="viewAsTrigger"
+                aria-expanded="false"
+                aria-haspopup="menu"
+              >
+                <span>View as…</span>
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <ul class="team-view-as-menu" id="viewAsMenu" role="menu" aria-label="View as" hidden></ul>
+            </div>
             <a href="/logout" class="team-header-signout">Sign out</a>
           </div>
         </div>
@@ -42,17 +65,6 @@
 
       <p id="pageErr" class="voc-error" hidden></p>
       <p id="pageMsg" class="voc-msg" aria-live="polite"></p>
-
-      <div id="adminBar" class="voc-admin-bar" hidden>
-        <label for="impersonateSelect">View as employee</label>
-        <select id="impersonateSelect">
-          <option value="">— Select employee —</option>
-        </select>
-        <button type="button" id="stopImpersonateBtn" hidden>Exit preview</button>
-      </div>
-      <p id="impersonateBanner" class="voc-impersonate-banner" hidden>
-        Admin preview: viewing payroll as <strong id="impersonateName"></strong>
-      </p>
 
       <p id="loadingLine" class="voc-loading">Loading your balances…</p>
 
@@ -222,27 +234,19 @@
         return data;
       }
 
-      async function loadEmployeeOptions(selectEl, selectedId) {
+      async function fetchEmployees() {
         const r = await fetch("/api/employees", { credentials: "same-origin" });
         const text = await r.text();
         let data = {};
         try {
           data = text ? JSON.parse(text) : {};
         } catch {
-          throw new Error("Could not load employee list");
+          throw new Error("Could not load users");
         }
         if (!r.ok) {
-          throw new Error(data.error || "Could not load employee list");
+          throw new Error(data.error || "Could not load users");
         }
-        const employees = Array.isArray(data.employees) ? data.employees : [];
-        selectEl.innerHTML = '<option value="">— Select employee —</option>';
-        for (const emp of employees) {
-          const opt = document.createElement("option");
-          opt.value = emp.id;
-          opt.textContent = emp.displayName || emp.providerId || emp.id;
-          if (selectedId && emp.id === selectedId) opt.selected = true;
-          selectEl.appendChild(opt);
-        }
+        return Array.isArray(data.employees) ? data.employees : [];
       }
 
       (async () => {
@@ -251,13 +255,165 @@
         const greetEl = document.getElementById("greetingLine");
         const loadingEl = document.getElementById("loadingLine");
         const wrap = document.getElementById("contentWrap");
-        const adminBar = document.getElementById("adminBar");
-        const impersonateSelect = document.getElementById("impersonateSelect");
-        const stopBtn = document.getElementById("stopImpersonateBtn");
-        const impersonateBanner = document.getElementById("impersonateBanner");
-        const impersonateNameEl = document.getElementById("impersonateName");
+        const viewAsRoot = document.getElementById("viewAsRoot");
+        const viewAsTrigger = document.getElementById("viewAsTrigger");
+        const viewAsMenu = document.getElementById("viewAsMenu");
+        const impersonationBanner = document.getElementById("impersonationBanner");
+        const impersonationBannerName = document.getElementById("impersonationBannerName");
+        const impersonationBannerEmail = document.getElementById("impersonationBannerEmail");
+        const impersonationBannerExit = document.getElementById("impersonationBannerExit");
 
         let activeImpersonateId = getStoredImpersonateId();
+        let viewerEmployeeId = null;
+        let viewerDisplayName = "Yourself";
+        let employees = [];
+        let employeesLoaded = false;
+        let employeesLoading = false;
+        let viewAsOpen = false;
+        let busyEmployeeId = null;
+
+        function setViewAsOpen(open) {
+          viewAsOpen = open;
+          viewAsTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+          viewAsMenu.hidden = !open;
+        }
+
+        function closeViewAsMenu() {
+          setViewAsOpen(false);
+        }
+
+        function updateImpersonationBanner(data) {
+          if (data.impersonating) {
+            impersonationBannerName.textContent = data.employeeName || "employee";
+            const email = data.employeeLoginEmail || "";
+            impersonationBannerEmail.textContent = email ? `(${email})` : "";
+            impersonationBanner.hidden = false;
+          } else {
+            impersonationBanner.hidden = true;
+          }
+        }
+
+        function renderViewAsMenu() {
+          viewAsMenu.innerHTML = "";
+
+          const heading = document.createElement("li");
+          heading.setAttribute("role", "presentation");
+          heading.className = "team-view-as-menu-heading";
+          heading.textContent = "View as…";
+          viewAsMenu.appendChild(heading);
+
+          if (activeImpersonateId) {
+            const selfItem = document.createElement("li");
+            selfItem.setAttribute("role", "none");
+            const selfBtn = document.createElement("button");
+            selfBtn.type = "button";
+            selfBtn.setAttribute("role", "menuitem");
+            selfBtn.className = "team-view-as-item";
+            selfBtn.textContent =
+              busyEmployeeId === "__self__" ? "Switching…" : `Yourself (${viewerDisplayName})`;
+            selfBtn.disabled = busyEmployeeId === "__self__";
+            selfBtn.addEventListener("click", () => exitViewAs());
+            selfItem.appendChild(selfBtn);
+            viewAsMenu.appendChild(selfItem);
+          }
+
+          if (employeesLoading) {
+            const status = document.createElement("li");
+            status.className = "team-view-as-status";
+            status.textContent = "Loading users…";
+            viewAsMenu.appendChild(status);
+            return;
+          }
+
+          const others = employees.filter((emp) => emp.id !== viewerEmployeeId);
+          for (const emp of others) {
+            const li = document.createElement("li");
+            li.setAttribute("role", "none");
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.setAttribute("role", "menuitem");
+            btn.className = "team-view-as-item";
+            const isCurrent = activeImpersonateId && emp.id === activeImpersonateId;
+            if (isCurrent) btn.classList.add("is-current");
+            btn.disabled = Boolean(busyEmployeeId);
+
+            const name = document.createElement("span");
+            name.className = "team-view-as-item-name";
+            name.textContent = emp.displayName || emp.providerId || emp.id;
+            btn.appendChild(name);
+
+            const email = String(emp.loginEmail || "").trim();
+            if (email) {
+              const emailEl = document.createElement("span");
+              emailEl.className = "team-view-as-item-email";
+              emailEl.textContent = email;
+              btn.appendChild(emailEl);
+            }
+
+            if (busyEmployeeId === emp.id) {
+              const busy = document.createElement("span");
+              busy.className = "team-view-as-item-email";
+              busy.textContent = "Switching…";
+              btn.appendChild(busy);
+            }
+
+            btn.addEventListener("click", () => selectEmployee(emp.id));
+            li.appendChild(btn);
+            viewAsMenu.appendChild(li);
+          }
+
+          if (!employeesLoading && others.length === 0) {
+            const status = document.createElement("li");
+            status.className = "team-view-as-status";
+            status.textContent = "No other users found.";
+            viewAsMenu.appendChild(status);
+          }
+        }
+
+        async function ensureEmployeesLoaded() {
+          if (employeesLoaded || employeesLoading) return;
+          employeesLoading = true;
+          renderViewAsMenu();
+          try {
+            employees = await fetchEmployees();
+            employeesLoaded = true;
+          } catch (e) {
+            viewAsMenu.innerHTML = "";
+            const heading = document.createElement("li");
+            heading.setAttribute("role", "presentation");
+            heading.className = "team-view-as-menu-heading";
+            heading.textContent = "View as…";
+            viewAsMenu.appendChild(heading);
+            const status = document.createElement("li");
+            status.className = "team-view-as-status is-error";
+            status.textContent = e.message || "Could not load users";
+            viewAsMenu.appendChild(status);
+            employeesLoading = false;
+            return;
+          }
+          employeesLoading = false;
+          renderViewAsMenu();
+        }
+
+        async function selectEmployee(id) {
+          busyEmployeeId = id;
+          renderViewAsMenu();
+          setStoredImpersonateId(id);
+          activeImpersonateId = id;
+          closeViewAsMenu();
+          await refreshView(id);
+          busyEmployeeId = null;
+        }
+
+        async function exitViewAs() {
+          busyEmployeeId = "__self__";
+          renderViewAsMenu();
+          setStoredImpersonateId("");
+          activeImpersonateId = "";
+          closeViewAsMenu();
+          await refreshView("");
+          busyEmployeeId = null;
+        }
 
         async function refreshView(employeeId) {
           errEl.hidden = true;
@@ -265,59 +421,60 @@
           msgEl.textContent = "";
           loadingEl.hidden = false;
           wrap.hidden = true;
-          impersonateBanner.hidden = true;
-          stopBtn.hidden = true;
 
           try {
             const data = await fetchMyLeave(employeeId || "");
 
             if (data.isAdmin) {
-              adminBar.hidden = false;
-              await loadEmployeeOptions(impersonateSelect, employeeId || data.employeeId || "");
+              viewerEmployeeId = data.viewerEmployeeId || null;
+              viewerDisplayName = data.viewerDisplayName || "Yourself";
+              viewAsRoot.hidden = false;
             }
 
             if (data.needsEmployeeSelection && !employeeId) {
               loadingEl.hidden = true;
-              greetEl.textContent = `${greetingPrefix()} Admin`;
-              msgEl.textContent = "Select an employee above to preview their payroll page.";
+              greetEl.textContent = `${greetingPrefix()} ${firstNameFromDisplayName(viewerDisplayName)}`;
+              msgEl.textContent =
+                "Select an employee from View as… in the header to preview their payroll page.";
+              updateImpersonationBanner(data);
               return;
             }
 
             renderLeaveData(greetEl, data);
             loadingEl.hidden = true;
             wrap.hidden = false;
+            updateImpersonationBanner(data);
 
-            if (data.impersonating) {
-              impersonateNameEl.textContent = data.employeeName || "employee";
-              impersonateBanner.hidden = false;
-              stopBtn.hidden = false;
-              if (impersonateSelect.value !== data.employeeId) {
-                impersonateSelect.value = data.employeeId || "";
-              }
-            } else if (data.isAdmin && data.employeeId) {
-              impersonateSelect.value = data.employeeId;
+            if (data.impersonating && data.employeeId) {
+              activeImpersonateId = data.employeeId;
+              setStoredImpersonateId(data.employeeId);
+            } else if (!employeeId) {
+              activeImpersonateId = "";
             }
           } catch (e) {
             loadingEl.hidden = true;
             greetEl.textContent = "";
             errEl.hidden = false;
             errEl.textContent = e.message || "Could not load leave data.";
+            impersonationBanner.hidden = true;
           }
         }
 
-        impersonateSelect.addEventListener("change", () => {
-          const id = impersonateSelect.value.trim();
-          setStoredImpersonateId(id);
-          activeImpersonateId = id;
-          refreshView(id);
+        viewAsTrigger.addEventListener("click", () => {
+          const next = !viewAsOpen;
+          setViewAsOpen(next);
+          if (next) {
+            renderViewAsMenu();
+            ensureEmployeesLoaded();
+          }
         });
 
-        stopBtn.addEventListener("click", () => {
-          setStoredImpersonateId("");
-          activeImpersonateId = "";
-          impersonateSelect.value = "";
-          refreshView("");
+        document.addEventListener("mousedown", (e) => {
+          if (viewAsRoot.hidden || !viewAsOpen) return;
+          if (!viewAsRoot.contains(e.target)) closeViewAsMenu();
         });
+
+        impersonationBannerExit.addEventListener("click", () => exitViewAs());
 
         await refreshView(activeImpersonateId);
       })();
