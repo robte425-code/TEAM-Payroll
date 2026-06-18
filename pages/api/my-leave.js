@@ -1,5 +1,25 @@
 const { getToken } = require("next-auth/jwt");
 const { getPool } = require("../../lib/db");
+const {
+  isUuid,
+  findEmployeeByEmail,
+  findEmployeeById,
+  fetchLeaveDataForEmployee,
+} = require("../../lib/my-leave-data");
+
+function getQueryEmployeeId(req) {
+  const raw = req.query?.employeeId;
+  if (raw != null && String(raw).trim()) return String(raw).trim();
+  try {
+    const host = req.headers?.host || "localhost";
+    const proto = req.headers?.["x-forwarded-proto"] || "http";
+    const u = new URL(req.url || "", `${proto}://${host}`);
+    const fromUrl = u.searchParams.get("employeeId");
+    return fromUrl ? String(fromUrl).trim() : "";
+  } catch {
+    return "";
+  }
+}
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
@@ -25,6 +45,16 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  const isAdmin = token?.role === "admin";
+  const impersonateId = getQueryEmployeeId(req);
+
+  if (impersonateId && !isUuid(impersonateId)) {
+    return res.status(400).json({ error: "Invalid employee id" });
+  }
+  if (impersonateId && !isAdmin) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+
   let pool;
   try {
     pool = getPool();
@@ -33,88 +63,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    const empR = await pool.query(
-      `SELECT id, display_name,
-              pto_ytd_hours_accrued, pto_ytd_hours_used,
-              sick_ytd_hours_accrued, sick_ytd_hours_used
-       FROM payroll.employees
-       WHERE lower(trim(login_email)) = $1
-       LIMIT 1`,
-      [email]
-    );
-    const emp = empR.rows[0];
-    if (!emp) {
-      return res.status(404).json({
-        error:
-          "No employee record is linked to your sign-in email. Ask a payroll admin to set your Sign-in email on the Employee pay rates page.",
-      });
+    let emp;
+    let impersonating = false;
+
+    if (impersonateId) {
+      emp = await findEmployeeById(pool, impersonateId);
+      if (!emp) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      impersonating = true;
+    } else {
+      emp = await findEmployeeByEmail(pool, email);
+      if (!emp) {
+        if (isAdmin) {
+          return res.status(200).json({
+            isAdmin: true,
+            needsEmployeeSelection: true,
+          });
+        }
+        return res.status(404).json({
+          error:
+            "No employee record is linked to your sign-in email. Ask a payroll admin to set your Sign-in email on the Employee pay rates page.",
+        });
+      }
     }
 
-    const employeeId = emp.id;
-    const displayName = emp.display_name || "";
-
-    const ptoAccrued = Number(emp.pto_ytd_hours_accrued) || 0;
-    const ptoUsed = Number(emp.pto_ytd_hours_used) || 0;
-    const sickAccrued = Number(emp.sick_ytd_hours_accrued) || 0;
-    const sickUsed = Number(emp.sick_ytd_hours_used) || 0;
-
-    const pto = await pool.query(
-      `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
-       FROM payroll.pto_log l
-       WHERE l.id IN (
-         SELECT DISTINCT unnest(d.pto_log_ids)
-         FROM payroll.leave_change_batch_details d
-         WHERE d.employee_id = $1::uuid
-       )
-       ORDER BY l.action_date DESC, l.created_at DESC`,
-      [employeeId]
-    );
-
-    const sick = await pool.query(
-      `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
-       FROM payroll.sick_time_log l
-       WHERE l.id IN (
-         SELECT DISTINCT unnest(d.sick_log_ids)
-         FROM payroll.leave_change_batch_details d
-         WHERE d.employee_id = $1::uuid
-       )
-       ORDER BY l.action_date DESC, l.created_at DESC`,
-      [employeeId]
-    );
-
-    if (pto.rows.length === 0) {
-      const fallback = await pool.query(
-        `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
-         FROM payroll.pto_log l
-         WHERE lower(regexp_replace(trim(l.employee_name), '\\s+', ' ', 'g')) =
-               lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
-         ORDER BY l.action_date DESC, l.created_at DESC`,
-        [displayName]
-      );
-      pto.rows.push(...fallback.rows);
-    }
-    if (sick.rows.length === 0) {
-      const fallback = await pool.query(
-        `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
-         FROM payroll.sick_time_log l
-         WHERE lower(regexp_replace(trim(l.employee_name), '\\s+', ' ', 'g')) =
-               lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
-         ORDER BY l.action_date DESC, l.created_at DESC`,
-        [displayName]
-      );
-      sick.rows.push(...fallback.rows);
-    }
-
+    const payload = await fetchLeaveDataForEmployee(pool, emp);
     return res.status(200).json({
-      employeeName: displayName,
-      ptoYtdHoursAccrued: ptoAccrued,
-      ptoYtdHoursUsed: ptoUsed,
-      ptoAvailableHours: ptoAccrued - ptoUsed,
-      sickYtdHoursAccrued: sickAccrued,
-      sickYtdHoursUsed: sickUsed,
-      sickAvailableHours: sickAccrued - sickUsed,
-      ptoLogs: pto.rows,
-      sickLogs: sick.rows,
+      ...payload,
+      isAdmin,
+      impersonating,
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Request failed" });

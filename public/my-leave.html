@@ -42,6 +42,18 @@
 
       <p id="pageErr" class="voc-error" hidden></p>
       <p id="pageMsg" class="voc-msg" aria-live="polite"></p>
+
+      <div id="adminBar" class="voc-admin-bar" hidden>
+        <label for="impersonateSelect">View as employee</label>
+        <select id="impersonateSelect">
+          <option value="">— Select employee —</option>
+        </select>
+        <button type="button" id="stopImpersonateBtn" hidden>Exit preview</button>
+      </div>
+      <p id="impersonateBanner" class="voc-impersonate-banner" hidden>
+        Admin preview: viewing payroll as <strong id="impersonateName"></strong>
+      </p>
+
       <p id="loadingLine" class="voc-loading">Loading your balances…</p>
 
       <div id="contentWrap" hidden>
@@ -160,47 +172,154 @@
         }
       }
 
+      function renderLeaveData(greetEl, data) {
+        const firstName = firstNameFromDisplayName(data.employeeName);
+        greetEl.textContent = `${greetingPrefix()} ${firstName}`;
+
+        document.getElementById("ptoAccrued").textContent = money2(data.ptoYtdHoursAccrued);
+        document.getElementById("ptoUsed").textContent = money2(data.ptoYtdHoursUsed);
+        document.getElementById("ptoAvail").textContent = money2(data.ptoAvailableHours);
+        document.getElementById("sickAccrued").textContent = money2(data.sickYtdHoursAccrued);
+        document.getElementById("sickUsed").textContent = money2(data.sickYtdHoursUsed);
+        document.getElementById("sickAvail").textContent = money2(data.sickAvailableHours);
+
+        renderLogRows(document.getElementById("ptoLogBody"), data.ptoLogs);
+        renderLogRows(document.getElementById("sickLogBody"), data.sickLogs);
+      }
+
+      const IMPERSONATE_KEY = "payrollImpersonateEmployeeId";
+
+      function getStoredImpersonateId() {
+        try {
+          return sessionStorage.getItem(IMPERSONATE_KEY) || "";
+        } catch {
+          return "";
+        }
+      }
+
+      function setStoredImpersonateId(id) {
+        try {
+          if (id) sessionStorage.setItem(IMPERSONATE_KEY, id);
+          else sessionStorage.removeItem(IMPERSONATE_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      async function fetchMyLeave(employeeId) {
+        const url = employeeId ? `/api/my-leave?employeeId=${encodeURIComponent(employeeId)}` : "/api/my-leave";
+        const r = await fetch(url, { credentials: "same-origin" });
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { error: text || "Invalid response" };
+        }
+        if (!r.ok) {
+          throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
+        }
+        return data;
+      }
+
+      async function loadEmployeeOptions(selectEl, selectedId) {
+        const r = await fetch("/api/employees", { credentials: "same-origin" });
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error("Could not load employee list");
+        }
+        if (!r.ok) {
+          throw new Error(data.error || "Could not load employee list");
+        }
+        const employees = Array.isArray(data.employees) ? data.employees : [];
+        selectEl.innerHTML = '<option value="">— Select employee —</option>';
+        for (const emp of employees) {
+          const opt = document.createElement("option");
+          opt.value = emp.id;
+          opt.textContent = emp.displayName || emp.providerId || emp.id;
+          if (selectedId && emp.id === selectedId) opt.selected = true;
+          selectEl.appendChild(opt);
+        }
+      }
+
       (async () => {
         const errEl = document.getElementById("pageErr");
         const msgEl = document.getElementById("pageMsg");
         const greetEl = document.getElementById("greetingLine");
         const loadingEl = document.getElementById("loadingLine");
         const wrap = document.getElementById("contentWrap");
+        const adminBar = document.getElementById("adminBar");
+        const impersonateSelect = document.getElementById("impersonateSelect");
+        const stopBtn = document.getElementById("stopImpersonateBtn");
+        const impersonateBanner = document.getElementById("impersonateBanner");
+        const impersonateNameEl = document.getElementById("impersonateName");
 
-        try {
-          const r = await fetch("/api/my-leave", { credentials: "same-origin" });
-          const text = await r.text();
-          let data = {};
+        let activeImpersonateId = getStoredImpersonateId();
+
+        async function refreshView(employeeId) {
+          errEl.hidden = true;
+          errEl.textContent = "";
+          msgEl.textContent = "";
+          loadingEl.hidden = false;
+          wrap.hidden = true;
+          impersonateBanner.hidden = true;
+          stopBtn.hidden = true;
+
           try {
-            data = text ? JSON.parse(text) : {};
-          } catch {
-            data = { error: text || "Invalid response" };
+            const data = await fetchMyLeave(employeeId || "");
+
+            if (data.isAdmin) {
+              adminBar.hidden = false;
+              await loadEmployeeOptions(impersonateSelect, employeeId || data.employeeId || "");
+            }
+
+            if (data.needsEmployeeSelection && !employeeId) {
+              loadingEl.hidden = true;
+              greetEl.textContent = `${greetingPrefix()} Admin`;
+              msgEl.textContent = "Select an employee above to preview their payroll page.";
+              return;
+            }
+
+            renderLeaveData(greetEl, data);
+            loadingEl.hidden = true;
+            wrap.hidden = false;
+
+            if (data.impersonating) {
+              impersonateNameEl.textContent = data.employeeName || "employee";
+              impersonateBanner.hidden = false;
+              stopBtn.hidden = false;
+              if (impersonateSelect.value !== data.employeeId) {
+                impersonateSelect.value = data.employeeId || "";
+              }
+            } else if (data.isAdmin && data.employeeId) {
+              impersonateSelect.value = data.employeeId;
+            }
+          } catch (e) {
+            loadingEl.hidden = true;
+            greetEl.textContent = "";
+            errEl.hidden = false;
+            errEl.textContent = e.message || "Could not load leave data.";
           }
-          if (!r.ok) {
-            throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
-          }
-
-          const firstName = firstNameFromDisplayName(data.employeeName);
-          greetEl.textContent = `${greetingPrefix()} ${firstName}`;
-
-          document.getElementById("ptoAccrued").textContent = money2(data.ptoYtdHoursAccrued);
-          document.getElementById("ptoUsed").textContent = money2(data.ptoYtdHoursUsed);
-          document.getElementById("ptoAvail").textContent = money2(data.ptoAvailableHours);
-          document.getElementById("sickAccrued").textContent = money2(data.sickYtdHoursAccrued);
-          document.getElementById("sickUsed").textContent = money2(data.sickYtdHoursUsed);
-          document.getElementById("sickAvail").textContent = money2(data.sickAvailableHours);
-
-          renderLogRows(document.getElementById("ptoLogBody"), data.ptoLogs);
-          renderLogRows(document.getElementById("sickLogBody"), data.sickLogs);
-
-          loadingEl.hidden = true;
-          wrap.hidden = false;
-        } catch (e) {
-          loadingEl.hidden = true;
-          greetEl.textContent = "";
-          errEl.hidden = false;
-          errEl.textContent = e.message || "Could not load your leave data.";
         }
+
+        impersonateSelect.addEventListener("change", () => {
+          const id = impersonateSelect.value.trim();
+          setStoredImpersonateId(id);
+          activeImpersonateId = id;
+          refreshView(id);
+        });
+
+        stopBtn.addEventListener("click", () => {
+          setStoredImpersonateId("");
+          activeImpersonateId = "";
+          impersonateSelect.value = "";
+          refreshView("");
+        });
+
+        await refreshView(activeImpersonateId);
       })();
     </script>
   </body>
