@@ -25,8 +25,9 @@
       });
     </script>
 
-    <h1>Employee pay rates</h1>
-    <p class="muted page-subtitle">
+    <main class="voc-main">
+    <h1 class="voc-page-title">Employee pay rates</h1>
+    <p class="voc-page-lead">
       Hourly rates are stored in your <strong>Postgres</strong> database (schema
       <code>payroll</code>). Requires this app to be run with
       <code>DATABASE_URL</code> (e.g. <code>vercel dev</code> or deployed on Vercel).
@@ -129,6 +130,7 @@
         <button type="button" id="saveEmployeesBtn">Save</button>
       </p>
     </div>
+    </main>
 
     <script>
       const API = "/api/employees";
