@@ -6,6 +6,7 @@ const {
   findEmployeeById,
   fetchLeaveDataForEmployee,
 } = require("../../lib/my-leave-data");
+const { readImpersonateEmail } = require("../../lib/impersonation");
 
 function getQueryEmployeeId(req) {
   const raw = req.query?.employeeId;
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
   }
 
   const isAdmin = token?.role === "admin";
-  const impersonateId = getQueryEmployeeId(req);
+  let impersonateId = getQueryEmployeeId(req);
 
   if (impersonateId && !isUuid(impersonateId)) {
     return res.status(400).json({ error: "Invalid employee id" });
@@ -68,6 +69,14 @@ export default async function handler(req, res) {
     pool = getPool();
   } catch (e) {
     return res.status(500).json({ error: e.message || "Database not configured" });
+  }
+
+  if (isAdmin && !impersonateId) {
+    const impEmail = readImpersonateEmail(req);
+    if (impEmail && impEmail !== email) {
+      const empByEmail = await findEmployeeByEmail(pool, impEmail);
+      if (empByEmail?.id) impersonateId = empByEmail.id;
+    }
   }
 
   try {

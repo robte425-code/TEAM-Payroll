@@ -112,6 +112,23 @@
   color: #1c1917;
 }
 
+.team-header-nav-secondary {
+  flex-basis: 100%;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(231, 229, 228, 0.6);
+}
+
+@media (min-width: 640px) {
+  .team-header-nav-secondary {
+    flex-basis: auto;
+    padding-top: 0;
+    border-top: none;
+    margin-left: 0.5rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid rgba(231, 229, 228, 0.8);
+  }
+}
+
 .team-header-right {
   display: flex;
   align-items: center;

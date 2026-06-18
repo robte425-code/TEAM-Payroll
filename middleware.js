@@ -1,6 +1,8 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+const IMPERSONATE_COOKIE = "team_impersonate";
+
 const authEnabled = Boolean(
   process.env.NEXTAUTH_SECRET &&
     process.env.AZURE_AD_CLIENT_ID &&
@@ -15,10 +17,24 @@ function isAdminToken(token) {
   return token?.role === "admin";
 }
 
+function isImpersonating(req) {
+  const raw = req.cookies.get(IMPERSONATE_COOKIE)?.value;
+  if (!raw) return false;
+  const email = String(raw).trim().toLowerCase();
+  return email.includes("@");
+}
+
 const authMiddleware = withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
+
+    if (isImpersonating(req) && !isMemberAllowedPath(path)) {
+      if (path.startsWith("/api/")) {
+        return NextResponse.json({ error: "Forbidden while viewing as another user" }, { status: 403 });
+      }
+      return NextResponse.redirect(new URL("/my-leave.html", req.url));
+    }
 
     if (isMemberAllowedPath(path)) {
       return NextResponse.next();
@@ -66,5 +82,7 @@ export const config = {
     "/api/leave-logs",
     "/api/leave-rollback",
     "/api/my-leave",
+    "/api/impersonate",
+    "/api/view-as-users",
   ],
 };
