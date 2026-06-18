@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas", "pdf-lib"],
+  serverExternalPackages: ["pdf-lib", "pdf-parse"],
   async rewrites() {
     return [{ source: "/", destination: "/index.html" }];
   },
