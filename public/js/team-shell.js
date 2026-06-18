@@ -31,7 +31,7 @@
       { href: "https://team-requests.vercel.app", label: "Requests", key: "requests" },
       { href: PHONE_BOOK_URL, label: "Phone book", key: "phone-book" },
       { href: VOC_HOTLINE_URL, label: "Voc hotline", key: "voc-hotline" },
-      { href: "./my-leave.html", label: "PTO/Sick", key: "payroll" },
+      { href: "./my-leave.html", label: "PTO", key: "payroll" },
       { href: HR_URL, label: "HR", key: "hr" },
     ];
     return links
