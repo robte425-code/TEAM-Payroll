@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pay stubs — TEAM Payroll</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/voc-shell.css" />
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body class="voc-page">
+    <div id="team-shell-root"></div>
+    <script src="./js/team-shell.js"></script>
+    <script>
+      TeamShell.mount({
+        mode: "admin",
+        adminPage: "pay-stubs",
+        enableViewAs: true,
+        onViewAsChange: () => window.location.assign("./my-leave.html"),
+      });
+    </script>
+
+    <main class="voc-main">
+      <h1 class="voc-page-title">Pay stubs</h1>
+      <p class="voc-page-lead">
+        Upload the consolidated PDF from your accountant. Each page becomes one employee pay stub
+        employees can download from their Payroll page.
+      </p>
+
+      <section class="voc-card" style="max-width: 42rem; margin-bottom: 1rem">
+        <h2 class="voc-card-title">Upload pay period</h2>
+        <p class="voc-page-lead" style="margin-bottom: 0.75rem">
+          Expected format: Payroll Relief direct deposit advice, one employee per page (like
+          <code>13821 2026-06-15 10 Employee Checks Non-Neg.pdf</code>).
+        </p>
+        <form id="uploadForm">
+          <label for="pdfFile" class="voc-page-lead" style="display: block; margin-bottom: 0.5rem">
+            Consolidated PDF
+          </label>
+          <input id="pdfFile" name="file" type="file" accept="application/pdf,.pdf" required />
+          <div style="margin-top: 0.75rem">
+            <button type="submit" id="uploadBtn">Upload and split</button>
+          </div>
+        </form>
+        <p id="uploadMsg" class="voc-msg" aria-live="polite" style="margin-top: 0.75rem"></p>
+        <p id="uploadErr" class="voc-error" hidden style="margin-top: 0.75rem"></p>
+      </section>
+
+      <section class="voc-card">
+        <h2 class="voc-card-title">Recent uploads</h2>
+        <p id="listLoading" class="voc-loading">Loading…</p>
+        <div id="listWrap" hidden>
+          <div class="voc-log-wrap" style="max-height: none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Check date</th>
+                  <th>Pay period</th>
+                  <th>Employee</th>
+                  <th>Matched</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="stubListBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatDate(d) {
+        if (!d) return "—";
+        const s = String(d).slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+          const [y, m, day] = s.split("-");
+          return `${m}/${day}/${y}`;
+        }
+        return s;
+      }
+
+      function formatPayPeriod(start, end) {
+        if (!start && !end) return "—";
+        if (start && end) return `${formatDate(start)} – ${formatDate(end)}`;
+        return formatDate(start || end);
+      }
+
+      async function loadList() {
+        const loading = document.getElementById("listLoading");
+        const wrap = document.getElementById("listWrap");
+        const tbody = document.getElementById("stubListBody");
+        loading.hidden = false;
+        wrap.hidden = true;
+        tbody.innerHTML = "";
+
+        const r = await fetch("/api/pay-stubs", { credentials: "same-origin" });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "Could not load pay stubs");
+
+        const stubs = Array.isArray(data.stubs) ? data.stubs : [];
+        loading.hidden = true;
+        wrap.hidden = false;
+
+        if (!stubs.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="color:#78716c">No pay stubs uploaded yet.</td></tr>';
+          return;
+        }
+
+        for (const stub of stubs) {
+          const tr = document.createElement("tr");
+          const matched = stub.employeeId
+            ? `<span style="color:#15803d">Yes</span>`
+            : `<span style="color:#b91c1c">No — ${escapeHtml(stub.extractedName)}</span>`;
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDate(stub.checkDate))}</td>
+            <td>${escapeHtml(formatPayPeriod(stub.payPeriodStart, stub.payPeriodEnd))}</td>
+            <td>${escapeHtml(stub.employeeName || stub.extractedName || "—")}</td>
+            <td>${matched}</td>
+            <td><a href="${escapeHtml(stub.downloadUrl)}">Download</a></td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById("uploadMsg");
+        const err = document.getElementById("uploadErr");
+        const btn = document.getElementById("uploadBtn");
+        const fileInput = document.getElementById("pdfFile");
+        msg.textContent = "";
+        err.hidden = true;
+        err.textContent = "";
+
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          err.hidden = false;
+          err.textContent = "Choose a PDF file.";
+          return;
+        }
+
+        const form = new FormData();
+        form.append("file", file);
+        btn.disabled = true;
+        msg.textContent = "Uploading and splitting PDF…";
+
+        try {
+          const r = await fetch("/api/pay-stubs/upload", {
+            method: "POST",
+            credentials: "same-origin",
+            body: form,
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || "Upload failed");
+          msg.textContent = data.message || "Upload complete.";
+          fileInput.value = "";
+          await loadList();
+        } catch (ex) {
+          err.hidden = false;
+          err.textContent = ex.message || "Upload failed";
+          msg.textContent = "";
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      loadList().catch((e) => {
+        document.getElementById("listLoading").hidden = true;
+        const err = document.getElementById("uploadErr");
+        err.hidden = false;
+        err.textContent = e.message || "Could not load list";
+      });
+    </script>
+  </body>
+</html>

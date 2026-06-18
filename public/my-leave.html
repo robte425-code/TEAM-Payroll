@@ -78,6 +78,23 @@
             </div>
           </section>
         </div>
+
+        <section class="voc-card" style="margin-top: 1rem" aria-labelledby="payStubsHeading">
+          <h2 id="payStubsHeading" class="voc-card-title">Pay stubs</h2>
+          <p id="payStubsEmpty" class="voc-page-lead" hidden>No pay stubs available yet.</p>
+          <div id="payStubsWrap" class="voc-log-wrap" style="max-height: none" hidden>
+            <table>
+              <thead>
+                <tr>
+                  <th>Check date</th>
+                  <th>Pay period</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="payStubsBody"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -143,6 +160,40 @@
         renderLogRows(document.getElementById("sickLogBody"), data.sickLogs);
       }
 
+      function renderPayStubs(stubs) {
+        const emptyEl = document.getElementById("payStubsEmpty");
+        const wrap = document.getElementById("payStubsWrap");
+        const tbody = document.getElementById("payStubsBody");
+        tbody.innerHTML = "";
+        if (!stubs || !stubs.length) {
+          emptyEl.hidden = false;
+          wrap.hidden = true;
+          return;
+        }
+        emptyEl.hidden = true;
+        wrap.hidden = false;
+        for (const stub of stubs) {
+          const tr = document.createElement("tr");
+          const period =
+            stub.payPeriodStart && stub.payPeriodEnd
+              ? `${formatDate(stub.payPeriodStart)} – ${formatDate(stub.payPeriodEnd)}`
+              : formatDate(stub.payPeriodStart || stub.payPeriodEnd);
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDate(stub.checkDate))}</td>
+            <td>${escapeHtml(period)}</td>
+            <td><a href="${escapeHtml(stub.downloadUrl)}">Download PDF</a></td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function fetchPayStubs() {
+        const r = await fetch("/api/pay-stubs", { credentials: "same-origin" });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) return [];
+        return Array.isArray(data.stubs) ? data.stubs : [];
+      }
+
       async function fetchMyLeave() {
         const r = await fetch("/api/my-leave", { credentials: "same-origin" });
         const text = await r.text();
@@ -185,6 +236,8 @@
             }
 
             renderLeaveData(shell, data);
+            const stubs = await fetchPayStubs();
+            renderPayStubs(stubs);
             loadingEl.hidden = true;
             wrap.hidden = false;
             shell.updateBanner(data);

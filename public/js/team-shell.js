@@ -14,6 +14,7 @@
     { href: "./rates.html", label: "Employee pay rates", key: "rates" },
     { href: "./access.html", label: "Access management", key: "access" },
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
+    { href: "./pay-stubs.html", label: "Pay stubs", key: "pay-stubs" },
   ];
 
   const PAYROLL_ADMIN_SECTIONS = [

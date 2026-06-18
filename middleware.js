@@ -14,7 +14,8 @@ function isMemberAllowedPath(pathname) {
     pathname === "/my-leave.html" ||
     pathname.startsWith("/api/my-leave") ||
     pathname === "/api/impersonate" ||
-    pathname === "/api/view-as-users"
+    pathname === "/api/view-as-users" ||
+    pathname.startsWith("/api/pay-stubs")
   );
 }
 
@@ -82,6 +83,7 @@ export const config = {
     "/access.html",
     "/leave.html",
     "/my-leave.html",
+    "/pay-stubs.html",
     "/api/employees/:path*",
     "/api/settings",
     "/api/access",
@@ -92,6 +94,7 @@ export const config = {
     "/api/my-leave",
     "/api/impersonate",
     "/api/view-as-users",
+    "/api/pay-stubs/:path*",
     "/api/internal/team-access",
   ],
 };
