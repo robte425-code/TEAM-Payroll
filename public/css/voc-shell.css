@@ -1,4 +1,156 @@
-/* Voc hotline–aligned shell for member-facing TEAM pages (static HTML). */
+/* TEAM updates–aligned shell for member-facing pages (static HTML). */
+
+/* Header — matches updates `Header.tsx` (user nav; no admin dropdown / ticker). */
+
+.team-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.team-header-border {
+  border-bottom: 1px solid rgba(231, 229, 228, 0.8);
+}
+
+.team-header-bar {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .team-header-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .team-header-bar {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.team-header-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.team-header-logo {
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.9;
+  transition: opacity 0.15s ease;
+}
+
+.team-header-logo:hover {
+  opacity: 1;
+}
+
+.team-header-logo img {
+  height: 3.5rem;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+@media (min-width: 640px) {
+  .team-header-logo img {
+    height: 4rem;
+  }
+}
+
+.team-header-nav {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .team-header-nav {
+    flex-wrap: nowrap;
+  }
+}
+
+.team-header-nav a {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: #57534e;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.team-header-nav a:hover {
+  background: #fafaf9;
+  color: #1c1917;
+}
+
+.team-header-nav a[aria-current="page"] {
+  background: #f5f5f4;
+  color: #1c1917;
+}
+
+.team-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  align-self: flex-end;
+}
+
+@media (min-width: 640px) {
+  .team-header-right {
+    align-self: center;
+  }
+}
+
+.team-header-greeting {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #57534e;
+}
+
+.team-header-signout {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: #78716c;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.team-header-signout:hover {
+  background: #f5f5f4;
+  color: #44403c;
+}
 
 .voc-page {
   margin: 0;
@@ -10,168 +162,6 @@
   background: #fafaf9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-.voc-header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
-  border-bottom: 1px solid rgba(231, 229, 228, 0.8);
-}
-
-.voc-header-inner {
-  max-width: 72rem;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-}
-
-@media (min-width: 640px) {
-  .voc-header-inner {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1.5rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .voc-header-inner {
-    padding-left: 2rem;
-    padding-right: 2rem;
-  }
-}
-
-.voc-header-start {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1.5rem;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.voc-app-nav {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.voc-app-nav a {
-  display: inline-block;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-decoration: none;
-  color: #57534e;
-  transition: background 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
-}
-
-.voc-app-nav a:hover {
-  background: #fafaf9;
-  color: #1c1917;
-}
-
-.voc-app-nav a[aria-current="page"],
-.voc-app-nav a.voc-nav-link-active {
-  background: #f5f5f4;
-  color: #1c1917;
-}
-
-.voc-logo-link {
-  display: flex;
-  flex-shrink: 0;
-  opacity: 0.9;
-  transition: opacity 0.15s ease;
-}
-
-.voc-logo-link:hover {
-  opacity: 1;
-}
-
-.voc-logo-link img {
-  height: 3.5rem;
-  width: auto;
-  display: block;
-  object-fit: contain;
-}
-
-@media (min-width: 640px) {
-  .voc-logo-link img {
-    height: 4rem;
-  }
-}
-
-.voc-header-end {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  align-self: flex-end;
-}
-
-@media (min-width: 640px) {
-  .voc-header-end {
-    align-self: center;
-  }
-}
-
-.voc-greeting {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #57534e;
-  margin: 0;
-}
-
-.voc-header-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.voc-nav-btn {
-  display: inline-block;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-decoration: none;
-  color: #57534e;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.voc-nav-btn:hover {
-  background: #fafaf9;
-  color: #1c1917;
-}
-
-.voc-nav-btn[aria-current="page"] {
-  background: #f5f5f4;
-  color: #1c1917;
-}
-
-.voc-nav-muted {
-  color: #78716c;
-}
-
-.voc-nav-muted:hover {
-  background: #f5f5f4;
-  color: #44403c;
 }
 
 .voc-main {
