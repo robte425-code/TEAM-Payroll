@@ -16,6 +16,29 @@
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
   ];
 
+  const PAYROLL_ADMIN_SECTIONS = [
+    {
+      label: "Admin",
+      items: [
+        { href: UPDATES_URL, label: "Home", external: true },
+        {
+          href: "https://teamvoc-updates.vercel.app/manage/access",
+          label: "Access & Backups",
+          external: true,
+        },
+        {
+          href: "https://teamvoc-updates.vercel.app/manage/usage-stats",
+          label: "Usage stats",
+          external: true,
+        },
+      ],
+    },
+    {
+      label: "Payroll",
+      items: ADMIN_LINKS,
+    },
+  ];
+
   function escapeHtml(s) {
     return String(s ?? "")
       .replace(/&/g, "&amp;")
@@ -42,22 +65,22 @@
       .join("");
   }
 
-  function adminSubNav(currentKey) {
-    return ADMIN_LINKS.map((l) => {
-      const current = l.key === currentKey ? ' aria-current="page"' : "";
-      return `<a href="${escapeHtml(l.href)}"${current}>${escapeHtml(l.label)}</a>`;
-    }).join("");
+  function adminNavHtml() {
+    return `<div class="team-admin-nav" id="adminNavRoot" hidden>
+      <button type="button" class="team-admin-nav-trigger" id="adminNavTrigger" aria-expanded="false" aria-haspopup="menu">
+        <span>Admin</span>
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <ul class="team-admin-nav-menu" id="adminNavMenu" role="menu" aria-label="Admin" hidden></ul>
+    </div>`;
   }
 
   function renderShellHtml(options) {
     const mode = options.mode || "employee";
-    const adminPage = options.adminPage || null;
     const showViewAs = Boolean(options.enableViewAs);
-
-    const adminRow =
-      mode === "admin"
-        ? `<nav class="team-header-nav team-header-nav-secondary" aria-label="Payroll admin">${adminSubNav(adminPage)}</nav>`
-        : "";
+    const showAdminNav = mode === "admin" || showViewAs;
 
     const viewAsHtml = showViewAs
       ? `<div class="team-view-as" id="viewAsRoot" hidden>
@@ -88,10 +111,10 @@
                 <img src="./assets/team-logo.png" alt="Team Vocational Services" width="220" height="80" />
               </a>
               <nav class="team-header-nav" aria-label="Main">${crossAppNav("payroll")}</nav>
-              ${adminRow}
             </div>
             <div class="team-header-right">
               ${viewAsHtml}
+              ${showAdminNav ? adminNavHtml() : ""}
               <a href="/logout" class="team-header-signout">Sign out</a>
             </div>
           </div>
@@ -99,7 +122,72 @@
       </header>`;
   }
 
-  function createViewAsController(root, onChange) {
+  function createAdminNavController(root, adminPage) {
+    const adminNavRoot = root.querySelector("#adminNavRoot");
+    const adminNavTrigger = root.querySelector("#adminNavTrigger");
+    const adminNavMenu = root.querySelector("#adminNavMenu");
+    if (!adminNavRoot || !adminNavTrigger || !adminNavMenu) {
+      return { setVisible() {}, renderMenu() {} };
+    }
+
+    let adminNavOpen = false;
+
+    function setAdminNavOpen(open) {
+      adminNavOpen = open;
+      adminNavTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+      adminNavMenu.hidden = !open;
+    }
+
+    function renderMenu() {
+      adminNavMenu.innerHTML = "";
+      for (const section of PAYROLL_ADMIN_SECTIONS) {
+        const heading = document.createElement("li");
+        heading.setAttribute("role", "presentation");
+        heading.className = "team-admin-nav-menu-heading";
+        heading.textContent = section.label;
+        adminNavMenu.appendChild(heading);
+
+        for (const item of section.items) {
+          const li = document.createElement("li");
+          li.setAttribute("role", "none");
+          const isCurrent = item.key && item.key === adminPage;
+          const link = document.createElement("a");
+          link.setAttribute("role", "menuitem");
+          link.className = `team-admin-nav-item${isCurrent ? " is-current" : ""}`;
+          link.href = item.href;
+          link.textContent = item.label;
+          if (item.external) {
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          }
+          link.addEventListener("click", () => setAdminNavOpen(false));
+          li.appendChild(link);
+          adminNavMenu.appendChild(li);
+        }
+      }
+    }
+
+    adminNavTrigger.addEventListener("click", () => {
+      const next = !adminNavOpen;
+      setAdminNavOpen(next);
+      if (next) renderMenu();
+    });
+
+    document.addEventListener("mousedown", (e) => {
+      if (adminNavRoot.hidden || !adminNavOpen) return;
+      if (!adminNavRoot.contains(e.target)) setAdminNavOpen(false);
+    });
+
+    return {
+      setVisible(visible) {
+        adminNavRoot.hidden = !visible;
+        if (!visible) setAdminNavOpen(false);
+      },
+      renderMenu,
+    };
+  }
+
+  function createViewAsController(root, onChange, adminNav) {
     const viewAsRoot = root.querySelector("#viewAsRoot");
     const viewAsTrigger = root.querySelector("#viewAsTrigger");
     const viewAsMenu = root.querySelector("#viewAsMenu");
@@ -356,11 +444,12 @@
       updateBanner(data) {
         updateImpersonationBanner(data);
       },
-      applyMyLeaveMeta(data) {
+        applyMyLeaveMeta(data) {
         if (data.isAdmin) {
           viewerEmployeeId = data.viewerEmployeeId || null;
           viewerDisplayName = data.viewerDisplayName || "Yourself";
           viewAsRoot.hidden = false;
+          adminNav?.setVisible(true);
         }
         if (data.impersonating && data.employeeId) {
           activeImpersonateId = data.employeeId;
@@ -375,6 +464,7 @@
           const status = r.ok ? await r.json() : null;
           if (status && status.canImpersonate) {
             viewAsRoot.hidden = false;
+            adminNav?.setVisible(true);
             if (status.impersonating && status.target) {
               updateImpersonationBanner({
                 impersonating: true,
@@ -404,7 +494,12 @@
     if (!root) return null;
 
     root.innerHTML = renderShellHtml(options);
-    const controller = createViewAsController(root, options.onViewAsChange);
+    const adminNav = createAdminNavController(root, options.adminPage || null);
+    if (options.mode === "admin") {
+      adminNav.setVisible(true);
+      adminNav.renderMenu();
+    }
+    const controller = createViewAsController(root, options.onViewAsChange, adminNav);
 
     if (options.mode === "admin") {
       controller.refreshFromImpersonateApi?.();
