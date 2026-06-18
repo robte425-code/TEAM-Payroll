@@ -1,4 +1,4 @@
-const { getPool } = require("../../lib/db");
+const { getPool } = require("../../../lib/db");
 
 function verifyInternalAccess(req) {
   const secret = process.env.TEAM_INTERNAL_ACCESS_SECRET?.trim();
