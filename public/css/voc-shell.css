@@ -1,0 +1,300 @@
+/* Voc hotline–aligned shell for member-facing TEAM pages (static HTML). */
+
+.voc-page {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #1c1917;
+  background: #fafaf9;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.voc-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
+  border-bottom: 1px solid rgba(231, 229, 228, 0.8);
+}
+
+.voc-header-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .voc-header-inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .voc-header-inner {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.voc-header-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.voc-logo-link {
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.9;
+  transition: opacity 0.15s ease;
+}
+
+.voc-logo-link:hover {
+  opacity: 1;
+}
+
+.voc-logo-link img {
+  height: 3.5rem;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+@media (min-width: 640px) {
+  .voc-logo-link img {
+    height: 4rem;
+  }
+}
+
+.voc-header-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  align-self: flex-end;
+}
+
+@media (min-width: 640px) {
+  .voc-header-end {
+    align-self: center;
+  }
+}
+
+.voc-greeting {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #57534e;
+  margin: 0;
+}
+
+.voc-header-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.voc-nav-btn {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: #57534e;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.voc-nav-btn:hover {
+  background: #fafaf9;
+  color: #1c1917;
+}
+
+.voc-nav-btn[aria-current="page"] {
+  background: #f5f5f4;
+  color: #1c1917;
+}
+
+.voc-nav-muted {
+  color: #78716c;
+}
+
+.voc-nav-muted:hover {
+  background: #f5f5f4;
+  color: #44403c;
+}
+
+.voc-main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2.5rem;
+}
+
+@media (min-width: 640px) {
+  .voc-main {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .voc-main {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.voc-page-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #1c1917;
+}
+
+.voc-page-lead {
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
+  color: #78716c;
+  max-width: 42rem;
+}
+
+.voc-error {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.voc-msg {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #78716c;
+}
+
+.voc-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 840px) {
+  .voc-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.voc-card {
+  border: 1px solid #e7e5e4;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.05);
+  padding: 1.25rem 1.25rem 1rem;
+}
+
+.voc-card-title {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1c1917;
+  letter-spacing: -0.01em;
+}
+
+.voc-stat {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.voc-stat dt {
+  margin: 0;
+  color: #78716c;
+  font-weight: 500;
+}
+
+.voc-stat dd {
+  margin: 0;
+  font-weight: 600;
+  color: #1c1917;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.voc-log-heading {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #78716c;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.voc-log-wrap {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid #e7e5e4;
+  border-radius: 0.5rem;
+  background: #fafaf9;
+  -webkit-overflow-scrolling: touch;
+}
+
+.voc-log-wrap table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.voc-log-wrap th,
+.voc-log-wrap td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  border-bottom: 1px solid #e7e5e4;
+}
+
+.voc-log-wrap th {
+  position: sticky;
+  top: 0;
+  background: #f5f5f4;
+  font-weight: 600;
+  color: #44403c;
+  font-size: 0.75rem;
+}
+
+.voc-log-wrap tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.voc-log-wrap tbody tr:hover {
+  background: #ffffff;
+}
+
+.voc-loading {
+  padding: 2rem 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #78716c;
+}

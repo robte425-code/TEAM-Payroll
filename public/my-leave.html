@@ -3,135 +3,97 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My PTO &amp; Sick time — TEAM Payroll</title>
-    <link rel="stylesheet" href="./css/app.css" />
-    <style>
-      .my-leave-greeting {
-        font-size: clamp(1.15rem, 2.5vw, 1.45rem);
-        font-weight: 600;
-        margin: 10px 0 18px;
-        letter-spacing: -0.02em;
-      }
-      .my-leave-grid {
-        display: grid;
-        gap: 14px;
-        grid-template-columns: 1fr;
-      }
-      @media (min-width: 840px) {
-        .my-leave-grid {
-          grid-template-columns: 1fr 1fr;
-          align-items: start;
-        }
-      }
-      .my-leave-stat {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 4px 12px;
-        margin: 0 0 12px;
-        font-size: 0.95rem;
-      }
-      .my-leave-stat dt {
-        margin: 0;
-        color: var(--muted);
-        font-weight: 500;
-      }
-      .my-leave-stat dd {
-        margin: 0;
-        font-weight: 600;
-        text-align: right;
-      }
-      .my-leave-log-wrap {
-        max-height: 280px;
-        overflow: auto;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-top: 8px;
-        -webkit-overflow-scrolling: touch;
-      }
-      .my-leave-log-wrap table {
-        margin: 0;
-        font-size: 0.85rem;
-        width: 100%;
-      }
-      .my-leave-log-wrap th,
-      .my-leave-log-wrap td {
-        padding: 6px 8px;
-      }
-    </style>
+    <title>Payroll — TEAM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/voc-shell.css" />
   </head>
-  <body>
-    <header class="site-header">
-      <div class="site-title">
-        <img src="./assets/team-logo.png" alt="TEAM Vocational Services" class="brand-logo" />
-        <span class="brand-divider">|</span>
-        <span class="brand-product">Payroll</span>
+  <body class="voc-page">
+    <header class="voc-header">
+      <div class="voc-header-inner">
+        <div class="voc-header-start">
+          <a href="./my-leave.html" class="voc-logo-link">
+            <img src="./assets/team-logo.png" alt="TEAM Vocational Services" />
+          </a>
+        </div>
+        <div class="voc-header-end">
+          <p id="greetingLine" class="voc-greeting" aria-live="polite"></p>
+          <nav class="voc-header-nav" aria-label="Account">
+            <a href="./my-leave.html" class="voc-nav-btn" aria-current="page">Refresh</a>
+            <a href="/logout" class="voc-nav-btn voc-nav-muted">Sign out</a>
+          </nav>
+        </div>
       </div>
-      <nav class="site-nav" aria-label="Main">
-        <a href="https://team-payroll.vercel.app/my-leave.html" aria-current="page">Refresh</a>
-        <a href="/logout">Logout</a>
-      </nav>
     </header>
 
-    <h1>My PTO &amp; Sick time</h1>
-    <p id="greetingLine" class="my-leave-greeting" aria-live="polite"></p>
-    <p id="pageErr" class="error"></p>
-    <p id="pageMsg" class="muted" aria-live="polite"></p>
+    <main class="voc-main">
+      <h1 class="voc-page-title">Payroll</h1>
+      <p class="voc-page-lead">Your PTO and sick time balances and activity logs.</p>
 
-    <div id="contentWrap" hidden>
-      <div class="my-leave-grid">
-        <div class="card">
-          <h3 style="margin-top: 0">PTO</h3>
-          <dl class="my-leave-stat">
-            <dt>YTD hours accrued including carryover</dt>
-            <dd id="ptoAccrued">—</dd>
-            <dt>YTD hours used</dt>
-            <dd id="ptoUsed">—</dd>
-            <dt>Available for use (hr)</dt>
-            <dd id="ptoAvail">—</dd>
-          </dl>
-          <h4 class="muted" style="margin: 12px 0 6px; font-size: 0.9rem; font-weight: 600">PTO log</h4>
-          <div class="my-leave-log-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Action</th>
-                  <th>Hours</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody id="ptoLogBody"></tbody>
-            </table>
-          </div>
-        </div>
+      <p id="pageErr" class="voc-error" hidden></p>
+      <p id="pageMsg" class="voc-msg" aria-live="polite"></p>
+      <p id="loadingLine" class="voc-loading">Loading your balances…</p>
 
-        <div class="card">
-          <h3 style="margin-top: 0">Sick time</h3>
-          <dl class="my-leave-stat">
-            <dt>YTD hours accrued including carryover</dt>
-            <dd id="sickAccrued">—</dd>
-            <dt>YTD hours used</dt>
-            <dd id="sickUsed">—</dd>
-            <dt>Available for use (hr)</dt>
-            <dd id="sickAvail">—</dd>
-          </dl>
-          <h4 class="muted" style="margin: 12px 0 6px; font-size: 0.9rem; font-weight: 600">Sick time log</h4>
-          <div class="my-leave-log-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Action</th>
-                  <th>Hours</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody id="sickLogBody"></tbody>
-            </table>
-          </div>
+      <div id="contentWrap" hidden>
+        <div class="voc-grid">
+          <section class="voc-card" aria-labelledby="ptoHeading">
+            <h2 id="ptoHeading" class="voc-card-title">PTO</h2>
+            <dl class="voc-stat">
+              <dt>YTD hours accrued including carryover</dt>
+              <dd id="ptoAccrued">—</dd>
+              <dt>YTD hours used</dt>
+              <dd id="ptoUsed">—</dd>
+              <dt>Available for use (hr)</dt>
+              <dd id="ptoAvail">—</dd>
+            </dl>
+            <h3 class="voc-log-heading">PTO log</h3>
+            <div class="voc-log-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Hours</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="ptoLogBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="voc-card" aria-labelledby="sickHeading">
+            <h2 id="sickHeading" class="voc-card-title">Sick time</h2>
+            <dl class="voc-stat">
+              <dt>YTD hours accrued including carryover</dt>
+              <dd id="sickAccrued">—</dd>
+              <dt>YTD hours used</dt>
+              <dd id="sickUsed">—</dd>
+              <dt>Available for use (hr)</dt>
+              <dd id="sickAvail">—</dd>
+            </dl>
+            <h3 class="voc-log-heading">Sick time log</h3>
+            <div class="voc-log-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Hours</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="sickLogBody"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </div>
-    </div>
+    </main>
 
     <script>
       function money2(n) {
@@ -152,12 +114,11 @@
 
       function greetingPrefix() {
         const h = new Date().getHours();
-        if (h < 12) return "Good morning";
-        if (h < 17) return "Good afternoon";
-        return "Good evening";
+        if (h < 12) return "Good morning,";
+        if (h < 17) return "Good afternoon,";
+        return "Good evening,";
       }
 
-      /** First word of display name for greetings (e.g. "Jane Doe" → "Jane"). */
       function firstNameFromDisplayName(fullName) {
         const s = String(fullName ?? "").trim().replace(/\s+/g, " ");
         if (!s) return "there";
@@ -177,7 +138,7 @@
         tbody.innerHTML = "";
         if (!rows || !rows.length) {
           const tr = document.createElement("tr");
-          tr.innerHTML = '<td colspan="4" class="muted">No log entries yet.</td>';
+          tr.innerHTML = '<td colspan="4" style="color:#78716c">No log entries yet.</td>';
           tbody.appendChild(tr);
           return;
         }
@@ -195,7 +156,9 @@
 
       (async () => {
         const errEl = document.getElementById("pageErr");
+        const msgEl = document.getElementById("pageMsg");
         const greetEl = document.getElementById("greetingLine");
+        const loadingEl = document.getElementById("loadingLine");
         const wrap = document.getElementById("contentWrap");
 
         try {
@@ -212,7 +175,7 @@
           }
 
           const firstName = firstNameFromDisplayName(data.employeeName);
-          greetEl.textContent = `${greetingPrefix()}, ${firstName}`;
+          greetEl.textContent = `${greetingPrefix()} ${firstName}`;
 
           document.getElementById("ptoAccrued").textContent = money2(data.ptoYtdHoursAccrued);
           document.getElementById("ptoUsed").textContent = money2(data.ptoYtdHoursUsed);
@@ -224,9 +187,12 @@
           renderLogRows(document.getElementById("ptoLogBody"), data.ptoLogs);
           renderLogRows(document.getElementById("sickLogBody"), data.sickLogs);
 
+          loadingEl.hidden = true;
           wrap.hidden = false;
         } catch (e) {
+          loadingEl.hidden = true;
           greetEl.textContent = "";
+          errEl.hidden = false;
           errEl.textContent = e.message || "Could not load your leave data.";
         }
       })();
