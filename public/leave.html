@@ -49,7 +49,12 @@
     <div id="team-shell-root"></div>
     <script src="./js/team-shell.js"></script>
     <script>
-      TeamShell.mount({ mode: "admin", adminPage: "leave" });
+      TeamShell.mount({
+        mode: "admin",
+        adminPage: "leave",
+        enableViewAs: true,
+        onViewAsChange: () => window.location.assign("./my-leave.html"),
+      });
     </script>
 
     <h1>PTO and Sick time management</h1>

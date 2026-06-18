@@ -17,7 +17,12 @@
     <div id="team-shell-root"></div>
     <script src="./js/team-shell.js"></script>
     <script>
-      TeamShell.mount({ mode: "admin", adminPage: "index" });
+      TeamShell.mount({
+        mode: "admin",
+        adminPage: "index",
+        enableViewAs: true,
+        onViewAsChange: () => window.location.assign("./my-leave.html"),
+      });
     </script>
 
     <h1>TEAM Payroll Analyzer</h1>

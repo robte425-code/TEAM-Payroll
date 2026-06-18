@@ -17,118 +17,28 @@
     <div id="team-shell-root"></div>
     <script src="./js/team-shell.js"></script>
     <script>
-      TeamShell.mount({ mode: "admin", adminPage: "access" });
+      TeamShell.mount({
+        mode: "admin",
+        adminPage: "access",
+        enableViewAs: true,
+        onViewAsChange: () => window.location.assign("./my-leave.html"),
+      });
     </script>
 
-    <h1>Access management</h1>
-    <p class="muted page-subtitle">
-      Controls which email addresses are allowed to sign in to TEAM Payroll.
-      Only admins can view/update this list.
-    </p>
-
-    <div class="card" style="max-width: 760px">
-      <p class="muted" style="margin-top: 0">
-        Provide one email per line (e.g. <code>robert@team-voc.com</code>).
-        Sign-in access is granted only for emails in this allowlist.
+    <main class="voc-main">
+      <h1 class="voc-page-title">Access management</h1>
+      <p class="voc-page-lead">
+        Payroll sign-in and admin access is managed centrally in Updates.
       </p>
-
-      <label for="allowedEmailsTextarea" class="muted" style="display: block; margin-top: 10px">
-        Allowed emails
-      </label>
-      <textarea
-        id="allowedEmailsTextarea"
-        rows="10"
-        spellcheck="false"
-        style="width: 100%; margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 13px"
-      ></textarea>
-
-      <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap">
-        <button type="button" id="loadAccessBtn">Load current list</button>
-        <button type="button" id="saveAccessBtn">Save</button>
+      <div class="voc-card" style="max-width: 42rem">
+        <p style="margin: 0 0 1rem; font-size: 0.875rem; color: #57534e">
+          Open
+          <a href="https://teamvoc-updates.vercel.app/manage/access" style="font-weight: 600; color: #1c1917"
+            >Access &amp; admins</a
+          >
+          on the Updates site to manage who can sign in to Payroll and who has admin access.
+        </p>
       </div>
-
-      <p id="msg" class="muted" aria-live="polite" style="margin-top: 10px"></p>
-      <p id="err" class="error" style="margin-top: 6px"></p>
-    </div>
-
-    <script>
-      const API = "/api/access";
-      const textarea = document.getElementById("allowedEmailsTextarea");
-      const msg = document.getElementById("msg");
-      const err = document.getElementById("err");
-
-      function flash(text, isError) {
-        msg.textContent = isError ? "" : text;
-        err.textContent = isError ? text : "";
-        if (!isError && text) {
-          setTimeout(() => {
-            if (msg.textContent === text) msg.textContent = "";
-          }, 3500);
-        }
-      }
-
-      async function apiJson(url, options) {
-        const r = await fetch(url, options);
-        const text = await r.text();
-        let data = {};
-        try {
-          data = text ? JSON.parse(text) : {};
-        } catch {
-          data = { error: text || "Invalid response" };
-        }
-        if (!r.ok) {
-          const m = data.error || data.message || text || `HTTP ${r.status}`;
-          throw new Error(m);
-        }
-        return data;
-      }
-
-      async function loadAccess() {
-        flash("Loading...", false);
-        try {
-          const d = await apiJson(API, { method: "GET" });
-          const list = Array.isArray(d.allowedEmails) ? d.allowedEmails : [];
-          textarea.value = list.join("\n");
-          flash("Loaded.");
-        } catch (e) {
-          flash(e.message || "Load failed.", true);
-        }
-      }
-
-      async function saveAccess() {
-        err.textContent = "";
-        msg.textContent = "";
-        const lines = String(textarea.value || "")
-          .split(/\r?\n/g)
-          .map((s) => s.trim())
-          .filter(Boolean);
-
-        const allowedEmails = Array.from(
-          new Set(
-            lines
-              .map((s) => s.toLowerCase())
-              .filter((s) => s.includes("@"))
-          )
-        );
-
-        try {
-          await apiJson(API, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ allowedEmails }),
-          });
-          flash("Saved.");
-          await loadAccess();
-        } catch (e) {
-          flash(e.message || "Save failed.", true);
-        }
-      }
-
-      document.getElementById("loadAccessBtn").addEventListener("click", loadAccess);
-      document.getElementById("saveAccessBtn").addEventListener("click", saveAccess);
-
-      loadAccess();
-    </script>
+    </main>
   </body>
 </html>
-

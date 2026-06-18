@@ -63,6 +63,9 @@ export default function middleware(req) {
   if (!authEnabled) {
     return NextResponse.next();
   }
+  if (req.nextUrl.pathname.startsWith("/api/internal/")) {
+    return NextResponse.next();
+  }
   return authMiddleware(req);
 }
 
@@ -84,5 +87,6 @@ export const config = {
     "/api/my-leave",
     "/api/impersonate",
     "/api/view-as-users",
+    "/api/internal/team-access",
   ],
 };

@@ -17,7 +17,12 @@
     <div id="team-shell-root"></div>
     <script src="./js/team-shell.js"></script>
     <script>
-      TeamShell.mount({ mode: "admin", adminPage: "rates" });
+      TeamShell.mount({
+        mode: "admin",
+        adminPage: "rates",
+        enableViewAs: true,
+        onViewAsChange: () => window.location.assign("./my-leave.html"),
+      });
     </script>
 
     <h1>Employee pay rates</h1>

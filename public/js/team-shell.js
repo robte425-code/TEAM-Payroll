@@ -420,7 +420,7 @@
     const controller = createViewAsController(root, options.onViewAsChange);
 
     if (options.mode === "admin") {
-      controller.refreshFromImpersonateApi();
+      controller.refreshFromImpersonateApi?.();
     }
 
     return controller;
