@@ -54,6 +54,39 @@
   align-items: center;
   gap: 1.5rem;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.voc-app-nav {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.voc-app-nav a {
+  display: inline-block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: #57534e;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.voc-app-nav a:hover {
+  background: #fafaf9;
+  color: #1c1917;
+}
+
+.voc-app-nav a[aria-current="page"],
+.voc-app-nav a.voc-nav-link-active {
+  background: #f5f5f4;
+  color: #1c1917;
 }
 
 .voc-logo-link {
