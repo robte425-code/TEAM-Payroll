@@ -3,35 +3,32 @@
  * Renders impersonation banner, cross-app header, and optional view-as.
  */
 (function (global) {
-  const UPDATES_URL = "https://teamvoc-updates.vercel.app/";
+  const UPDATES_URL = "https://teamvoc-updates.vercel.app";
   const PHONE_BOOK_URL = "https://teamvoc-updates.vercel.app/phone-book";
   const VOC_HOTLINE_URL = "https://voc-hotline-nine.vercel.app";
   const HR_URL = "https://team-hr.vercel.app";
 
   const ADMIN_LINKS = [
-    { href: "./my-leave.html", label: "Check my balances", key: "my-leave" },
+    { href: "./my-leave.html", label: "My balances", key: "my-leave" },
     { href: "./index.html", label: "Analyze spreadsheet", key: "index" },
     { href: "./rates.html", label: "Employee pay rates", key: "rates" },
-    { href: "./access.html", label: "Access management", key: "access" },
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
     { href: "./pay-stubs.html", label: "Pay stubs", key: "pay-stubs" },
+    { href: "./access.html", label: "Access management", key: "access" },
   ];
 
+  /** Matches @team/shell payrollAdminSections + full Updates admin links. */
   const PAYROLL_ADMIN_SECTIONS = [
     {
       label: "Admin",
       items: [
-        { href: UPDATES_URL, label: "Home", external: true },
-        {
-          href: "https://teamvoc-updates.vercel.app/manage/access",
-          label: "Access & Backups",
-          external: true,
-        },
-        {
-          href: "https://teamvoc-updates.vercel.app/manage/usage-stats",
-          label: "Usage stats",
-          external: true,
-        },
+        { href: `${UPDATES_URL}/`, label: "Home", external: true },
+        { href: `${UPDATES_URL}/manage/updates`, label: "Updates", external: true },
+        { href: `${UPDATES_URL}/manage/key-dates`, label: "Key dates", external: true },
+        { href: `${UPDATES_URL}/manage/ticker`, label: "Ticker", external: true },
+        { href: `${UPDATES_URL}/manage/reminders`, label: "Reminders", external: true },
+        { href: `${UPDATES_URL}/manage/access`, label: "Access & Backups", external: true },
+        { href: `${UPDATES_URL}/manage/usage-stats`, label: "Usage stats", external: true },
       ],
     },
     {
@@ -51,11 +48,11 @@
 
   function crossAppNav(currentApp) {
     const links = [
-      { href: UPDATES_URL, label: "Dashboard", key: "dashboard" },
+      { href: `${UPDATES_URL}/`, label: "Dashboard", key: "dashboard" },
       { href: "https://team-requests.vercel.app", label: "Requests", key: "requests" },
       { href: PHONE_BOOK_URL, label: "Phone book", key: "phone-book" },
       { href: VOC_HOTLINE_URL, label: "Voc hotline", key: "voc-hotline" },
-      { href: "./my-leave.html", label: "PTO", key: "payroll" },
+      { href: "./my-leave.html", label: "Payroll", key: "payroll" },
       { href: HR_URL, label: "HR", key: "hr" },
     ];
     return links
@@ -100,7 +97,7 @@
         <span>
           Viewing as <strong id="impersonationBannerName"></strong>
           <span class="team-impersonation-banner-email" id="impersonationBannerEmail"></span>
-          — you&apos;re seeing exactly what they see in this app.
+          — you&apos;re seeing exactly what they see.
         </span>
         <button type="button" id="impersonationBannerExit">Exit view-as</button>
       </div>
@@ -108,7 +105,7 @@
         <div class="team-header-border">
           <div class="team-header-bar">
             <div class="team-header-left">
-              <a href="${escapeHtml(UPDATES_URL)}" class="team-header-logo">
+              <a href="${escapeHtml(UPDATES_URL)}/" class="team-header-logo">
                 <img src="./assets/team-logo.png" alt="Team Vocational Services" width="220" height="80" />
               </a>
               <nav class="team-header-nav" aria-label="Main">${crossAppNav("payroll")}</nav>
@@ -450,7 +447,7 @@
           viewerEmployeeId = data.viewerEmployeeId || null;
           viewerDisplayName = data.viewerDisplayName || "Yourself";
           viewAsRoot.hidden = false;
-          adminNav?.setVisible(true);
+          adminNav?.setVisible(!data.impersonating);
         }
         if (data.impersonating && data.employeeId) {
           activeImpersonateId = data.employeeId;
@@ -465,7 +462,7 @@
           const status = r.ok ? await r.json() : null;
           if (status && status.canImpersonate) {
             viewAsRoot.hidden = false;
-            adminNav?.setVisible(true);
+            adminNav?.setVisible(!status.impersonating);
             if (status.impersonating && status.target) {
               updateImpersonationBanner({
                 impersonating: true,
@@ -475,10 +472,12 @@
             } else {
               updateImpersonationBanner({ impersonating: false });
             }
+            return true;
           }
         } catch {
           /* ignore */
         }
+        return false;
       },
     };
   }
@@ -497,13 +496,14 @@
     root.innerHTML = renderShellHtml(options);
     const adminNav = createAdminNavController(root, options.adminPage || null);
     if (options.mode === "admin") {
-      adminNav.setVisible(true);
       adminNav.renderMenu();
     }
     const controller = createViewAsController(root, options.onViewAsChange, adminNav);
 
     if (options.mode === "admin") {
-      controller.refreshFromImpersonateApi?.();
+      void controller.refreshFromImpersonateApi?.().then((handled) => {
+        if (!handled) adminNav.setVisible(true);
+      });
     }
 
     return controller;
