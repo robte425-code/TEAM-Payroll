@@ -1,6 +1,6 @@
 /**
  * Shared TEAM shell for Payroll static HTML pages.
- * Renders impersonation banner, cross-app header, optional view-as, and greeting.
+ * Renders impersonation banner, cross-app header, and optional view-as.
  */
 (function (global) {
   const UPDATES_URL = "https://teamvoc-updates.vercel.app/";
@@ -15,19 +15,6 @@
     { href: "./access.html", label: "Access management", key: "access" },
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
   ];
-
-  function greetingPrefix() {
-    const h = new Date().getHours();
-    if (h < 12) return "Good morning,";
-    if (h < 17) return "Good afternoon,";
-    return "Good evening,";
-  }
-
-  function firstNameFromDisplayName(fullName) {
-    const s = String(fullName ?? "").trim().replace(/\s+/g, " ");
-    if (!s) return "there";
-    return s.split(" ")[0] || "there";
-  }
 
   function escapeHtml(s) {
     return String(s ?? "")
@@ -103,7 +90,6 @@
               ${adminRow}
             </div>
             <div class="team-header-right">
-              <span id="greetingLine" class="team-header-greeting" aria-live="polite"></span>
               ${viewAsHtml}
               <a href="/logout" class="team-header-signout">Sign out</a>
             </div>
@@ -120,13 +106,10 @@
     const impersonationBannerName = root.querySelector("#impersonationBannerName");
     const impersonationBannerEmail = root.querySelector("#impersonationBannerEmail");
     const impersonationBannerExit = root.querySelector("#impersonationBannerExit");
-    const greetEl = root.querySelector("#greetingLine");
 
     if (!viewAsRoot || !viewAsTrigger || !viewAsMenu) {
       return {
-        setGreeting(name) {
-          if (greetEl) greetEl.textContent = `${greetingPrefix()} ${firstNameFromDisplayName(name)}`;
-        },
+        setGreeting() {},
         updateBanner(data) {
           updateImpersonationBanner(data);
         },
@@ -143,11 +126,6 @@
               });
             } else {
               updateImpersonationBanner({ impersonating: false });
-            }
-            if (status?.effective?.name) {
-              this.setGreeting(status.effective.name);
-            } else if (status?.real?.name) {
-              this.setGreeting(status.real.name);
             }
           } catch {
             /* ignore */
@@ -373,9 +351,7 @@
     }
 
     return {
-      setGreeting(name) {
-        if (greetEl) greetEl.textContent = `${greetingPrefix()} ${firstNameFromDisplayName(name)}`;
-      },
+      setGreeting() {},
       updateBanner(data) {
         updateImpersonationBanner(data);
       },
@@ -406,9 +382,6 @@
               });
             } else {
               updateImpersonationBanner({ impersonating: false });
-            }
-            if (status.effective?.name) {
-              this.setGreeting(status.effective.name);
             }
           }
         } catch {
@@ -441,7 +414,5 @@
 
   global.TeamShell = {
     mount,
-    greetingPrefix,
-    firstNameFromDisplayName,
   };
 })(typeof window !== "undefined" ? window : globalThis);
