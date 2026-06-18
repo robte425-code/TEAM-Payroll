@@ -10,7 +10,12 @@ const authEnabled = Boolean(
 );
 
 function isMemberAllowedPath(pathname) {
-  return pathname === "/my-leave.html" || pathname.startsWith("/api/my-leave");
+  return (
+    pathname === "/my-leave.html" ||
+    pathname.startsWith("/api/my-leave") ||
+    pathname === "/api/impersonate" ||
+    pathname === "/api/view-as-users"
+  );
 }
 
 function isAdminToken(token) {

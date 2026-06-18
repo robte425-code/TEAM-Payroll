@@ -333,11 +333,24 @@
       renderViewAsMenu();
       closeViewAsMenu();
       try {
-        await fetch("/api/impersonate", { method: "DELETE", credentials: "same-origin" });
+        const r = await fetch("/api/impersonate", { method: "DELETE", credentials: "same-origin" });
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          throw new Error(data.error || "Could not exit view-as");
+        }
         activeImpersonateId = "";
-        if (typeof onChange === "function") await onChange();
+        updateImpersonationBanner({ impersonating: false });
+        if (typeof onChange === "function") {
+          await onChange();
+        } else {
+          window.location.reload();
+        }
+      } catch (e) {
+        console.error(e);
+        window.alert(e.message || "Could not exit view-as");
       } finally {
         busyEmployeeId = null;
+        renderViewAsMenu();
       }
     }
 
