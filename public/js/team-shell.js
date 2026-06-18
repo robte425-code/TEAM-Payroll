@@ -14,7 +14,6 @@
     { href: "./rates.html", label: "Employee pay rates", key: "rates" },
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
     { href: "./pay-stubs.html", label: "Pay stubs", key: "pay-stubs" },
-    { href: "./access.html", label: "Access management", key: "access" },
   ];
 
   /** Matches @team/shell payrollAdminSections + full Updates admin links. */

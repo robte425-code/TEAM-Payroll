@@ -80,7 +80,6 @@ export const config = {
     "/",
     "/index.html",
     "/rates.html",
-    "/access.html",
     "/leave.html",
     "/my-leave.html",
     "/pay-stubs.html",
