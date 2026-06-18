@@ -27,6 +27,7 @@
 
   function crossAppNav(currentApp) {
     const links = [
+      { href: UPDATES_URL, label: "Dashboard", key: "dashboard" },
       { href: "https://team-requests.vercel.app", label: "Requests", key: "requests" },
       { href: PHONE_BOOK_URL, label: "Phone book", key: "phone-book" },
       { href: VOC_HOTLINE_URL, label: "Voc hotline", key: "voc-hotline" },
