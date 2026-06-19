@@ -86,6 +86,7 @@
             <table>
               <thead>
                 <tr>
+                  <th>Name</th>
                   <th>Check date</th>
                   <th>Pay period</th>
                   <th></th>
@@ -179,6 +180,7 @@
               ? `${formatDate(stub.payPeriodStart)} – ${formatDate(stub.payPeriodEnd)}`
               : formatDate(stub.payPeriodStart || stub.payPeriodEnd);
           tr.innerHTML = `
+            <td>${escapeHtml(stub.employeeName || stub.extractedName || "—")}</td>
             <td>${escapeHtml(formatDate(stub.checkDate))}</td>
             <td>${escapeHtml(period)}</td>
             <td><a href="${escapeHtml(stub.downloadUrl)}">Download PDF</a></td>
