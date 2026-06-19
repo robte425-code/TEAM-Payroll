@@ -13,23 +13,11 @@
     { href: "./index.html", label: "Analyze spreadsheet", key: "index" },
     { href: "./rates.html", label: "Employee pay rates", key: "rates" },
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
-    { href: "./pay-stubs.html", label: "Pay stubs", key: "pay-stubs" },
+    { href: "./pay-stubs.html", label: "Upload paystubs", key: "pay-stubs" },
   ];
 
-  /** Matches @team/shell payrollAdminSections + full Updates admin links. */
+  /** Matches @team/shell payrollAdminSections. */
   const PAYROLL_ADMIN_SECTIONS = [
-    {
-      label: "Admin",
-      items: [
-        { href: `${UPDATES_URL}/`, label: "Home", external: true },
-        { href: `${UPDATES_URL}/manage/updates`, label: "Updates", external: true },
-        { href: `${UPDATES_URL}/manage/key-dates`, label: "Key dates", external: true },
-        { href: `${UPDATES_URL}/manage/ticker`, label: "Ticker", external: true },
-        { href: `${UPDATES_URL}/manage/reminders`, label: "Reminders", external: true },
-        { href: `${UPDATES_URL}/manage/access`, label: "Access & Backups", external: true },
-        { href: `${UPDATES_URL}/manage/usage-stats`, label: "Usage stats", external: true },
-      ],
-    },
     {
       label: "Payroll",
       items: ADMIN_LINKS,
