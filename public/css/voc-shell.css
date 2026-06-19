@@ -565,6 +565,13 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Scroll after 10 data rows; header row stays sticky via .voc-log-wrap th */
+.voc-log-wrap-10 {
+  --voc-log-row-height: 2.25rem;
+  --voc-log-header-height: 2.25rem;
+  max-height: calc(var(--voc-log-header-height) + 10 * var(--voc-log-row-height));
+}
+
 .voc-log-wrap table {
   width: 100%;
   margin: 0;
