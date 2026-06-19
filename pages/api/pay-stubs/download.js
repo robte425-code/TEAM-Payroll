@@ -1,4 +1,5 @@
 const { getAuthContext } = require("../../../lib/pay-stub-auth");
+const { logPayStubDownload } = require("../../../lib/log-pay-stub-download");
 
 function getStubId(req) {
   const raw = req.query?.id;
@@ -40,14 +41,16 @@ export default async function handler(req, res) {
     return res.status(ctx.error.status).json({ error: ctx.error.message });
   }
 
-  const { pool, isAdmin, impersonating, employeeId } = ctx;
+  const { pool, isAdmin, impersonating, employeeId, realEmail, effectiveEmail } = ctx;
 
   try {
     const r = await pool.query(
       `SELECT s.id, s.pdf_data, s.extracted_name, s.employee_id,
-              b.check_date, b.pay_period_start, b.pay_period_end
+              b.check_date, b.pay_period_start, b.pay_period_end,
+              e.display_name AS employee_name
        FROM payroll.pay_stubs s
        JOIN payroll.pay_stub_batches b ON b.id = s.batch_id
+       LEFT JOIN payroll.employees e ON e.id = s.employee_id
        WHERE s.id = $1::uuid
        LIMIT 1`,
       [stubId]
@@ -63,6 +66,25 @@ export default async function handler(req, res) {
     if (!ownsStub && !adminDirect) {
       res.setHeader("Content-Type", "application/json");
       return res.status(403).json({ error: "Forbidden" });
+    }
+
+    try {
+      await logPayStubDownload(pool, {
+        payStubId: row.id,
+        payStubEmployeeId: row.employee_id,
+        stubEmployeeName: row.employee_name || row.extracted_name,
+        checkDate: row.check_date,
+        payPeriodStart: row.pay_period_start,
+        payPeriodEnd: row.pay_period_end,
+        sessionEmail: realEmail,
+        effectiveEmail,
+        impersonating,
+        userAgent: req.headers["user-agent"],
+      });
+    } catch (logErr) {
+      if (logErr.code !== "42P01") {
+        console.error("pay stub download log failed:", logErr);
+      }
     }
 
     const pdf = row.pdf_data;

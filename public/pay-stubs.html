@@ -71,6 +71,30 @@
           </div>
         </div>
       </section>
+
+      <section class="voc-card" style="margin-top: 1rem">
+        <h2 class="voc-card-title">Download log</h2>
+        <p class="voc-page-lead" style="margin-bottom: 0.75rem">
+          Every pay stub PDF download is recorded (employees, admins, and view-as sessions).
+        </p>
+        <p id="logLoading" class="voc-loading">Loading download log…</p>
+        <div id="logWrap" hidden>
+          <div class="voc-log-wrap" style="max-height: none">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Employee</th>
+                  <th>Check date</th>
+                  <th>Downloaded by</th>
+                  <th>View-as</th>
+                </tr>
+              </thead>
+              <tbody id="downloadLogBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </main>
 
     <script>
@@ -96,6 +120,65 @@
         if (!start && !end) return "—";
         if (start && end) return `${formatDate(start)} – ${formatDate(end)}`;
         return formatDate(start || end);
+      }
+
+      function formatDateTime(iso) {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString(undefined, {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+      }
+
+      function formatDownloader(entry) {
+        const session = entry.sessionEmail || "—";
+        if (entry.impersonating && entry.effectiveEmail && entry.effectiveEmail !== session) {
+          return `${session} (as ${entry.effectiveEmail})`;
+        }
+        return session;
+      }
+
+      async function loadDownloadLog() {
+        const loading = document.getElementById("logLoading");
+        const wrap = document.getElementById("logWrap");
+        const tbody = document.getElementById("downloadLogBody");
+        loading.hidden = false;
+        wrap.hidden = true;
+        tbody.innerHTML = "";
+
+        const r = await fetch("/api/pay-stubs/download-log", { credentials: "same-origin" });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "Could not load download log");
+
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        loading.hidden = true;
+        wrap.hidden = false;
+
+        if (!entries.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="color:#78716c">No downloads recorded yet.</td></tr>';
+          return;
+        }
+
+        for (const entry of entries) {
+          const tr = document.createElement("tr");
+          const viewAs = entry.impersonating
+            ? `<span style="color:#b45309">Yes</span>`
+            : `<span style="color:#78716c">No</span>`;
+          tr.innerHTML = `
+            <td>${escapeHtml(formatDateTime(entry.downloadedAt))}</td>
+            <td>${escapeHtml(entry.stubEmployeeName || "—")}</td>
+            <td>${escapeHtml(formatDate(entry.checkDate))}</td>
+            <td>${escapeHtml(formatDownloader(entry))}</td>
+            <td>${viewAs}</td>
+          `;
+          tbody.appendChild(tr);
+        }
       }
 
       async function loadList() {
@@ -169,6 +252,7 @@
           msg.textContent = data.message || "Upload complete.";
           fileInput.value = "";
           await loadList();
+          await loadDownloadLog();
         } catch (ex) {
           err.hidden = false;
           err.textContent = ex.message || "Upload failed";
@@ -178,11 +262,12 @@
         }
       });
 
-      loadList().catch((e) => {
+      Promise.all([loadList(), loadDownloadLog()]).catch((e) => {
         document.getElementById("listLoading").hidden = true;
+        document.getElementById("logLoading").hidden = true;
         const err = document.getElementById("uploadErr");
         err.hidden = false;
-        err.textContent = e.message || "Could not load list";
+        err.textContent = e.message || "Could not load page data";
       });
     </script>
   </body>
