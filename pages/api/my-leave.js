@@ -82,7 +82,7 @@ export default async function handler(req, res) {
   try {
     let emp;
     let impersonating = false;
-    const ownEmp = isAdmin ? await findEmployeeByEmail(pool, email) : null;
+    const ownEmp = await findEmployeeByEmail(pool, email);
     const viewerInfo = isAdmin
       ? {
           viewerEmployeeId: ownEmp?.id ?? null,
