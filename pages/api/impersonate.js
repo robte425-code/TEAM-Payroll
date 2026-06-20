@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       }
     }
     return res.status(200).json({
-      canImpersonate: true,
+      canImpersonate: !impersonating,
       impersonating,
       real: { email: realEmail, name: token.name || realEmail },
       effective: {

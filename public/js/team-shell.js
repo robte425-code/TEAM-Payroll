@@ -433,7 +433,7 @@
         if (data.isAdmin) {
           viewerEmployeeId = data.viewerEmployeeId || null;
           viewerDisplayName = data.viewerDisplayName || "Yourself";
-          viewAsRoot.hidden = false;
+          viewAsRoot.hidden = Boolean(data.impersonating);
           adminNav?.setVisible(!data.impersonating);
         }
         if (data.impersonating && data.employeeId) {
@@ -447,9 +447,9 @@
         try {
           const r = await fetch("/api/impersonate", { credentials: "same-origin", cache: "no-store" });
           const status = r.ok ? await r.json() : null;
-          if (status && status.canImpersonate) {
-            viewAsRoot.hidden = false;
-            adminNav?.setVisible(!status.impersonating);
+          if (status) {
+            viewAsRoot.hidden = !status.canImpersonate;
+            adminNav?.setVisible(Boolean(status.canImpersonate));
             if (status.impersonating && status.target) {
               updateImpersonationBanner({
                 impersonating: true,
