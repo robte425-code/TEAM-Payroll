@@ -6,6 +6,7 @@ const { getToken } = require("next-auth/jwt");
 const { getPool } = require("../../../lib/db");
 const { splitPayStubPdf } = require("../../../lib/pay-stub-pdf");
 const { matchEmployeeByName } = require("../../../lib/match-employee-name");
+const { respondAuthMisconfigured } = require("../../../lib/authConfig");
 
 export const config = {
   api: {
@@ -44,6 +45,8 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (respondAuthMisconfigured(res)) return;
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token || token.role !== "admin") {

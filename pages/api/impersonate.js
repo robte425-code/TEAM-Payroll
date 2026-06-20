@@ -6,6 +6,7 @@ const {
   setCookieHeader,
   clearCookieHeader,
 } = require("../../lib/impersonation");
+const { respondAuthMisconfigured } = require("../../lib/authConfig");
 
 async function requireAdmin(req) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -17,6 +18,7 @@ async function requireAdmin(req) {
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
+  if (respondAuthMisconfigured(res)) return;
 
   const admin = await requireAdmin(req);
   const token = admin.token;

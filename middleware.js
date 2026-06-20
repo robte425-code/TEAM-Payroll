@@ -1,13 +1,18 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import { authEnabled, authMisconfiguredInProduction } from "./lib/authConfig";
 
 const IMPERSONATE_COOKIE = "team_impersonate";
 
-const authEnabled = Boolean(
-  process.env.NEXTAUTH_SECRET &&
-    process.env.AZURE_AD_CLIENT_ID &&
-    process.env.AZURE_AD_CLIENT_SECRET
-);
+function authMisconfiguredResponse(req) {
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Authentication is not configured" }, { status: 503 });
+  }
+  return new NextResponse("Authentication is not configured", {
+    status: 503,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
 
 function isMemberAllowedPath(pathname) {
   return (
@@ -66,6 +71,9 @@ const authMiddleware = withAuth(
 );
 
 export default function middleware(req) {
+  if (authMisconfiguredInProduction()) {
+    return authMisconfiguredResponse(req);
+  }
   if (!authEnabled) {
     return NextResponse.next();
   }

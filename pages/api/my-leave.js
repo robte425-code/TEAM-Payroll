@@ -7,6 +7,7 @@ const {
   fetchLeaveDataForEmployee,
 } = require("../../lib/my-leave-data");
 const { readImpersonateEmail } = require("../../lib/impersonation");
+const { respondAuthMisconfigured } = require("../../lib/authConfig");
 
 function getQueryEmployeeId(req) {
   const raw = req.query?.employeeId;
@@ -38,9 +39,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  if (respondAuthMisconfigured(res)) return;
+
   const secret = process.env.NEXTAUTH_SECRET;
   if (!secret) {
-    return res.status(500).json({ error: "Auth not configured" });
+    return res.status(503).json({ error: "Auth not configured" });
   }
 
   let token;

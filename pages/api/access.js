@@ -1,6 +1,7 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 const { getToken } = require("next-auth/jwt");
+const { respondAuthMisconfigured } = require("../../lib/authConfig");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -46,6 +47,7 @@ function normalizeEmail(s) {
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
+  if (respondAuthMisconfigured(res)) return;
 
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");

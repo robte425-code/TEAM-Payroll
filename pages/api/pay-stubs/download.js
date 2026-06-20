@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing id" });
   }
 
-  const ctx = await getAuthContext(req);
+  const ctx = await getAuthContext(req, res);
   if (ctx.error) {
     res.setHeader("Content-Type", "application/json");
     return res.status(ctx.error.status).json({ error: ctx.error.message });

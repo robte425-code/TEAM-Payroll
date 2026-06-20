@@ -1,11 +1,13 @@
 const { getToken } = require("next-auth/jwt");
 const { getPool } = require("../../lib/db");
+const { respondAuthMisconfigured } = require("../../lib/authConfig");
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
   }
+  if (respondAuthMisconfigured(res)) return;
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token || token.role !== "admin") {

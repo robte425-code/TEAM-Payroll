@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const ctx = await getAuthContext(req);
+  const ctx = await getAuthContext(req, res);
   if (ctx.error) {
     return res.status(ctx.error.status).json({ error: ctx.error.message });
   }
