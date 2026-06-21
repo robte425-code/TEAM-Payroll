@@ -7,24 +7,26 @@ const {
   clearCookieHeader,
 } = require("../../lib/impersonation");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
-
-async function requireAdmin(req) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token || token.role !== "admin") {
-    return { ok: false, token: null };
-  }
-  return { ok: true, token };
-}
+const { requireRealAdmin, resolveIsAdmin } = require("../../lib/apiAuth");
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   if (respondAuthMisconfigured(res)) return;
 
-  const admin = await requireAdmin(req);
-  const token = admin.token;
+  const secret = process.env.NEXTAUTH_SECRET;
+  let token = null;
+  if (secret) {
+    try {
+      token = await getToken({ req, secret });
+    } catch {
+      token = null;
+    }
+  }
 
   if (req.method === "GET") {
-    if (!admin.ok) {
+    const email = String(token?.email || "").trim().toLowerCase();
+    const isAdmin = email ? await resolveIsAdmin(email) : false;
+    if (!isAdmin) {
       return res.status(200).json({
         canImpersonate: false,
         impersonating: false,
@@ -33,7 +35,7 @@ export default async function handler(req, res) {
         target: null,
       });
     }
-    const realEmail = String(token.email || "").toLowerCase();
+    const realEmail = email;
     const targetEmail = readImpersonateEmail(req);
     const impersonating = Boolean(targetEmail && targetEmail !== realEmail);
     let effectiveName = token.name || realEmail;
@@ -60,7 +62,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (!admin.ok) return res.status(403).json({ error: "Forbidden" });
+    const admin = await requireRealAdmin(req, res);
+    if (!admin) return;
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const employeeId = body.employeeId ? String(body.employeeId) : "";
     let email = body.email ? String(body.email).trim().toLowerCase() : "";
@@ -76,7 +79,7 @@ export default async function handler(req, res) {
     if (!email || !email.includes("@")) {
       return res.status(400).json({ error: "A valid email or employeeId is required." });
     }
-    if (email === String(token.email).toLowerCase()) {
+    if (email === admin.email) {
       return res.status(400).json({ error: "That's already you" });
     }
     res.setHeader("Set-Cookie", setCookieHeader(email));
@@ -84,6 +87,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
+    const admin = await requireRealAdmin(req, res);
+    if (!admin) return;
     res.setHeader("Set-Cookie", clearCookieHeader());
     return res.status(200).json({ ok: true });
   }

@@ -2,11 +2,11 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { IncomingForm } = require("formidable");
-const { getToken } = require("next-auth/jwt");
 const { getPool } = require("../../../lib/db");
 const { splitPayStubPdf } = require("../../../lib/pay-stub-pdf");
 const { matchEmployeeByName } = require("../../../lib/match-employee-name");
 const { respondAuthMisconfigured } = require("../../../lib/authConfig");
+const { requireRealAdmin } = require("../../../lib/apiAuth");
 
 export const config = {
   api: {
@@ -48,10 +48,8 @@ export default async function handler(req, res) {
 
   if (respondAuthMisconfigured(res)) return;
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token || token.role !== "admin") {
-    return res.status(403).json({ error: "Admin access required" });
-  }
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   let uploaded;
   try {

@@ -8,6 +8,7 @@ const {
 } = require("../../lib/my-leave-data");
 const { readImpersonateEmail } = require("../../lib/impersonation");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
+const { resolveIsAdmin } = require("../../lib/apiAuth");
 
 function getQueryEmployeeId(req) {
   const raw = req.query?.employeeId;
@@ -57,7 +58,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const isAdmin = token?.role === "admin";
+  const isAdmin = await resolveIsAdmin(email);
   let impersonateId = getQueryEmployeeId(req);
 
   if (impersonateId && !isUuid(impersonateId)) {

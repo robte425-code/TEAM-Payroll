@@ -1,6 +1,7 @@
 const { getToken } = require("next-auth/jwt");
 const { getPool } = require("../../lib/db");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
+const { requireRealAdmin } = require("../../lib/apiAuth");
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,10 +10,8 @@ export default async function handler(req, res) {
   }
   if (respondAuthMisconfigured(res)) return;
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token || token.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   try {
     const pool = getPool();

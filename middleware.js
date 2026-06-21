@@ -93,7 +93,6 @@ export const config = {
     "/pay-stubs.html",
     "/api/employees/:path*",
     "/api/settings",
-    "/api/access",
     "/api/leave-record",
     "/api/leave-ytd",
     "/api/leave-logs",
