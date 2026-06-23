@@ -56,7 +56,7 @@
     if (!link) return;
 
     try {
-      const r = await fetch("/api/pay-stubs/unread", { credentials: "same-origin", cache: "no-store" });
+      const r = await fetch("/api/payroll-unread", { credentials: "same-origin", cache: "no-store" });
       const data = r.ok ? await r.json().catch(() => ({})) : {};
       link.classList.toggle("has-unread-paystub", Boolean(data.hasUnreadPayStub));
       if (data.hasUnreadPayStub) {
