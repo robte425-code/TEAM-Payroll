@@ -173,7 +173,8 @@
         }
         emptyEl.hidden = true;
         wrap.hidden = false;
-        for (const stub of stubs) {
+        for (let i = 0; i < stubs.length; i++) {
+          const stub = stubs[i];
           const tr = document.createElement("tr");
           const period =
             stub.payPeriodStart && stub.payPeriodEnd
@@ -183,7 +184,7 @@
             <td>${escapeHtml(stub.employeeName || stub.extractedName || "—")}</td>
             <td>${escapeHtml(formatDate(stub.checkDate))}</td>
             <td>${escapeHtml(period)}</td>
-            <td><a href="${escapeHtml(stub.downloadUrl)}">Download PDF</a></td>
+            <td><a class="js-pay-stub-download" href="${escapeHtml(stub.downloadUrl)}">Download PDF</a></td>
           `;
           tbody.appendChild(tr);
         }
@@ -256,6 +257,12 @@
           mode: "employee",
           enableViewAs: true,
           onViewAsChange: refreshView,
+        });
+
+        document.getElementById("payStubsBody").addEventListener("click", (e) => {
+          const link = e.target.closest("a.js-pay-stub-download");
+          if (!link) return;
+          window.setTimeout(() => TeamShell.refreshPayrollNavBadge?.(), 2000);
         });
 
         await refreshView();

@@ -112,6 +112,34 @@
   color: #1c1917;
 }
 
+.team-header-nav a.has-unread-paystub {
+  background: #fff7ed;
+  color: #9a3412;
+  box-shadow: inset 0 0 0 1px #fdba74;
+}
+
+.team-header-nav a.has-unread-paystub:hover {
+  background: #ffedd5;
+  color: #7c2d12;
+}
+
+.team-header-nav a.has-unread-paystub[aria-current="page"] {
+  background: #ffedd5;
+  color: #7c2d12;
+  box-shadow: inset 0 0 0 1px #fb923c;
+}
+
+.team-header-nav a.has-unread-paystub::after {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: 0.375rem;
+  border-radius: 9999px;
+  background: #ea580c;
+  vertical-align: middle;
+}
+
 .team-header-nav-secondary {
   flex-basis: 100%;
   padding-top: 0.25rem;

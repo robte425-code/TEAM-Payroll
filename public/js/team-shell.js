@@ -45,9 +45,32 @@
     return links
       .map((l) => {
         const current = l.key === currentApp ? ' aria-current="page"' : "";
-        return `<a href="${escapeHtml(l.href)}"${current}>${escapeHtml(l.label)}</a>`;
+        const idAttr = l.key === "payroll" ? ' id="teamNavPayroll" data-nav-key="payroll"' : "";
+        return `<a href="${escapeHtml(l.href)}"${idAttr}${current}>${escapeHtml(l.label)}</a>`;
       })
       .join("");
+  }
+
+  async function refreshPayrollNavBadge() {
+    const link = document.getElementById("teamNavPayroll");
+    if (!link) return;
+
+    try {
+      const r = await fetch("/api/pay-stubs/unread", { credentials: "same-origin", cache: "no-store" });
+      const data = r.ok ? await r.json().catch(() => ({})) : {};
+      link.classList.toggle("has-unread-paystub", Boolean(data.hasUnreadPayStub));
+      if (data.hasUnreadPayStub) {
+        link.setAttribute(
+          "title",
+          data.checkDate ? `New pay stub for ${String(data.checkDate).slice(0, 10)}` : "New pay stub available"
+        );
+      } else {
+        link.removeAttribute("title");
+      }
+    } catch {
+      link.classList.remove("has-unread-paystub");
+      link.removeAttribute("title");
+    }
   }
 
   function adminNavHtml() {
@@ -372,6 +395,7 @@
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || "Could not switch user");
         if (typeof onChange === "function") await onChange();
+        void refreshPayrollNavBadge();
       } catch (e) {
         console.error(e);
         throw e;
@@ -397,6 +421,7 @@
         } else {
           window.location.reload();
         }
+        void refreshPayrollNavBadge();
       } catch (e) {
         console.error(e);
         window.alert(e.message || "Could not exit view-as");
@@ -442,6 +467,7 @@
           activeImpersonateId = "";
         }
         updateImpersonationBanner(data);
+        void refreshPayrollNavBadge();
       },
       async refreshFromImpersonateApi() {
         try {
@@ -459,6 +485,7 @@
             } else {
               updateImpersonationBanner({ impersonating: false });
             }
+            void refreshPayrollNavBadge();
             return true;
           }
         } catch {
@@ -493,10 +520,13 @@
       });
     }
 
+    void refreshPayrollNavBadge();
+
     return controller;
   }
 
   global.TeamShell = {
     mount,
+    refreshPayrollNavBadge,
   };
 })(typeof window !== "undefined" ? window : globalThis);
