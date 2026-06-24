@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         split.payPeriodStart,
         split.payPeriodEnd,
         uploaded.originalFilename,
-        String(token.email || "").toLowerCase(),
+        admin.email,
         split.pageCount,
       ]
     );
