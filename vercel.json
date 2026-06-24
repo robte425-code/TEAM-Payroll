@@ -1,6 +1,9 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm install",
   "framework": "nextjs",
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "functions": {
+    "pages/api/internal/database-backup.js": {
+      "maxDuration": 300
+    }
+  }
 }
