@@ -27,7 +27,9 @@
 
     <main class="voc-main">
       <h1 class="voc-page-title">Backup</h1>
-      <p class="voc-page-lead">Download a SQL backup of the payroll database.</p>
+      <p class="voc-page-lead">
+        Download or restore a SQL backup of the payroll database.
+      </p>
 
       <section class="voc-card" style="max-width: 42rem">
         <h2 class="voc-card-title">Database backup</h2>
@@ -41,18 +43,57 @@
           connections.
         </p>
         <p style="margin: 0">
-          <a id="downloadBackupBtn" href="#">Download database backup</a>
+          <button type="button" id="downloadBackupBtn">Download database backup</button>
         </p>
         <p id="backupMsg" class="voc-msg" aria-live="polite" style="margin-top: 0.75rem"></p>
         <p id="backupErr" class="voc-error" hidden style="margin-top: 0.75rem"></p>
       </section>
+
+      <section
+        class="voc-card"
+        style="max-width: 42rem; margin-top: 1rem; border-color: #fcd34d; background: #fffbeb"
+      >
+        <h2 class="voc-card-title">Restore database backup</h2>
+        <p class="voc-page-lead" style="margin-bottom: 0.75rem">
+          Warning: this replaces all current data in the <code>payroll</code> schema with the
+          uploaded backup file.
+        </p>
+        <form id="restoreForm">
+          <label for="restoreFile" class="voc-page-lead" style="display: block; margin-bottom: 0.5rem">
+            SQL backup file
+          </label>
+          <input
+            id="restoreFile"
+            name="file"
+            type="file"
+            accept=".sql,text/plain,application/sql"
+            required
+          />
+          <label for="restoreConfirm" class="voc-page-lead" style="display: block; margin: 0.75rem 0 0.5rem">
+            Confirmation
+          </label>
+          <input
+            id="restoreConfirm"
+            type="text"
+            autocomplete="off"
+            placeholder='Type "RESTORE" to confirm'
+            style="max-width: 16rem"
+          />
+          <div style="margin-top: 0.75rem">
+            <button type="submit" id="restoreBackupBtn">Restore database backup</button>
+          </div>
+        </form>
+        <p id="restoreMsg" class="voc-msg" aria-live="polite" style="margin-top: 0.75rem"></p>
+        <p id="restoreErr" class="voc-error" hidden style="margin-top: 0.75rem"></p>
+      </section>
     </main>
 
     <script>
-      document.getElementById("downloadBackupBtn").addEventListener("click", async (e) => {
-        e.preventDefault();
+      document.getElementById("downloadBackupBtn").addEventListener("click", async () => {
+        const btn = document.getElementById("downloadBackupBtn");
         const msg = document.getElementById("backupMsg");
         const err = document.getElementById("backupErr");
+        btn.disabled = true;
         msg.textContent = "Preparing backup…";
         err.hidden = true;
         err.textContent = "";
@@ -80,6 +121,66 @@
           msg.textContent = "";
           err.hidden = false;
           err.textContent = ex.message || "Backup failed";
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      document.getElementById("restoreForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById("restoreFile");
+        const confirmInput = document.getElementById("restoreConfirm");
+        const btn = document.getElementById("restoreBackupBtn");
+        const msg = document.getElementById("restoreMsg");
+        const err = document.getElementById("restoreErr");
+        const file = fileInput.files?.[0];
+
+        err.hidden = true;
+        err.textContent = "";
+        msg.textContent = "";
+
+        if (!file) {
+          err.hidden = false;
+          err.textContent = "Choose a .sql backup file first.";
+          return;
+        }
+        if (confirmInput.value.trim().toUpperCase() !== "RESTORE") {
+          err.hidden = false;
+          err.textContent = 'Type RESTORE in the confirmation field.';
+          return;
+        }
+        if (
+          !confirm(
+            "This will REPLACE all payroll database data with the uploaded backup. Continue?"
+          )
+        ) {
+          return;
+        }
+
+        btn.disabled = true;
+        msg.textContent = "Restoring backup…";
+
+        try {
+          const form = new FormData();
+          form.append("file", file);
+          const r = await fetch("/api/database-backup", {
+            method: "POST",
+            body: form,
+            credentials: "same-origin",
+          });
+          if (!r.ok) {
+            const data = await r.json().catch(() => ({}));
+            throw new Error(data.error || "Restore failed");
+          }
+          msg.textContent = "Database restore complete.";
+          confirmInput.value = "";
+          fileInput.value = "";
+        } catch (ex) {
+          msg.textContent = "";
+          err.hidden = false;
+          err.textContent = ex.message || "Restore failed";
+        } finally {
+          btn.disabled = false;
         }
       });
     </script>
