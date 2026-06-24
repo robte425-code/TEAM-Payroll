@@ -24,7 +24,7 @@ function verifyInternalAccess(req) {
 function backupFilename() {
   const iso = new Date().toISOString().slice(0, 19);
   const [day, time] = iso.split("T");
-  return `${APP_NAME}-${day} ${time.replace(/:/g, "-")}${EXTENSION}`;
+  return `${APP_NAME}-${day}_${time.replace(/:/g, "-")}${EXTENSION}`;
 }
 
 async function readRawBody(req) {
