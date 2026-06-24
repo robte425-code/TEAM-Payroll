@@ -92,6 +92,7 @@ export const config = {
     "/leave.html",
     "/my-leave.html",
     "/pay-stubs.html",
+    "/backup.html",
     "/api/employees/:path*",
     "/api/settings",
     "/api/leave-record",
@@ -103,6 +104,7 @@ export const config = {
     "/api/view-as-users",
     "/api/pay-stubs/:path*",
     "/api/payroll-unread",
+    "/api/database-backup",
     "/api/internal/team-access",
   ],
 };
