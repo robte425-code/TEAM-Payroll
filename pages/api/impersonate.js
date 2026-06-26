@@ -39,6 +39,7 @@ export default async function handler(req, res) {
     const targetEmail = readImpersonateEmail(req);
     const impersonating = Boolean(targetEmail && targetEmail !== realEmail);
     let effectiveName = token.name || realEmail;
+    let effectiveRole = "admin";
     if (impersonating) {
       try {
         const pool = getPool();
@@ -47,6 +48,7 @@ export default async function handler(req, res) {
       } catch {
         /* ignore */
       }
+      effectiveRole = (await resolveIsAdmin(targetEmail)) ? "admin" : "member";
     }
     return res.status(200).json({
       canImpersonate: !impersonating,
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
       effective: {
         email: impersonating ? targetEmail : realEmail,
         name: effectiveName,
-        role: impersonating ? "member" : "admin",
+        role: effectiveRole,
       },
       target: impersonating ? { email: targetEmail, name: effectiveName } : null,
     });

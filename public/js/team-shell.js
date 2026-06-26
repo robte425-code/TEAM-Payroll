@@ -479,7 +479,7 @@
           viewerEmployeeId = data.viewerEmployeeId || null;
           viewerDisplayName = data.viewerDisplayName || "Yourself";
           viewAsRoot.hidden = Boolean(data.impersonating);
-          adminNav?.setVisible(!data.impersonating);
+          adminNav?.setVisible(Boolean(data.effectiveIsAdmin));
         }
         if (data.impersonating && data.employeeId) {
           activeImpersonateId = data.employeeId;
@@ -495,7 +495,7 @@
           const status = r.ok ? await r.json() : null;
           if (status) {
             viewAsRoot.hidden = !status.canImpersonate;
-            adminNav?.setVisible(Boolean(status.canImpersonate));
+            adminNav?.setVisible(status.effective?.role === "admin");
             if (status.impersonating && status.target) {
               updateImpersonationBanner({
                 impersonating: true,

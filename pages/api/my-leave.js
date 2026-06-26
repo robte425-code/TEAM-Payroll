@@ -118,9 +118,12 @@ export default async function handler(req, res) {
     }
 
     const payload = await fetchLeaveDataForEmployee(pool, emp);
+    const effectiveEmail = String(emp?.login_email || email).trim().toLowerCase();
+    const effectiveIsAdmin = await resolveIsAdmin(effectiveEmail);
     return res.status(200).json({
       ...payload,
       isAdmin,
+      effectiveIsAdmin,
       impersonating,
       ...viewerInfo,
     });
