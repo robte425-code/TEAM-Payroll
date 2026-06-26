@@ -20,14 +20,14 @@ async function ensureMetaTable(client) {
   `);
 }
 
-async function importEnvAdminsOnce(client) {
-  await ensureMetaTable(client);
-  const done = await client.query(`SELECT value FROM payroll.app_meta WHERE key = $1`, [
-    ENV_ADMINS_IMPORTED_KEY,
-  ]);
-  if (done.rows[0]?.value === "1") return 0;
+async function countAdmins(client) {
+  const r = await client.query(
+    `SELECT count(*)::int AS n FROM payroll.app_access_emails WHERE is_admin = true`
+  );
+  return r.rows[0]?.n ?? 0;
+}
 
-  const emails = envAdminEmails();
+async function importEmails(client, emails) {
   for (const email of emails) {
     await client.query(
       `INSERT INTO payroll.app_access_emails (email, is_enabled, is_admin)
@@ -36,7 +36,24 @@ async function importEnvAdminsOnce(client) {
       [email]
     );
   }
+}
 
+async function importEnvAdminsOnce(client) {
+  await ensureMetaTable(client);
+  const emails = envAdminEmails();
+  const done = await client.query(`SELECT value FROM payroll.app_meta WHERE key = $1`, [
+    ENV_ADMINS_IMPORTED_KEY,
+  ]);
+
+  if (done.rows[0]?.value === "1") {
+    if ((await countAdmins(client)) === 0 && emails.length > 0) {
+      await importEmails(client, emails);
+      return emails.length;
+    }
+    return 0;
+  }
+
+  await importEmails(client, emails);
   await client.query(
     `INSERT INTO payroll.app_meta (key, value) VALUES ($1, '1')
      ON CONFLICT (key) DO UPDATE SET value = '1', updated_at = now()`,
