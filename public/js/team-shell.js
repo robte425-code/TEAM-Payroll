@@ -16,11 +16,25 @@
     { href: "./pay-stubs.html", label: "Upload paystubs", key: "pay-stubs" },
   ];
 
+  const PLATFORM_HUB_LINKS = [
+    {
+      href: `${UPDATES_URL}/manage/access`,
+      label: "Access hub",
+      external: true,
+      separatorBefore: true,
+    },
+    {
+      href: `${UPDATES_URL}/manage/backup`,
+      label: "Backup hub",
+      external: true,
+    },
+  ];
+
   /** Matches @team/shell payrollAdminSections. */
   const PAYROLL_ADMIN_SECTIONS = [
     {
       label: "Payroll",
-      items: ADMIN_LINKS,
+      items: [...ADMIN_LINKS, ...PLATFORM_HUB_LINKS],
     },
   ];
 
@@ -156,6 +170,12 @@
         adminNavMenu.appendChild(heading);
 
         for (const item of section.items) {
+          if (item.separatorBefore) {
+            const sep = document.createElement("li");
+            sep.setAttribute("role", "separator");
+            sep.className = "team-admin-nav-separator";
+            adminNavMenu.appendChild(sep);
+          }
           const li = document.createElement("li");
           li.setAttribute("role", "none");
           const isCurrent = item.key && item.key === adminPage;

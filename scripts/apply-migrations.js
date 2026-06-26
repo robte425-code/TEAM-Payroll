@@ -67,6 +67,12 @@ async function main() {
       await client.query(sql);
     }
     console.log("Done. Applied", files.length, "migration file(s).");
+
+    const { importEnvAdminsOnce } = require("./import-env-admins-once");
+    const imported = await importEnvAdminsOnce(client);
+    if (imported > 0) {
+      console.log(`Imported ${imported} admin(s) from ADMIN_EMAILS (one-time migration).`);
+    }
   } finally {
     await client.end();
   }

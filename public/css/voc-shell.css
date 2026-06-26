@@ -268,6 +268,12 @@
   border-bottom: 1px solid #f5f5f4;
 }
 
+.team-admin-nav-separator {
+  margin: 0.25rem 0;
+  border-top: 1px solid #e7e5e4;
+  list-style: none;
+}
+
 .team-admin-nav-item {
   display: block;
   padding: 0.5rem 0.75rem;
