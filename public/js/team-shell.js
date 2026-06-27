@@ -19,7 +19,7 @@
   /** Matches @team/shell payrollAdminSections (no platform hub links). */
   const PAYROLL_ADMIN_SECTIONS = [
     {
-      label: "Payroll",
+      label: "Admin",
       items: ADMIN_LINKS,
     },
   ];
