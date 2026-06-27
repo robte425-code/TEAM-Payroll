@@ -16,25 +16,11 @@
     { href: "./pay-stubs.html", label: "Upload paystubs", key: "pay-stubs" },
   ];
 
-  const PLATFORM_HUB_LINKS = [
-    {
-      href: `${UPDATES_URL}/manage/access`,
-      label: "Access hub",
-      external: true,
-      separatorBefore: true,
-    },
-    {
-      href: `${UPDATES_URL}/manage/backup`,
-      label: "Backup hub",
-      external: true,
-    },
-  ];
-
-  /** Matches @team/shell payrollAdminSections. */
+  /** Matches @team/shell payrollAdminSections (no platform hub links). */
   const PAYROLL_ADMIN_SECTIONS = [
     {
       label: "Payroll",
-      items: [...ADMIN_LINKS, ...PLATFORM_HUB_LINKS],
+      items: ADMIN_LINKS,
     },
   ];
 
