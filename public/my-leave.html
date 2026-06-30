@@ -11,6 +11,20 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./css/voc-shell.css" />
+    <style>
+      .voc-pto-notice {
+        max-width: 48rem;
+        margin-bottom: 1rem;
+        padding: 0.875rem 1rem;
+        border: 1px solid #fcd34d;
+        border-radius: 0.75rem;
+        background: #fffbeb;
+        color: #78350f;
+      }
+      .voc-pto-notice strong {
+        color: #92400e;
+      }
+    </style>
   </head>
   <body class="voc-page">
     <div id="team-shell-root"></div>
@@ -21,6 +35,7 @@
 
       <p id="pageErr" class="voc-error" hidden></p>
       <p id="pageMsg" class="voc-msg" aria-live="polite"></p>
+      <div id="ptoHighBalanceNotice" class="voc-pto-notice" hidden role="status"></div>
 
       <p id="loadingLine" class="voc-loading">Loading your balances…</p>
 
@@ -147,8 +162,21 @@
         }
       }
 
+      function renderPtoHighBalanceNotice(notice) {
+        const el = document.getElementById("ptoHighBalanceNotice");
+        if (!el) return;
+        if (!notice?.message) {
+          el.hidden = true;
+          el.textContent = "";
+          return;
+        }
+        el.hidden = false;
+        el.innerHTML = `<strong>PTO balance notice.</strong> ${escapeHtml(notice.message)}`;
+      }
+
       function renderLeaveData(shell, data) {
         shell.setGreeting(data.employeeName);
+        renderPtoHighBalanceNotice(data.ptoHighBalanceNotice);
 
         document.getElementById("ptoAccrued").textContent = money2(data.ptoYtdHoursAccrued);
         document.getElementById("ptoUsed").textContent = money2(data.ptoYtdHoursUsed);
@@ -232,6 +260,7 @@
             if (data.needsEmployeeSelection && !data.impersonating) {
               loadingEl.hidden = true;
               shell.setGreeting(data.viewerDisplayName || "Yourself");
+              renderPtoHighBalanceNotice(null);
               msgEl.textContent =
                 "Select an employee from View as… in the header to preview their payroll page.";
               shell.updateBanner(data);
@@ -247,6 +276,7 @@
           } catch (e) {
             loadingEl.hidden = true;
             shell.setGreeting("");
+            renderPtoHighBalanceNotice(null);
             errEl.hidden = false;
             errEl.textContent = e.message || "Could not load leave data.";
             shell.updateBanner({ impersonating: false });

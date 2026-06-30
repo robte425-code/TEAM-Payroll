@@ -7,6 +7,7 @@ const {
   fetchLeaveDataForEmployee,
 } = require("../../lib/my-leave-data");
 const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
+const { getPtoHighBalanceNoticeForEmployee } = require("../../lib/pto-high-balance-notice");
 const { readImpersonateEmail } = require("../../lib/impersonation");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
 const { resolveIsAdmin } = require("../../lib/apiAuth");
@@ -121,10 +122,12 @@ export default async function handler(req, res) {
     }
 
     const payload = await fetchLeaveDataForEmployee(pool, emp);
+    const ptoHighBalanceNotice = await getPtoHighBalanceNoticeForEmployee(pool, emp);
     const effectiveEmail = String(emp?.login_email || email).trim().toLowerCase();
     const effectiveIsAdmin = await resolveIsAdmin(effectiveEmail);
     return res.status(200).json({
       ...payload,
+      ptoHighBalanceNotice,
       isAdmin,
       effectiveIsAdmin,
       impersonating,
