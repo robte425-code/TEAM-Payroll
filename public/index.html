@@ -170,9 +170,9 @@
         Training rate.
         <strong>Edu pay</strong> — Prof. Hours where activity starts with <strong>Z Education</strong> × employee
         Edu rate.
-        When recording PTO/Sick time, if an employee claimed PTO, billed hours (case work + travel/wait + report +
-        NB TT training + non-bill time) plus PTO must not exceed working days × 8 for the pay period; admins are emailed
-        if exceeded.
+        When recording PTO/Sick time, if an employee claimed PTO or sick time, billed hours (case work + travel/wait +
+        report + NB TT training + non-bill time) plus PTO and sick time must not exceed working days × 8 for the pay
+        period; admins are emailed if exceeded.
       </p>
       <div id="payroll20GenReimSection" style="margin: 14px 0">
         <p class="muted" style="margin: 0 0 8px">
@@ -2451,8 +2451,8 @@
               0;
             const limitHours = workingDays * 8;
             msg += emailSent
-              ? ` Emailed payroll admins about ${violationCount} employee(s) over the pay-period limit (${workingDays} working day(s) × 8 = ${limitHours} hr billed + PTO).`
-              : ` Found ${violationCount} employee(s) over the pay-period billed + PTO limit (admin email not sent).`;
+              ? ` Emailed payroll admins about ${violationCount} employee(s) over the pay-period limit (${workingDays} working day(s) × 8 = ${limitHours} hr billed + PTO + sick).`
+              : ` Found ${violationCount} employee(s) over the pay-period billed + PTO + sick limit (admin email not sent).`;
           }
           if (msgEl) msgEl.textContent = msg;
         } catch (e) {
