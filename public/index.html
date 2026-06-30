@@ -170,6 +170,9 @@
         Training rate.
         <strong>Edu pay</strong> — Prof. Hours where activity starts with <strong>Z Education</strong> × employee
         Edu rate.
+        When recording PTO/Sick time, if an employee claimed PTO, billed hours (case work + travel/wait + report +
+        NB TT training + non-bill time) plus PTO must not exceed working days × 8 for the pay period; admins are emailed
+        if exceeded.
       </p>
       <div id="payroll20GenReimSection" style="margin: 14px 0">
         <p class="muted" style="margin: 0 0 8px">
@@ -309,6 +312,80 @@
       const REPORT_RATE_CODES = new Set(["0910V"]);
       const REQUIRED_HEADERS = ["Work Done By", "Provider ID", "Rate Code", "Units", "Adj/ Resub"];
       const NONBILL_HEADERS = ["Timekeeper VRC", "Prof. Hours", "Activity Type"];
+      const NONBILL_DATE_HEADERS = ["Date", "Service Date", "Work Date", "Date From", "Date To"];
+
+      function parseDateKey(value) {
+        if (value == null || value === "") return "";
+        if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value)) {
+          const y = value.getFullYear();
+          const m = String(value.getMonth() + 1).padStart(2, "0");
+          const d = String(value.getDate()).padStart(2, "0");
+          return `${y}-${m}-${d}`;
+        }
+        if (typeof value === "number" && isFinite(value) && value > 20000 && value < 100000) {
+          const epoch = new Date(Date.UTC(1899, 11, 30));
+          const ms = epoch.getTime() + value * 86400000;
+          const d = new Date(ms);
+          if (!isNaN(d)) {
+            const y = d.getUTCFullYear();
+            const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+            const day = String(d.getUTCDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+          }
+        }
+        const s = String(value).trim();
+        if (!s) return "";
+        const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+        const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (us) {
+          const m = String(us[1]).padStart(2, "0");
+          const d = String(us[2]).padStart(2, "0");
+          return `${us[3]}-${m}-${d}`;
+        }
+        return "";
+      }
+
+      function findNonBillDateColumnIndex(headerRow) {
+        for (const h of NONBILL_DATE_HEADERS) {
+          const idx = headerRow.indexOf(h);
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      }
+
+      function resolvePayPeriodHoursCheckPayload() {
+        const check = lastPayroll20Results?.payPeriodHoursCheck;
+        if (check && typeof check === "object") return check;
+        const legacy = lastPayroll20Results?.dailyHoursCheck;
+        if (legacy && typeof legacy === "object") {
+          const workingDays = Number(lastPayroll10Results?.workingDays);
+          return {
+            ...legacy,
+            workingDays: Number.isFinite(workingDays) ? workingDays : Number(legacy.workingDays) || 0,
+          };
+        }
+        return null;
+      }
+
+      function buildPayPeriodHoursCheckPayload(nonBillParsedRows) {
+        const workingDays = Number(lastPayroll10Results?.workingDays);
+        return {
+          workingDays: Number.isFinite(workingDays) ? workingDays : 0,
+          invoiceRows: sessionCalcRows.map((r) => ({
+            employeeName: r.employeeName,
+            providerId: r.providerId,
+            dateFrom: r.dateFrom,
+            rateCodeCategory: r.rateCodeCategory,
+            units: r.units,
+          })),
+          nonBillRows: (nonBillParsedRows || []).map((r) => ({
+            timekeeper: r.timekeeper,
+            profHours: r.profHours,
+            bucket: r.bucket,
+          })),
+        };
+      }
 
       function formatEndDateForTitle(endDateRaw) {
         const raw = String(endDateRaw ?? "").trim();
@@ -466,6 +543,7 @@
         const idxVrc = headerRow.indexOf("Timekeeper VRC");
         const idxHours = headerRow.indexOf("Prof. Hours");
         const idxAct = headerRow.indexOf("Activity Type");
+        const idxDate = findNonBillDateColumnIndex(headerRow);
         const out = [];
         for (let r = headerIndex + 1; r < allRows.length; r++) {
           const row = allRows[r];
@@ -476,11 +554,14 @@
           if (!timekeeper && !activity) continue;
           const bucket = nonBillActivityBucket(activity);
           if (bucket == null) continue;
+          const dateRaw = idxDate >= 0 ? row[idxDate] : "";
           out.push({
             timekeeper,
             profHours: Number.isFinite(hours) ? hours : 0,
             activityType: activity,
             bucket,
+            date: idxDate >= 0 ? formatDateCell(dateRaw) : "",
+            dateKey: idxDate >= 0 ? parseDateKey(formatDateCell(dateRaw)) : "",
           });
         }
         return { worksheetName: firstSheetName, rows: out };
@@ -2136,6 +2217,7 @@
             nbOnlyEmployeeNames: nbOnlyList.map((e) => e.displayName),
             rows: rows20,
             leaveRows,
+            payPeriodHoursCheck: buildPayPeriodHoursCheckPayload(parsed.rows),
             sums: {
               casePlusReports: sumCasePlusReports,
               nbTime: sumNbTime,
@@ -2336,10 +2418,15 @@
         }
         if (msgEl) msgEl.textContent = "Recording...";
         try {
+          const endDateRaw = document.getElementById("payrollEndDateInput")?.value || "";
           const r = await fetch("/api/leave-record", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rows: lastPayroll20Results.leaveRows }),
+            body: JSON.stringify({
+              rows: lastPayroll20Results.leaveRows,
+              payPeriodHoursCheck: resolvePayPeriodHoursCheckPayload(),
+              payrollEndDate: endDateRaw || null,
+            }),
           });
           const text = await r.text();
           let data = {};
@@ -2352,7 +2439,22 @@
             throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
           }
           const updatedEmployees = Number(data.updatedEmployees) || 0;
-          if (msgEl) msgEl.textContent = `Recorded for ${updatedEmployees} employee(s).`;
+          let msg = `Recorded for ${updatedEmployees} employee(s).`;
+          const violationCount = Array.isArray(data.payPeriodPtoViolations)
+            ? data.payPeriodPtoViolations.length
+            : 0;
+          if (violationCount > 0) {
+            const emailSent = data.payPeriodPtoOverlimitEmail?.sent;
+            const workingDays =
+              Number(resolvePayPeriodHoursCheckPayload()?.workingDays) ||
+              Number(lastPayroll10Results?.workingDays) ||
+              0;
+            const limitHours = workingDays * 8;
+            msg += emailSent
+              ? ` Emailed payroll admins about ${violationCount} employee(s) over the pay-period limit (${workingDays} working day(s) × 8 = ${limitHours} hr billed + PTO).`
+              : ` Found ${violationCount} employee(s) over the pay-period billed + PTO limit (admin email not sent).`;
+          }
+          if (msgEl) msgEl.textContent = msg;
         } catch (e) {
           if (msgEl) msgEl.textContent = "";
           if (errEl) errEl.textContent = e.message || "Failed to record PTO/Sick time.";

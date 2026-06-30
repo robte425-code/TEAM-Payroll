@@ -1,6 +1,8 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
+const { findPayPeriodPtoOverLimitViolations } = require("../../lib/pay-period-pto-billed-check");
+const { sendPayPeriodPtoOverlimitAdminEmail } = require("../../lib/pay-period-pto-overlimit-email");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -230,7 +232,41 @@ export default async function handler(req, res) {
     }
 
     await client.query("COMMIT");
-    return res.status(200).json({ ok: true, updatedEmployees, batchId });
+
+    const payPeriodHoursCheck =
+      body.payPeriodHoursCheck && typeof body.payPeriodHoursCheck === "object"
+        ? body.payPeriodHoursCheck
+        : body.dailyHoursCheck && typeof body.dailyHoursCheck === "object"
+          ? body.dailyHoursCheck
+          : {};
+    const workingDays = Number(payPeriodHoursCheck.workingDays);
+    const payPeriodPtoViolations = findPayPeriodPtoOverLimitViolations({
+      invoiceRows: Array.isArray(payPeriodHoursCheck.invoiceRows) ? payPeriodHoursCheck.invoiceRows : [],
+      nonBillRows: Array.isArray(payPeriodHoursCheck.nonBillRows) ? payPeriodHoursCheck.nonBillRows : [],
+      workingDays: Number.isFinite(workingDays) ? workingDays : 0,
+    });
+    let payPeriodPtoOverlimitEmail = { sent: false, reason: "no_violations" };
+    try {
+      payPeriodPtoOverlimitEmail = await sendPayPeriodPtoOverlimitAdminEmail(pool, {
+        violations: payPeriodPtoViolations,
+        payrollEndDate: body.payrollEndDate || null,
+      });
+    } catch (e) {
+      payPeriodPtoOverlimitEmail = {
+        sent: false,
+        reason: "error",
+        error: e.message || "Email failed",
+        violationCount: payPeriodPtoViolations.length,
+      };
+    }
+
+    return res.status(200).json({
+      ok: true,
+      updatedEmployees,
+      batchId,
+      payPeriodPtoViolations,
+      payPeriodPtoOverlimitEmail,
+    });
   } catch (e) {
     try {
       await client.query("ROLLBACK");
