@@ -6,6 +6,7 @@ const {
   findEmployeeById,
   fetchLeaveDataForEmployee,
 } = require("../../lib/my-leave-data");
+const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
 const { readImpersonateEmail } = require("../../lib/impersonation");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
 const { resolveIsAdmin } = require("../../lib/apiAuth");
@@ -84,6 +85,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    await applyYearEndRolloverIfNeeded(pool);
+
     let emp;
     let impersonating = false;
     const ownEmp = await findEmployeeByEmail(pool, email);

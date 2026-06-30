@@ -1,5 +1,10 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
+const {
+  applyYearEndRolloverIfNeeded,
+  fetchRolloverSettings,
+  updateRolloverSettings,
+} = require("../../lib/leave-rollover");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -54,6 +59,8 @@ export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
       res.setHeader("Cache-Control", "no-store, max-age=0");
+      const rolloverRun = await applyYearEndRolloverIfNeeded(pool);
+      const rollover = await fetchRolloverSettings(pool);
       const r = await pool.query(
         `SELECT id, provider_id, display_name,
                 pto_ytd_hours_accrued, pto_ytd_hours_used,
@@ -71,11 +78,24 @@ export default async function handler(req, res) {
           sickYtdHoursAccrued: Number(x.sick_ytd_hours_accrued) || 0,
           sickYtdHoursUsed: Number(x.sick_ytd_hours_used) || 0,
         })),
+        rollover,
+        rolloverRun,
       });
     }
 
     if (req.method === "PATCH") {
       const body = await readJsonBody(req);
+
+      if (body.rolloverSettings && typeof body.rolloverSettings === "object") {
+        const rollover = await updateRolloverSettings(pool, {
+          ptoMaxHours: body.rolloverSettings.ptoMaxHours,
+          sickMaxHours: body.rolloverSettings.sickMaxHours,
+        });
+        if (!Array.isArray(body.rows) || !body.rows.length) {
+          return res.status(200).json({ ok: true, rollover });
+        }
+      }
+
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (!rows.length) return res.status(400).json({ error: "rows[] is required" });
 

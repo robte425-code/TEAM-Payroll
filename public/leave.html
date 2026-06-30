@@ -66,6 +66,27 @@
     </p>
 
     <div class="card">
+      <h3 style="margin-top: 0">Year-end rollover</h3>
+      <p class="muted" style="margin-top: 0">
+        At the start of each calendar year, unused PTO and sick balances carry forward up to these limits.
+        Used hours reset to zero; excess above the limit is forfeited. Rollover runs automatically the first time
+        leave data is loaded in a new year.
+      </p>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 8px">
+        <label>
+          PTO max carryover (hr)
+          <input type="number" id="ptoRolloverMax" class="rate-input" min="0" step="0.01" style="display: block; margin-top: 4px" />
+        </label>
+        <label>
+          Sick max carryover (hr)
+          <input type="number" id="sickRolloverMax" class="rate-input" min="0" step="0.01" style="display: block; margin-top: 4px" />
+        </label>
+        <button type="button" id="saveRolloverBtn">Save rollover limits</button>
+      </div>
+      <p id="rolloverStatus" class="muted" style="margin: 0"></p>
+    </div>
+
+    <div class="card">
       <button type="button" id="exportCsvBtn">Export CSV</button>
       <label style="display: inline-block; margin-right: 8px">
         Import CSV
@@ -450,11 +471,62 @@
         }
       }
 
+      function renderRolloverSettings(rollover, rolloverRun) {
+        const ptoInput = document.getElementById("ptoRolloverMax");
+        const sickInput = document.getElementById("sickRolloverMax");
+        const status = document.getElementById("rolloverStatus");
+        if (ptoInput && rollover) ptoInput.value = String(Number(rollover.ptoMaxHours) || 0);
+        if (sickInput && rollover) sickInput.value = String(Number(rollover.sickMaxHours) || 0);
+        if (!status) return;
+
+        const parts = [];
+        if (rollover?.lastRolloverYear != null) {
+          parts.push(`Last year-end processed: ${rollover.lastRolloverYear}.`);
+        } else {
+          parts.push("Year-end rollover has not run yet.");
+        }
+        if (rolloverRun?.applied && rolloverRun?.year) {
+          parts.push(
+            `Applied ${rolloverRun.year} rollover for ${Number(rolloverRun.employeesUpdated) || 0} employee(s) on this load.`
+          );
+        }
+        status.textContent = parts.join(" ");
+      }
+
+      async function saveRolloverSettings() {
+        err.textContent = "";
+        const ptoMaxHours = Number(document.getElementById("ptoRolloverMax")?.value || 0);
+        const sickMaxHours = Number(document.getElementById("sickRolloverMax")?.value || 0);
+        if (
+          !Number.isFinite(ptoMaxHours) ||
+          ptoMaxHours < 0 ||
+          !Number.isFinite(sickMaxHours) ||
+          sickMaxHours < 0
+        ) {
+          flash("Rollover limits must be non-negative numbers.", true);
+          return;
+        }
+        try {
+          const d = await apiJson(API, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rolloverSettings: { ptoMaxHours, sickMaxHours },
+            }),
+          });
+          renderRolloverSettings(d.rollover, null);
+          flash("Rollover limits saved.");
+        } catch (e) {
+          flash(e.message || "Could not save rollover limits.", true);
+        }
+      }
+
       async function render() {
         err.textContent = "";
         msg.textContent = "Loading...";
         try {
           const d = await apiJson(API, { method: "GET" });
+          renderRolloverSettings(d.rollover, d.rolloverRun);
           const list = [...(d.employees || [])].sort((a, b) =>
             compareEmployeeByLastName(a.displayName, b.displayName)
           );
@@ -480,6 +552,7 @@
       }
 
       document.getElementById("loadBtn").addEventListener("click", render);
+      document.getElementById("saveRolloverBtn").addEventListener("click", saveRolloverSettings);
       document.getElementById("addEmployeeLeaveBtn").addEventListener("click", appendNewEmployeeLeaveRow);
       document.getElementById("saveBtn").addEventListener("click", async () => {
         err.textContent = "";

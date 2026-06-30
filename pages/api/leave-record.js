@@ -1,5 +1,6 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
+const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -89,7 +90,13 @@ export default async function handler(req, res) {
   try {
     pool = getPool();
   } catch (e) {
-    return res.status(500).json({ error: e.message || "Database not configured" });
+    return res.status(500).json({ error: "Database not configured" });
+  }
+
+  try {
+    await applyYearEndRolloverIfNeeded(pool);
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Year-end rollover failed" });
   }
 
   const client = await pool.connect();
