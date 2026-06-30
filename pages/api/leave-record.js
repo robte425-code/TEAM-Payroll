@@ -1,10 +1,6 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
-const { applyYearEndRolloverIfNeeded, fetchRolloverSettings } = require("../../lib/leave-rollover");
-const {
-  PTO_HIGH_BALANCE_THRESHOLD_HOURS,
-  sendPtoHighBalanceEmail,
-} = require("../../lib/pto-high-balance-notice");
+const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -117,7 +113,6 @@ export default async function handler(req, res) {
     );
     const batchId = batchInserted.rows[0]?.id;
     let updatedEmployees = 0;
-    const ptoNoticeQueue = [];
 
     for (const r of rows) {
       const providerId = String(r.providerId || "").trim();
@@ -141,15 +136,6 @@ export default async function handler(req, res) {
       const afterPtoUsed = beforePtoUsed + ptoUsed;
       const afterSickAccrued = beforeSickAccrued + sickAccrual;
       const afterSickUsed = beforeSickUsed + sickUsed;
-      const afterPtoAvailable = afterPtoAccrued - afterPtoUsed;
-
-      if (afterPtoAvailable > PTO_HIGH_BALANCE_THRESHOLD_HOURS) {
-        ptoNoticeQueue.push({
-          employeeName,
-          loginEmail: before.login_email,
-          ptoAvailableHours: afterPtoAvailable,
-        });
-      }
 
       await client.query(
         `UPDATE payroll.employees
@@ -244,34 +230,7 @@ export default async function handler(req, res) {
     }
 
     await client.query("COMMIT");
-
-    const rollover = await fetchRolloverSettings(pool);
-    const ptoEmailResults = [];
-    for (const item of ptoNoticeQueue) {
-      try {
-        const result = await sendPtoHighBalanceEmail({
-          to: item.loginEmail,
-          employeeName: item.employeeName,
-          ptoAvailableHours: item.ptoAvailableHours,
-          ptoMaxCarryoverHours: rollover.ptoMaxHours,
-        });
-        ptoEmailResults.push({ employeeName: item.employeeName, ...result });
-      } catch (e) {
-        ptoEmailResults.push({
-          employeeName: item.employeeName,
-          sent: false,
-          reason: "error",
-          error: e.message || "Email failed",
-        });
-      }
-    }
-
-    return res.status(200).json({
-      ok: true,
-      updatedEmployees,
-      batchId,
-      ptoHighBalanceEmails: ptoEmailResults,
-    });
+    return res.status(200).json({ ok: true, updatedEmployees, batchId });
   } catch (e) {
     try {
       await client.query("ROLLBACK");
