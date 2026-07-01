@@ -66,6 +66,29 @@
     </p>
 
     <div class="card">
+      <h3 style="margin-top: 0">PTO balance notice</h3>
+      <p class="muted" style="margin-top: 0">
+        On <strong>My balances</strong>, employees see a banner when their available PTO exceeds this threshold.
+        The notice reminds them how many hours will carry over at year-end (using the PTO max carryover limit below).
+      </p>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 8px">
+        <label>
+          PTO notice threshold (hr)
+          <input
+            type="number"
+            id="ptoHighBalanceThreshold"
+            class="rate-input"
+            min="0"
+            step="0.01"
+            style="display: block; margin-top: 4px"
+          />
+        </label>
+        <button type="button" id="savePtoNoticeBtn">Save notice threshold</button>
+      </div>
+      <p id="ptoNoticeStatus" class="muted" style="margin: 0"></p>
+    </div>
+
+    <div class="card">
       <h3 style="margin-top: 0">Year-end rollover</h3>
       <p class="muted" style="margin-top: 0">
         At the start of each calendar year, unused PTO and sick balances carry forward up to these limits.
@@ -471,6 +494,17 @@
         }
       }
 
+      function renderPtoHighBalanceSettings(ptoHighBalance) {
+        const input = document.getElementById("ptoHighBalanceThreshold");
+        const status = document.getElementById("ptoNoticeStatus");
+        if (input && ptoHighBalance) {
+          input.value = String(Number(ptoHighBalance.thresholdHours) || 0);
+        }
+        if (status && ptoHighBalance) {
+          status.textContent = `Employees with more than ${money2(ptoHighBalance.thresholdHours)} hours of PTO available will see the notice on My balances.`;
+        }
+      }
+
       function renderRolloverSettings(rollover, rolloverRun) {
         const ptoInput = document.getElementById("ptoRolloverMax");
         const sickInput = document.getElementById("sickRolloverMax");
@@ -491,6 +525,28 @@
           );
         }
         status.textContent = parts.join(" ");
+      }
+
+      async function savePtoHighBalanceSettings() {
+        err.textContent = "";
+        const thresholdHours = Number(document.getElementById("ptoHighBalanceThreshold")?.value || 0);
+        if (!Number.isFinite(thresholdHours) || thresholdHours < 0) {
+          flash("PTO notice threshold must be a non-negative number.", true);
+          return;
+        }
+        try {
+          const d = await apiJson(API, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ptoHighBalanceSettings: { thresholdHours },
+            }),
+          });
+          renderPtoHighBalanceSettings(d.ptoHighBalance);
+          flash("PTO notice threshold saved.");
+        } catch (e) {
+          flash(e.message || "Could not save PTO notice threshold.", true);
+        }
       }
 
       async function saveRolloverSettings() {
@@ -526,6 +582,7 @@
         msg.textContent = "Loading...";
         try {
           const d = await apiJson(API, { method: "GET" });
+          renderPtoHighBalanceSettings(d.ptoHighBalance);
           renderRolloverSettings(d.rollover, d.rolloverRun);
           const list = [...(d.employees || [])].sort((a, b) =>
             compareEmployeeByLastName(a.displayName, b.displayName)
@@ -552,6 +609,7 @@
       }
 
       document.getElementById("loadBtn").addEventListener("click", render);
+      document.getElementById("savePtoNoticeBtn").addEventListener("click", savePtoHighBalanceSettings);
       document.getElementById("saveRolloverBtn").addEventListener("click", saveRolloverSettings);
       document.getElementById("addEmployeeLeaveBtn").addEventListener("click", appendNewEmployeeLeaveRow);
       document.getElementById("saveBtn").addEventListener("click", async () => {

@@ -5,6 +5,10 @@ const {
   fetchRolloverSettings,
   updateRolloverSettings,
 } = require("../../lib/leave-rollover");
+const {
+  fetchPtoHighBalanceSettings,
+  updatePtoHighBalanceSettings,
+} = require("../../lib/pto-high-balance-notice");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -60,7 +64,10 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       res.setHeader("Cache-Control", "no-store, max-age=0");
       const rolloverRun = await applyYearEndRolloverIfNeeded(pool);
-      const rollover = await fetchRolloverSettings(pool);
+      const [rollover, ptoHighBalance] = await Promise.all([
+        fetchRolloverSettings(pool),
+        fetchPtoHighBalanceSettings(pool),
+      ]);
       const r = await pool.query(
         `SELECT id, provider_id, display_name,
                 pto_ytd_hours_accrued, pto_ytd_hours_used,
@@ -80,20 +87,35 @@ export default async function handler(req, res) {
         })),
         rollover,
         rolloverRun,
+        ptoHighBalance,
       });
     }
 
     if (req.method === "PATCH") {
       const body = await readJsonBody(req);
 
+      let rollover;
+      let ptoHighBalance;
       if (body.rolloverSettings && typeof body.rolloverSettings === "object") {
-        const rollover = await updateRolloverSettings(pool, {
+        rollover = await updateRolloverSettings(pool, {
           ptoMaxHours: body.rolloverSettings.ptoMaxHours,
           sickMaxHours: body.rolloverSettings.sickMaxHours,
         });
-        if (!Array.isArray(body.rows) || !body.rows.length) {
-          return res.status(200).json({ ok: true, rollover });
-        }
+      }
+      if (body.ptoHighBalanceSettings && typeof body.ptoHighBalanceSettings === "object") {
+        ptoHighBalance = await updatePtoHighBalanceSettings(pool, {
+          thresholdHours: body.ptoHighBalanceSettings.thresholdHours,
+        });
+      }
+      if (
+        (body.rolloverSettings || body.ptoHighBalanceSettings) &&
+        (!Array.isArray(body.rows) || !body.rows.length)
+      ) {
+        return res.status(200).json({
+          ok: true,
+          rollover: rollover || (await fetchRolloverSettings(pool)),
+          ptoHighBalance: ptoHighBalance || (await fetchPtoHighBalanceSettings(pool)),
+        });
       }
 
       const rows = Array.isArray(body.rows) ? body.rows : [];
