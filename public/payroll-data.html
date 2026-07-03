@@ -216,6 +216,7 @@
       }
       .health-insurance-card {
         margin-top: 0;
+        padding: 18px 20px 20px;
       }
       .health-insurance-settings {
         display: flex;
@@ -223,8 +224,10 @@
         gap: 12px;
         align-items: end;
         margin-bottom: 14px;
-        padding-bottom: 14px;
-        border-bottom: 1px solid #e7e5e4;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: #fafaf9;
+        border: 1px solid #e7e5e4;
       }
       .health-insurance-settings label {
         display: grid;
@@ -236,67 +239,250 @@
       .health-insurance-settings input {
         min-width: 7rem;
       }
+      .health-insurance-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 18px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
       .health-insurance-legend {
         display: flex;
         flex-wrap: wrap;
-        gap: 14px;
-        margin: 0 0 12px;
-        font-size: 0.84rem;
+        gap: 10px;
+        margin: 0;
+        font-size: 0.82rem;
         color: #57534e;
       }
-      .health-insurance-legend span {
+      .health-insurance-legend-item {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: 7px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid #e7e5e4;
       }
       .health-insurance-swatch {
-        width: 14px;
-        height: 14px;
-        border-radius: 4px;
-        border: 1px solid rgba(120, 113, 108, 0.35);
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
         display: inline-block;
+        flex-shrink: 0;
       }
       .health-insurance-swatch--yes {
-        background: #dcfce7;
+        background: #16a34a;
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
       }
       .health-insurance-swatch--no {
-        background: #fee2e2;
+        background: #dc2626;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.16);
       }
-      .health-insurance-table th,
-      .health-insurance-table td {
+      .health-insurance-table-shell {
+        overflow: auto;
+        border: 1px solid #e7e5e4;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+      }
+      .health-insurance-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 0.84rem;
+      }
+      .health-insurance-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #f5f5f4;
+        border-bottom: 1px solid #e7e5e4;
+        padding: 12px 10px;
         text-align: center;
+        vertical-align: bottom;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #78716c;
+      }
+      .health-insurance-table thead th.hi-th-employee {
+        left: 0;
+        z-index: 3;
+        text-align: left;
+        min-width: 11rem;
+        box-shadow: 1px 0 0 #e7e5e4;
+      }
+      .health-insurance-table thead th.hi-th-month {
+        min-width: 8.5rem;
+      }
+      .health-insurance-month-label {
+        display: block;
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: none;
+        color: #292524;
+        margin-bottom: 8px;
+      }
+      .health-insurance-month-required-label {
+        display: block;
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #78716c;
+        margin-bottom: 2px;
+      }
+      .health-insurance-month-required-value {
+        display: block;
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        text-transform: none;
+        color: #1c1917;
+        line-height: 1.1;
+      }
+      .health-insurance-month-required-unit {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: #78716c;
+        margin-top: 1px;
+        margin-bottom: 4px;
+      }
+      .health-insurance-month-meta {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+        color: #a8a29e;
+        line-height: 1.25;
+      }
+      .health-insurance-table tbody tr:nth-child(even) td.hi-td-employee {
+        background: #fcfcfb;
+      }
+      .health-insurance-table tbody tr:nth-child(even) td.hi-cell {
+        background: #fcfcfb;
+      }
+      .health-insurance-table tbody tr:hover td {
+        background: #f8fafc;
+      }
+      .health-insurance-table tbody td {
+        border-bottom: 1px solid #f0eeec;
+        padding: 10px 8px;
         vertical-align: middle;
       }
-      .health-insurance-table th:first-child,
-      .health-insurance-table td:first-child {
-        text-align: left;
+      .health-insurance-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+      .hi-td-employee {
         position: sticky;
         left: 0;
-        background: #fff;
         z-index: 1;
+        background: #fff;
+        font-weight: 600;
+        color: #1c1917;
+        padding-left: 14px !important;
+        min-width: 11rem;
+        box-shadow: 1px 0 0 #f0eeec;
       }
-      .health-insurance-table th {
+      .hi-cell {
+        text-align: center;
+        min-width: 8.5rem;
+      }
+      .hi-cell-inner {
+        display: grid;
+        gap: 5px;
+        justify-items: center;
+        padding: 4px 6px;
+      }
+      .hi-hours-worked-label {
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #78716c;
+        line-height: 1.1;
+      }
+      .hi-hours-worked-value {
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #1c1917;
+        line-height: 1.1;
+      }
+      .hi-hours-worked-unit {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #78716c;
+        margin-top: -2px;
+      }
+      .hi-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 999px;
         font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+      .hi-badge--yes {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+      }
+      .hi-badge--no {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+      }
+      .hi-badge-icon {
+        font-size: 0.78rem;
+        line-height: 1;
+      }
+      .hi-progress {
+        width: 100%;
+        max-width: 6.5rem;
+        height: 6px;
+        border-radius: 999px;
+        background: #e7e5e4;
+        overflow: hidden;
+      }
+      .hi-progress-fill {
+        height: 100%;
+        border-radius: inherit;
+        transition: width 0.2s ease;
+      }
+      .hi-progress-fill--yes {
+        background: linear-gradient(90deg, #22c55e, #16a34a);
+      }
+      .hi-progress-fill--no {
+        background: linear-gradient(90deg, #f87171, #dc2626);
+      }
+      .hi-hours {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #a8a29e;
         line-height: 1.2;
         white-space: nowrap;
       }
-      .health-insurance-cell {
-        min-width: 5.5rem;
-        font-size: 0.78rem;
-        font-weight: 700;
-        border-radius: 8px;
+      .hi-cell--empty .hi-cell-inner {
+        color: #d6d3d1;
+        font-size: 0.9rem;
+        font-weight: 600;
       }
-      .health-insurance-cell--yes {
-        background: #dcfce7;
-        color: #166534;
-      }
-      .health-insurance-cell--no {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-      .health-insurance-cell--empty {
-        color: #a8a29e;
-        font-weight: 500;
+      .health-insurance-empty {
+        padding: 28px 16px;
+        text-align: center;
+        color: #78716c;
+        font-size: 0.92rem;
       }
     </style>
   </head>
@@ -412,13 +598,19 @@
           </label>
           <button type="button" id="saveHealthInsuranceSettingsBtn">Save X</button>
         </div>
-        <p id="healthInsuranceSettingsStatus" class="muted" style="margin: 0 0 12px"></p>
-        <div class="health-insurance-legend">
-          <span><i class="health-insurance-swatch health-insurance-swatch--yes"></i> Qualifies</span>
-          <span><i class="health-insurance-swatch health-insurance-swatch--no"></i> Does not qualify</span>
+        <p id="healthInsuranceSettingsStatus" class="muted" style="margin: 0 0 14px"></p>
+        <div class="health-insurance-toolbar">
+          <div class="health-insurance-legend">
+            <span class="health-insurance-legend-item">
+              <i class="health-insurance-swatch health-insurance-swatch--yes"></i> Qualifies
+            </span>
+            <span class="health-insurance-legend-item">
+              <i class="health-insurance-swatch health-insurance-swatch--no"></i> Does not qualify
+            </span>
+          </div>
         </div>
-        <div class="rates-table-scroll">
-          <table class="rates-table health-insurance-table">
+        <div class="health-insurance-table-shell">
+          <table class="health-insurance-table">
             <thead id="healthInsuranceHead"></thead>
             <tbody id="healthInsuranceBody"></tbody>
           </table>
@@ -695,6 +887,38 @@
         }
       }
 
+      function renderHealthInsuranceCell(entry) {
+        if (!entry) {
+          return '<td class="hi-cell hi-cell--empty"><div class="hi-cell-inner">—</div></td>';
+        }
+        const qualifies = Boolean(entry.qualifies);
+        const required = Number(entry.requiredHours) || 0;
+        const qualifying = Number(entry.qualifyingHours) || 0;
+        const pct = required > 0 ? Math.min(100, (qualifying / required) * 100) : 0;
+        const pctWidth = `${Math.max(qualifies ? 100 : 4, pct).toFixed(1)}%`;
+        const badgeClass = qualifies ? "hi-badge--yes" : "hi-badge--no";
+        const fillClass = qualifies ? "hi-progress-fill--yes" : "hi-progress-fill--no";
+        const label = qualifies ? "Qualifies" : "Does not qualify";
+        const icon = qualifies ? "✓" : "✗";
+        const title = `${hours(qualifying)} qualifying hr of ${hours(required)} hr to qualify (${pct.toFixed(0)}%)`;
+        return `
+          <td class="hi-cell" title="${escapeHtml(title)}">
+            <div class="hi-cell-inner">
+              <span class="hi-hours-worked-label">Qualifying hours</span>
+              <span class="hi-hours-worked-value">${escapeHtml(hours(qualifying))}</span>
+              <span class="hi-hours-worked-unit">hr worked</span>
+              <div class="hi-progress" aria-hidden="true">
+                <div class="hi-progress-fill ${fillClass}" style="width: ${pctWidth}"></div>
+              </div>
+              <span class="hi-hours">of ${escapeHtml(hours(required))} hr to qualify</span>
+              <span class="hi-badge ${badgeClass}">
+                <span class="hi-badge-icon" aria-hidden="true">${icon}</span>
+                ${escapeHtml(label)}
+              </span>
+            </div>
+          </td>`;
+      }
+
       function renderHealthInsuranceQualification(qualification) {
         const months = qualification?.months || [];
         const employees = qualification?.employees || [];
@@ -703,44 +927,35 @@
         if (!months.length || !employees.length) {
           healthInsuranceHead.innerHTML = "";
           healthInsuranceBody.innerHTML =
-            '<tr><td colspan="99" class="muted">No recorded payroll data for health insurance qualification.</td></tr>';
+            '<tr><td colspan="99"><div class="health-insurance-empty">No recorded payroll data for health insurance qualification.</div></td></tr>';
           return;
         }
 
         healthInsuranceHead.innerHTML = `
           <tr>
-            <th>Employee</th>
+            <th class="hi-th-employee">Employee</th>
             ${months
               .map(
                 (month) => `
-              <th title="${escapeHtml(`${hours(hoursPerWorkingDay)} hr × ${month.workingDays} working day(s) = ${hours(month.requiredHours)} hr required`)}">
-                ${escapeHtml(month.label)}
+              <th class="hi-th-month" title="${escapeHtml(`${hours(hoursPerWorkingDay)} hr × ${month.workingDays} working day(s) = ${hours(month.requiredHours)} hr to qualify`)}">
+                <span class="health-insurance-month-label">${escapeHtml(month.label)}</span>
+                <span class="health-insurance-month-required-label">Hours to qualify</span>
+                <span class="health-insurance-month-required-value">${escapeHtml(hours(month.requiredHours))}</span>
+                <span class="health-insurance-month-required-unit">hr</span>
+                <span class="health-insurance-month-meta">${escapeHtml(month.workingDays)} work day(s)</span>
               </th>`
               )
               .join("")}
           </tr>`;
 
         healthInsuranceBody.innerHTML = employees
-          .map((employee) => {
-            const cells = months
-              .map((month) => {
-                const entry = employee.months?.[month.monthKey];
-                if (!entry) {
-                  return '<td class="health-insurance-cell health-insurance-cell--empty">—</td>';
-                }
-                const title = `${hours(entry.qualifyingHours)} hr of ${hours(entry.requiredHours)} hr required`;
-                if (entry.qualifies) {
-                  return `<td class="health-insurance-cell health-insurance-cell--yes" title="${escapeHtml(title)}">Yes</td>`;
-                }
-                return `<td class="health-insurance-cell health-insurance-cell--no" title="${escapeHtml(title)}">No</td>`;
-              })
-              .join("");
-            return `
+          .map(
+            (employee) => `
               <tr>
-                <td>${escapeHtml(employee.employeeName)}</td>
-                ${cells}
-              </tr>`;
-          })
+                <td class="hi-td-employee">${escapeHtml(employee.employeeName)}</td>
+                ${months.map((month) => renderHealthInsuranceCell(employee.months?.[month.monthKey])).join("")}
+              </tr>`
+          )
           .join("");
       }
 
