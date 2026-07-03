@@ -512,54 +512,129 @@
       .lni-setup-card {
         padding: 18px 20px 20px;
       }
+      .lni-setup-header {
+        margin-bottom: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border, #e7e5e4);
+      }
+      .lni-setup-header h3 {
+        margin: 0 0 6px;
+        font-size: 1rem;
+      }
+      .lni-setup-header p {
+        margin: 0;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        max-width: 72ch;
+      }
       .lni-setup-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 18px;
-        align-items: start;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        align-items: stretch;
       }
-      .lni-setup-section h4 {
-        margin: 0 0 8px;
-        font-size: 0.95rem;
-      }
-      .lni-setup-actions {
+      .lni-setup-section {
         display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: end;
-        margin: 10px 0 12px;
+        flex-direction: column;
+        gap: 0;
+        min-width: 0;
+        padding: 14px 14px 12px;
+        border: 1px solid rgba(120, 113, 108, 0.22);
+        border-radius: 12px;
+        background: #fafaf9;
       }
-      .lni-setup-actions label {
+      .lni-setup-section-title {
+        margin: 0 0 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e7e5e4;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #78716c;
+      }
+      .lni-setup-toolbar {
         display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 12px;
+        align-items: end;
+        margin-bottom: 10px;
+      }
+      .lni-setup-toolbar--rates {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+      }
+      .lni-setup-field {
+        display: flex;
+        flex-direction: column;
         gap: 6px;
+        min-width: 0;
+      }
+      .lni-setup-field-label {
         font-size: 0.82rem;
         font-weight: 600;
         color: #44403c;
+        line-height: 1.2;
       }
-      .lni-rates-form {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 10px;
-        align-items: end;
-        margin-bottom: 12px;
+      .lni-setup-toolbar-actions {
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-end;
+        min-height: 2.5rem;
       }
-      .lni-rates-form label {
-        display: grid;
-        gap: 6px;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #44403c;
+      .lni-setup-toolbar-actions button {
+        white-space: nowrap;
+      }
+      .lni-setup-status {
+        margin: 0 0 10px;
+        min-height: 1.25rem;
+        font-size: 0.84rem;
+        line-height: 1.35;
+      }
+      .lni-setup-table-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .lni-setup-table-wrap .rates-table-scroll {
+        margin-top: 0;
+      }
+      table.lni-setup-table {
+        margin-top: 0;
       }
       .lni-setup-table td,
       .lni-setup-table th {
         font-size: 0.84rem;
+        padding: 7px 8px;
       }
-      .lni-setup-table select.payroll-analytics-input {
-        min-width: 8rem;
+      .lni-setup-table--types th:nth-child(1),
+      .lni-setup-table--types td:nth-child(1) {
+        width: auto;
+      }
+      .lni-setup-table--types th:nth-child(2),
+      .lni-setup-table--types td:nth-child(2) {
+        width: 5.5rem;
+        text-align: center;
+      }
+      .lni-setup-table--rates th:nth-child(1),
+      .lni-setup-table--rates td:nth-child(1) {
+        width: 28%;
+      }
+      .lni-setup-table--rates th:nth-child(2),
+      .lni-setup-table--rates td:nth-child(2) {
+        width: 24%;
+      }
+      .lni-setup-table--rates th:nth-child(3),
+      .lni-setup-table--rates td:nth-child(3),
+      .lni-setup-table--rates th:nth-child(4),
+      .lni-setup-table--rates td:nth-child(4) {
+        width: 24%;
+        text-align: right;
+      }
+      .lni-setup-table--rates th:nth-child(3),
+      .lni-setup-table--rates th:nth-child(4) {
+        text-align: right;
       }
       .lni-intern-cell {
         text-align: center;
-        width: 5rem;
       }
       .lni-intern-checkbox {
         width: 1rem;
@@ -567,6 +642,25 @@
         margin: 0;
         cursor: pointer;
         accent-color: #b45309;
+        vertical-align: middle;
+      }
+      @media (max-width: 960px) {
+        .lni-setup-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 640px) {
+        .lni-setup-toolbar,
+        .lni-setup-toolbar--rates {
+          grid-template-columns: 1fr;
+        }
+        .lni-setup-toolbar-actions {
+          justify-content: stretch;
+          min-height: 0;
+        }
+        .lni-setup-toolbar-actions button {
+          width: 100%;
+        }
       }
       .gross-profit-warnings {
         margin: 0 0 10px;
@@ -645,72 +739,82 @@
       </div>
 
       <div class="card lni-setup-card">
-        <h3 style="margin-top: 0">L&amp;I billing setup</h3>
-        <p class="muted" style="margin-top: 0">
-          Check <strong>Intern</strong> for interns; leave unchecked for full-time employees (with effective dates). Maintain L&amp;I billable rates for
-          professional time (case + report) and travel &amp; wait. L&amp;I rates and employee types use each period's
-          <strong>payroll start date</strong> (day after the previous recorded period end). Mileage reimbursement is excluded from gross profit as a passthrough.
-        </p>
+        <div class="lni-setup-header">
+          <h3>L&amp;I billing setup</h3>
+          <p class="muted">
+            Check <strong>Intern</strong> for interns; leave unchecked for full-time employees (with effective dates). Maintain L&amp;I billable rates for
+            professional time (case + report) and travel &amp; wait. L&amp;I rates and employee types use each period's
+            <strong>payroll start date</strong> (day after the previous recorded period end). Mileage reimbursement is excluded from gross profit as a passthrough.
+          </p>
+        </div>
         <div class="lni-setup-grid">
           <div class="lni-setup-section">
-            <h4>Employee types</h4>
-            <div class="lni-setup-actions">
-              <label>
-                Effective date for changes
+            <h4 class="lni-setup-section-title">Employee types</h4>
+            <div class="lni-setup-toolbar">
+              <div class="lni-setup-field">
+                <span class="lni-setup-field-label">Effective date for changes</span>
                 <input type="date" id="employmentTypeEffectiveDate" class="payroll-analytics-input" />
-              </label>
-              <button type="button" id="saveEmploymentTypesBtn">Save employee types</button>
+              </div>
+              <div class="lni-setup-toolbar-actions">
+                <button type="button" id="saveEmploymentTypesBtn">Save employee types</button>
+              </div>
             </div>
-            <p id="employmentTypeStatus" class="muted" style="margin: 0 0 10px"></p>
-            <div class="rates-table-scroll">
-              <table class="rates-table lni-setup-table">
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th class="lni-intern-cell">Intern</th>
-                  </tr>
-                </thead>
-                <tbody id="employmentTypesBody"></tbody>
-              </table>
+            <p id="employmentTypeStatus" class="lni-setup-status muted" aria-live="polite"></p>
+            <div class="lni-setup-table-wrap">
+              <div class="rates-table-scroll">
+                <table class="rates-table lni-setup-table lni-setup-table--types">
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th class="lni-intern-cell">Intern</th>
+                    </tr>
+                  </thead>
+                  <tbody id="employmentTypesBody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
           <div class="lni-setup-section">
-            <h4>L&amp;I billing rates</h4>
-            <div class="lni-rates-form">
-              <label>
-                Type
+            <h4 class="lni-setup-section-title">L&amp;I billing rates</h4>
+            <div class="lni-setup-toolbar lni-setup-toolbar--rates">
+              <div class="lni-setup-field">
+                <span class="lni-setup-field-label">Type</span>
                 <select id="lniRateType" class="payroll-analytics-input">
                   <option value="full_time">Full time</option>
                   <option value="intern">Intern</option>
                 </select>
-              </label>
-              <label>
-                Effective date
+              </div>
+              <div class="lni-setup-field">
+                <span class="lni-setup-field-label">Effective date</span>
                 <input type="date" id="lniRateEffectiveDate" class="payroll-analytics-input" />
-              </label>
-              <label>
-                Professional $/hr
+              </div>
+              <div class="lni-setup-field">
+                <span class="lni-setup-field-label">Professional $/hr</span>
                 <input type="number" id="lniProfessionalRate" class="payroll-analytics-input" min="0" step="0.01" />
-              </label>
-              <label>
-                Travel &amp; wait $/hr
+              </div>
+              <div class="lni-setup-field">
+                <span class="lni-setup-field-label">Travel &amp; wait $/hr</span>
                 <input type="number" id="lniTravelWaitRate" class="payroll-analytics-input" min="0" step="0.01" />
-              </label>
-              <button type="button" id="saveLniRateBtn">Save rate</button>
+              </div>
+              <div class="lni-setup-toolbar-actions">
+                <button type="button" id="saveLniRateBtn">Save rate</button>
+              </div>
             </div>
-            <p id="lniRateStatus" class="muted" style="margin: 0 0 10px"></p>
-            <div class="rates-table-scroll">
-              <table class="rates-table lni-setup-table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Effective</th>
-                    <th>Professional</th>
-                    <th>Travel &amp; wait</th>
-                  </tr>
-                </thead>
-                <tbody id="lniRatesBody"></tbody>
-              </table>
+            <p id="lniRateStatus" class="lni-setup-status muted" aria-live="polite"></p>
+            <div class="lni-setup-table-wrap">
+              <div class="rates-table-scroll">
+                <table class="rates-table lni-setup-table lni-setup-table--rates">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Effective</th>
+                      <th>Professional</th>
+                      <th>Travel &amp; wait</th>
+                    </tr>
+                  </thead>
+                  <tbody id="lniRatesBody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
