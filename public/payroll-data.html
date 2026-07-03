@@ -193,22 +193,47 @@
       }
       .payroll-chart-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        gap: 16px;
       }
       .payroll-chart-card {
-        min-height: 360px;
+        min-height: 0;
+        padding: 18px 18px 16px;
+        border: 1px solid #e7e5e4;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #fcfcfb 100%);
+        box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
       }
       .payroll-chart-card--employee-ranking {
         grid-column: 1 / -1;
-        min-height: 0;
+      }
+      .payroll-chart-header {
+        margin-bottom: 12px;
+      }
+      .payroll-chart-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1c1917;
+      }
+      .payroll-chart-header p {
+        margin: 4px 0 0;
+        font-size: 0.82rem;
+        color: #78716c;
+        line-height: 1.35;
+      }
+      .payroll-chart-panel {
+        border: 1px solid #f0eeec;
+        border-radius: 12px;
+        background: #fafaf9;
+        padding: 12px 10px 8px;
       }
       .payroll-chart-wrap {
-        height: 290px;
+        height: 320px;
       }
       .payroll-chart-wrap--employee-ranking {
         height: auto;
-        min-height: 320px;
+        min-height: 340px;
       }
       .payroll-data-table td,
       .payroll-data-table th {
@@ -559,22 +584,42 @@
 
       <div class="payroll-chart-grid">
         <div class="card payroll-chart-card">
-          <h3 style="margin-top: 0">Payroll cost over time</h3>
-          <div class="payroll-chart-wrap"><canvas id="costChart"></canvas></div>
-        </div>
-        <div class="card payroll-chart-card">
-          <h3 style="margin-top: 0">Hours over time</h3>
-          <div class="payroll-chart-wrap"><canvas id="hoursChart"></canvas></div>
-        </div>
-        <div class="card payroll-chart-card payroll-chart-card--employee-ranking">
-          <h3 style="margin-top: 0">Employee cost ranking</h3>
-          <div class="payroll-chart-wrap payroll-chart-wrap--employee-ranking" id="employeeCostChartWrap">
-            <canvas id="employeeCostChart"></canvas>
+          <div class="payroll-chart-header">
+            <h3>Payroll cost over time</h3>
+            <p>Stacked pay by recorded payroll period</p>
+          </div>
+          <div class="payroll-chart-panel">
+            <div class="payroll-chart-wrap"><canvas id="costChart"></canvas></div>
           </div>
         </div>
         <div class="card payroll-chart-card">
-          <h3 style="margin-top: 0">PTO and sick usage</h3>
-          <div class="payroll-chart-wrap"><canvas id="leaveChart"></canvas></div>
+          <div class="payroll-chart-header">
+            <h3>Hours over time</h3>
+            <p>Billable and leave hours by payroll period</p>
+          </div>
+          <div class="payroll-chart-panel">
+            <div class="payroll-chart-wrap"><canvas id="hoursChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card payroll-chart-card payroll-chart-card--employee-ranking">
+          <div class="payroll-chart-header">
+            <h3>Employee cost ranking</h3>
+            <p>Total payroll cost per employee for the filtered periods</p>
+          </div>
+          <div class="payroll-chart-panel">
+            <div class="payroll-chart-wrap payroll-chart-wrap--employee-ranking" id="employeeCostChartWrap">
+              <canvas id="employeeCostChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card payroll-chart-card">
+          <div class="payroll-chart-header">
+            <h3>PTO and sick usage</h3>
+            <p>Leave hours by payroll period</p>
+          </div>
+          <div class="payroll-chart-panel">
+            <div class="payroll-chart-wrap"><canvas id="leaveChart"></canvas></div>
+          </div>
         </div>
       </div>
 
@@ -618,7 +663,7 @@
       </div>
 
       <div class="card">
-        <h3 style="margin-top: 0">Employee totals</h3>
+        <h3 style="margin-top: 0">Employee totals (filtered)</h3>
         <div class="rates-table-scroll">
           <table class="rates-table payroll-data-table">
             <thead>
@@ -674,6 +719,111 @@
         sickTime: "#f97316",
       };
 
+      const CHART_THEME = {
+        fontFamily: "Inter, system-ui, sans-serif",
+        text: "#57534e",
+        textMuted: "#78716c",
+        grid: "rgba(120, 113, 108, 0.12)",
+        tooltipBg: "rgba(28, 25, 23, 0.94)",
+        panel: "#fafaf9",
+      };
+
+      function applyChartDefaults() {
+        if (!window.Chart) return;
+        Chart.defaults.font.family = CHART_THEME.fontFamily;
+        Chart.defaults.color = CHART_THEME.textMuted;
+        Chart.defaults.plugins.legend.labels.usePointStyle = true;
+        Chart.defaults.plugins.legend.labels.pointStyle = "circle";
+        Chart.defaults.plugins.legend.labels.boxWidth = 8;
+        Chart.defaults.plugins.legend.labels.boxHeight = 8;
+        Chart.defaults.plugins.legend.labels.padding = 14;
+        Chart.defaults.plugins.legend.labels.font = { size: 11, weight: "500" };
+        Chart.defaults.plugins.tooltip.backgroundColor = CHART_THEME.tooltipBg;
+        Chart.defaults.plugins.tooltip.titleFont = { size: 13, weight: "600" };
+        Chart.defaults.plugins.tooltip.bodyFont = { size: 12 };
+        Chart.defaults.plugins.tooltip.padding = 12;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+        Chart.defaults.plugins.tooltip.boxPadding = 5;
+        Chart.defaults.animation.duration = 500;
+      }
+
+      function scaleOptions(yLabel, moneyAxis) {
+        return {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            border: { display: false },
+            ticks: {
+              color: CHART_THEME.textMuted,
+              font: { size: 11, weight: "500" },
+              maxRotation: 45,
+              minRotation: 0,
+            },
+          },
+          y: {
+            stacked: true,
+            border: { display: false },
+            grid: { color: CHART_THEME.grid },
+            title: {
+              display: true,
+              text: yLabel,
+              color: CHART_THEME.text,
+              font: { size: 11, weight: "600" },
+            },
+            ticks: {
+              color: CHART_THEME.textMuted,
+              font: { size: 11 },
+              callback(value) {
+                if (moneyAxis) return money(value);
+                const n = Number(value) || 0;
+                return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+              },
+            },
+          },
+        };
+      }
+
+      function horizontalBarScaleOptions() {
+        return {
+          x: {
+            border: { display: false },
+            grid: { color: CHART_THEME.grid },
+            ticks: {
+              color: CHART_THEME.textMuted,
+              font: { size: 11 },
+              callback: (value) => money(value),
+            },
+          },
+          y: {
+            border: { display: false },
+            grid: { display: false },
+            ticks: {
+              autoSkip: false,
+              color: CHART_THEME.text,
+              font: { size: 12, weight: "500" },
+            },
+          },
+        };
+      }
+
+      function hexToRgba(hex, alpha) {
+        const raw = String(hex || "").replace("#", "");
+        if (raw.length !== 6) return hex;
+        const r = parseInt(raw.slice(0, 2), 16);
+        const g = parseInt(raw.slice(2, 4), 16);
+        const b = parseInt(raw.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+
+      function createHorizontalGradient(chart, color) {
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return hexToRgba(color, 0.85);
+        const gradient = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+        gradient.addColorStop(0, hexToRgba(color, 0.55));
+        gradient.addColorStop(1, hexToRgba(color, 0.95));
+        return gradient;
+      }
+
       function money(n) {
         const v = Number(n) || 0;
         return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -723,6 +873,11 @@
         }
       }
 
+      function stackedTooltipFooter(items, moneyAxis) {
+        const total = items.reduce((sum, item) => sum + (Number(item.parsed.y) || 0), 0);
+        return moneyAxis ? `Total: ${money(total)}` : `Total: ${hours(total)}`;
+      }
+
       function makeStackedBar(ctx, labels, datasets, yLabel, moneyAxis) {
         return new Chart(ctx, {
           type: "bar",
@@ -730,29 +885,26 @@
           options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            layout: { padding: { top: 4, right: 4, left: 0, bottom: 0 } },
             plugins: {
-              legend: { position: "bottom" },
+              legend: {
+                position: "bottom",
+                labels: { color: CHART_THEME.text },
+              },
               tooltip: {
                 callbacks: {
                   label(context) {
                     const value = context.parsed.y || 0;
                     return `${context.dataset.label}: ${moneyAxis ? money(value) : hours(value)}`;
                   },
-                },
-              },
-            },
-            scales: {
-              x: { stacked: true },
-              y: {
-                stacked: true,
-                title: { display: true, text: yLabel },
-                ticks: {
-                  callback(value) {
-                    return moneyAxis ? money(value) : value;
+                  footer(items) {
+                    return stackedTooltipFooter(items, moneyAxis);
                   },
                 },
               },
             },
+            scales: scaleOptions(yLabel, moneyAxis),
           },
         });
       }
@@ -780,14 +932,23 @@
           .join("");
       }
 
-      function dataset(label, data, color) {
-        return {
+      function dataset(label, data, color, { horizontal = false } = {}) {
+        const base = {
           label,
           data,
-          backgroundColor: color,
-          borderColor: color,
+          backgroundColor: hexToRgba(color, 0.88),
+          hoverBackgroundColor: color,
+          borderColor: hexToRgba(color, 0.35),
           borderWidth: 1,
+          borderRadius: horizontal ? { topRight: 6, bottomRight: 6 } : { topLeft: 6, topRight: 6 },
+          borderSkipped: false,
+          maxBarThickness: horizontal ? 28 : 56,
         };
+        if (horizontal) {
+          base.backgroundColor = (context) => createHorizontalGradient(context.chart, color);
+          base.hoverBackgroundColor = color;
+        }
+        return base;
       }
 
       function renderCharts(data) {
@@ -840,28 +1001,22 @@
           type: "bar",
           data: {
             labels: rankedEmployees.map((e) => e.employeeName),
-            datasets: [dataset("Total cost", rankedEmployees.map((e) => e.totalCost), COLORS.regularPay)],
+            datasets: [dataset("Total cost", rankedEmployees.map((e) => e.totalCost), COLORS.regularPay, { horizontal: true })],
           },
           options: {
             indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-              padding: { left: 4, right: 8 },
-            },
+            layout: { padding: { left: 4, right: 12, top: 4, bottom: 4 } },
             plugins: {
               legend: { display: false },
-              tooltip: { callbacks: { label: (context) => money(context.parsed.x || 0) } },
-            },
-            scales: {
-              x: { ticks: { callback: (value) => money(value) } },
-              y: {
-                ticks: {
-                  autoSkip: false,
-                  font: { size: 12 },
+              tooltip: {
+                callbacks: {
+                  label: (context) => `Total cost: ${money(context.parsed.x || 0)}`,
                 },
               },
             },
+            scales: horizontalBarScaleOptions(),
           },
         });
 
@@ -1123,6 +1278,7 @@
       });
       periodSelect.addEventListener("change", syncPeriodRangeDisabledState);
 
+      applyChartDefaults();
       loadData();
     </script>
   </body>
