@@ -16,23 +16,34 @@ The site is a **Next.js** app so **Vercel reliably deploys `/api/*`** (static HT
   - `other` (anything not yet mapped)
 - **Employee hourly rates** live in Postgres (`payroll.employees`) and appear on the analyzer when **Provider ID** matches.
 
-## Database (Neon / Postgres)
+## Database (Neon via Vercel)
 
-1. **Create tables** (once per database). From the repo root, with `DATABASE_URL` set (Neon pooling URL is fine):
+Payroll uses **Neon Postgres**, same pattern as other TEAM apps:
 
-   ```bash
-   psql "$DATABASE_URL" -f db/migrations/001_init_payroll.sql
-   ```
+1. **Vercel** → your project → **Storage** → create or link a **Neon** database (or use an existing TEAM Neon project).
+2. Copy the **pooled** connection string into Vercel **Environment Variables** as **`DATABASE_URL`** (Production and Preview if needed).
+3. Locally: copy `.env.example` → `.env` and set the same `DATABASE_URL` (Neon pooling URL is fine for `npm run dev` and migrations).
 
-   Or paste `db/migrations/001_init_payroll.sql` into the Neon SQL Editor.
+Migrations run automatically on **`npm run build`** (Vercel deploy). To apply manually:
 
-2. **Environment variables**
-   - Copy `.env.example` → `.env` locally (never commit `.env`).
-   - In Vercel: Project → Settings → Environment Variables → add **`DATABASE_URL`** (same Neon project as TEAM Voc is allowed; TEAM Payroll only uses the `payroll` schema).
+```bash
+npm run migrate
+```
 
-3. **Security**
-   - Do **not** commit connection strings or paste them in chat.
-   - If a secret was exposed, **rotate** the Neon password and update `DATABASE_URL` everywhere.
+Or run a single file:
+
+```bash
+psql "$DATABASE_URL" -f db/migrations/001_init_payroll.sql
+```
+
+For a full bootstrap without individual migration files, use `db/catch-up-neon.sql` in the Neon SQL Editor.
+
+**Schema:** all app tables live in the **`payroll`** schema (separate from other apps if you share one Neon database).
+
+### Security
+
+- Do **not** commit connection strings or paste them in chat.
+- If a secret was exposed, **rotate** the Neon password and update `DATABASE_URL` everywhere.
 
 ### Schema overview
 

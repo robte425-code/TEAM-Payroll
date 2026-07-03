@@ -209,6 +209,15 @@
           <span style="flex: 1; min-width: 4px" aria-hidden="true"></span>
           <button
             type="button"
+            id="recordPayrollBtn"
+            hidden
+            disabled
+            title="Save Payroll 2.0 results to the database"
+          >
+            Record payroll
+          </button>
+          <button
+            type="button"
             id="exportPayroll20CsvBtn"
             class="btn-secondary"
             hidden
@@ -228,6 +237,7 @@
             Print
           </button>
         </div>
+        <p id="payroll20RecordMsg" class="muted" aria-live="polite" style="margin: 0 0 8px"></p>
         <p class="muted" id="payroll20Meta"></p>
         <div class="payroll20-table-scroll">
           <table id="payroll20Table">
@@ -1161,18 +1171,25 @@
         setPayroll20ExtrasEnabled(true);
         renderLeaveRecordTable(p.leaveRows || []);
 
-        // Add Heather summary from Payroll 1.0 (as requested).
-        const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
-        const excludedEmployeeNames = new Set(
-          ["Robert Evans", "Heather Asplund"].map((n) => normalizeEmployeeName(n))
-        );
-        const employeeCount = Array.isArray(lastPayroll10Results?.rows)
-          ? lastPayroll10Results.rows.filter((r) => {
-              const k = normalizeEmployeeName(r.employeeName);
-              return !excludedEmployeeNames.has(k);
-            }).length
-          : 0;
-        const managementFee = 50 * employeeCount;
+        // Heather summary from Payroll 1.0 (stored on snapshot when available).
+        const hcFromP1 =
+          Number(p.heatherCommission) || Number(lastPayroll10Results?.heatherCommission) || 0;
+        let managementFee = Number(p.managementFee);
+        let employeeCount = 0;
+        if (!Number.isFinite(managementFee)) {
+          const excludedEmployeeNames = new Set(
+            ["Robert Evans", "Heather Asplund"].map((n) => normalizeEmployeeName(n))
+          );
+          employeeCount = Array.isArray(lastPayroll10Results?.rows)
+            ? lastPayroll10Results.rows.filter((r) => {
+                const k = normalizeEmployeeName(r.employeeName);
+                return !excludedEmployeeNames.has(k);
+              }).length
+            : 0;
+          managementFee = 50 * employeeCount;
+        } else {
+          employeeCount = Math.round(managementFee / 50);
+        }
         const hcEl = document.getElementById("payroll20HeatherCommissionFromP10");
         if (hcEl) {
           hcEl.textContent = `Commission for Heather (from Payroll 1.0): $${money2(hcFromP1)}`;
@@ -1276,8 +1293,13 @@
       }
 
       function setPayroll20ExtrasEnabled(enabled) {
+        const recordBtn = document.getElementById("recordPayrollBtn");
         const exportBtn = document.getElementById("exportPayroll20CsvBtn");
         const printBtn = document.getElementById("printPayroll20Btn");
+        if (recordBtn) {
+          recordBtn.hidden = !enabled;
+          recordBtn.disabled = !enabled;
+        }
         if (exportBtn) {
           exportBtn.hidden = !enabled;
           exportBtn.disabled = !enabled;
@@ -1307,6 +1329,8 @@
         if (leaveBody) leaveBody.innerHTML = "";
         const leaveMsg = document.getElementById("leaveRecordMsg");
         if (leaveMsg) leaveMsg.textContent = "";
+        const recordMsg = document.getElementById("payroll20RecordMsg");
+        if (recordMsg) recordMsg.textContent = "";
         lastPayroll20Results = null;
         setPayroll20ExtrasEnabled(false);
       }
@@ -2211,9 +2235,25 @@
           document.getElementById("payroll20ResultsWrap").hidden = false;
           renderLeaveRecordTable(leaveRows);
 
+          const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
+          const excludedEmployeeNames = new Set(
+            ["Robert Evans", "Heather Asplund"].map((n) => normalizeEmployeeName(n))
+          );
+          const employeeCount = Array.isArray(lastPayroll10Results?.rows)
+            ? lastPayroll10Results.rows.filter((r) => {
+                const k = normalizeEmployeeName(r.employeeName);
+                return !excludedEmployeeNames.has(k);
+              }).length
+            : 0;
+          const managementFee = 50 * employeeCount;
+
           lastPayroll20Results = {
             fileName: file.name,
             incentiveThreshold,
+            workingDays: Number(lastPayroll10Results?.workingDays) || 0,
+            holidayDays: Number(lastPayroll10Results?.holidayDays) || 0,
+            heatherCommission: hcFromP1,
+            managementFee,
             nbOnlyEmployeeNames: nbOnlyList.map((e) => e.displayName),
             rows: rows20,
             leaveRows,
@@ -2240,18 +2280,6 @@
           };
           setPayroll20ExtrasEnabled(true);
 
-          // Add Heather summary from Payroll 1.0 (as requested).
-          const hcFromP1 = Number(lastPayroll10Results?.heatherCommission) || 0;
-          const excludedEmployeeNames = new Set(
-            ["Robert Evans", "Heather Asplund"].map((n) => normalizeEmployeeName(n))
-          );
-          const employeeCount = Array.isArray(lastPayroll10Results?.rows)
-            ? lastPayroll10Results.rows.filter((r) => {
-                const k = normalizeEmployeeName(r.employeeName);
-                return !excludedEmployeeNames.has(k);
-              }).length
-            : 0;
-          const managementFee = 50 * employeeCount;
           const hcEl = document.getElementById("payroll20HeatherCommissionFromP10");
           if (hcEl) hcEl.textContent = `Commission for Heather (from Payroll 1.0): $${money2(hcFromP1)}`;
           const mfEl = document.getElementById("payroll20ManagementFeeFromP10");
@@ -2263,6 +2291,62 @@
           saveSessionToStorage();
         } catch (e) {
           errEl.textContent = e.message || "Failed to read non-bill spreadsheet.";
+        }
+      });
+
+      document.getElementById("recordPayrollBtn").addEventListener("click", async () => {
+        const errEl = document.getElementById("payroll20Error");
+        const msgEl = document.getElementById("payroll20RecordMsg");
+        if (errEl) errEl.textContent = "";
+        if (msgEl) msgEl.textContent = "";
+
+        if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.rows)) {
+          if (errEl) errEl.textContent = "Generate Payroll 2.0 before recording payroll.";
+          return;
+        }
+
+        const endDateRaw = String(document.getElementById("payrollEndDateInput")?.value || "").trim();
+        if (!endDateRaw) {
+          if (errEl) errEl.textContent = "Enter a payroll end date before recording payroll.";
+          return;
+        }
+
+        const btn = document.getElementById("recordPayrollBtn");
+        if (btn) btn.disabled = true;
+        if (msgEl) msgEl.textContent = "Recording payroll...";
+
+        try {
+          const r = await fetch("/api/payroll-record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({
+              payrollEndDate: endDateRaw,
+              payload: lastPayroll20Results,
+            }),
+          });
+          const text = await r.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = { error: text || "Invalid response" };
+          }
+          if (!r.ok) {
+            throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
+          }
+          const count = Number(data.employeeCount) || 0;
+          const dateLabel = formatEndDateForTitle(data.payrollEndDate || endDateRaw);
+          if (msgEl) {
+            msgEl.textContent = data.overwritten
+              ? `Updated stored payroll for end date ${dateLabel} (${count} employee row(s)).`
+              : `Recorded payroll for end date ${dateLabel} (${count} employee row(s)).`;
+          }
+        } catch (e) {
+          if (msgEl) msgEl.textContent = "";
+          if (errEl) errEl.textContent = e.message || "Failed to record payroll.";
+        } finally {
+          if (btn) btn.disabled = false;
         }
       });
 
