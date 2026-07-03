@@ -1,0 +1,294 @@
+const { getPool } = require("../../lib/db");
+const { requireRealAdmin } = require("../../lib/apiAuth");
+
+function parseDateParam(value) {
+  const s = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const d = new Date(`${s}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? "" : s;
+}
+
+function toNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function moneyTotal(row) {
+  return (
+    toNumber(row.regular_pay) +
+    toNumber(row.overtime_pay) +
+    toNumber(row.pto_pay) +
+    toNumber(row.sick_pay) +
+    toNumber(row.holiday_pay) +
+    toNumber(row.training_pay) +
+    toNumber(row.edu_pay) +
+    toNumber(row.general_reimbursement) +
+    toNumber(row.non_disc_bonus)
+  );
+}
+
+function emptyPayBuckets() {
+  return {
+    regularPay: 0,
+    overtimePay: 0,
+    ptoPay: 0,
+    sickPay: 0,
+    holidayPay: 0,
+    trainingPay: 0,
+    eduPay: 0,
+    generalReimbursement: 0,
+    nonDiscBonus: 0,
+  };
+}
+
+function emptyHourBuckets() {
+  return {
+    casePlusReports: 0,
+    nbTime: 0,
+    travelWaitHours: 0,
+    overtimeHours: 0,
+    ptoTime: 0,
+    sickTime: 0,
+  };
+}
+
+function addRowToBuckets(target, row) {
+  target.pay.regularPay += toNumber(row.regular_pay);
+  target.pay.overtimePay += toNumber(row.overtime_pay);
+  target.pay.ptoPay += toNumber(row.pto_pay);
+  target.pay.sickPay += toNumber(row.sick_pay);
+  target.pay.holidayPay += toNumber(row.holiday_pay);
+  target.pay.trainingPay += toNumber(row.training_pay);
+  target.pay.eduPay += toNumber(row.edu_pay);
+  target.pay.generalReimbursement += toNumber(row.general_reimbursement);
+  target.pay.nonDiscBonus += toNumber(row.non_disc_bonus);
+
+  target.hours.casePlusReports += toNumber(row.case_plus_reports);
+  target.hours.nbTime += toNumber(row.nb_time);
+  target.hours.travelWaitHours += toNumber(row.travel_wait_hours);
+  target.hours.overtimeHours += toNumber(row.overtime_hours);
+  target.hours.ptoTime += toNumber(row.pto_time);
+  target.hours.sickTime += toNumber(row.sick_time);
+}
+
+function totalObjectValues(obj) {
+  return Object.values(obj || {}).reduce((sum, value) => sum + toNumber(value), 0);
+}
+
+function buildAnalytics(rows) {
+  const byPeriod = new Map();
+  const byEmployee = new Map();
+  const employeeNames = new Map();
+  const summary = {
+    totalPayrollCost: 0,
+    totalHoursWorked: 0,
+    overtimeHours: 0,
+    ptoHours: 0,
+    sickHours: 0,
+    nonDiscBonus: 0,
+    reimbursements: 0,
+    employeeCount: 0,
+    runCount: 0,
+  };
+  const runIds = new Set();
+  const employeeKeys = new Set();
+
+  for (const row of rows) {
+    const runId = String(row.run_id || "");
+    const endDate = String(row.payroll_end_date || "").slice(0, 10);
+    const employeeName = String(row.employee_name || "").trim();
+    const employeeKey = normalizeName(employeeName);
+    const cost = moneyTotal(row);
+
+    runIds.add(runId);
+    if (employeeKey) employeeKeys.add(employeeKey);
+
+    if (!byPeriod.has(endDate)) {
+      byPeriod.set(endDate, {
+        payrollEndDate: endDate,
+        pay: emptyPayBuckets(),
+        hours: emptyHourBuckets(),
+        totalCost: 0,
+        employeeCount: 0,
+        employeeKeys: new Set(),
+      });
+    }
+    const period = byPeriod.get(endDate);
+    addRowToBuckets(period, row);
+    period.totalCost += cost;
+    if (employeeKey) period.employeeKeys.add(employeeKey);
+
+    if (employeeKey && !byEmployee.has(employeeKey)) {
+      byEmployee.set(employeeKey, {
+        employeeName,
+        pay: emptyPayBuckets(),
+        hours: emptyHourBuckets(),
+        totalCost: 0,
+        runCount: 0,
+        runIds: new Set(),
+      });
+      employeeNames.set(employeeKey, employeeName);
+    }
+    if (employeeKey) {
+      const emp = byEmployee.get(employeeKey);
+      addRowToBuckets(emp, row);
+      emp.totalCost += cost;
+      emp.runIds.add(runId);
+    }
+
+    summary.totalPayrollCost += cost;
+    summary.totalHoursWorked += toNumber(row.total_hours_worked);
+    summary.overtimeHours += toNumber(row.overtime_hours);
+    summary.ptoHours += toNumber(row.pto_time);
+    summary.sickHours += toNumber(row.sick_time);
+    summary.nonDiscBonus += toNumber(row.non_disc_bonus);
+    summary.reimbursements += toNumber(row.general_reimbursement);
+  }
+
+  summary.runCount = runIds.size;
+  summary.employeeCount = employeeKeys.size;
+  summary.averageCostPerEmployee = summary.employeeCount
+    ? summary.totalPayrollCost / summary.employeeCount
+    : 0;
+
+  const periods = [...byPeriod.values()]
+    .map((period) => ({
+      ...period,
+      employeeCount: period.employeeKeys.size,
+      employeeKeys: undefined,
+    }))
+    .sort((a, b) => a.payrollEndDate.localeCompare(b.payrollEndDate));
+
+  const employees = [...byEmployee.values()]
+    .map((emp) => ({
+      ...emp,
+      runCount: emp.runIds.size,
+      runIds: undefined,
+      totalHours: totalObjectValues(emp.hours),
+    }))
+    .sort((a, b) => b.totalCost - a.totalCost);
+
+  return {
+    summary,
+    periods,
+    employees,
+    employeeOptions: [...employeeNames.values()].sort((a, b) =>
+      String(a).localeCompare(String(b), undefined, { sensitivity: "base" })
+    ),
+  };
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Content-Type", "application/json");
+
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
+
+  let pool;
+  try {
+    pool = getPool();
+  } catch {
+    return res.status(500).json({ error: "Database not configured" });
+  }
+
+  const startDate = parseDateParam(req.query?.startDate);
+  const endDate = parseDateParam(req.query?.endDate);
+  const payrollEndDate = parseDateParam(req.query?.payrollEndDate);
+  const employee = normalizeName(req.query?.employee);
+
+  const where = [];
+  const params = [];
+  function addParam(value) {
+    params.push(value);
+    return `$${params.length}`;
+  }
+
+  if (payrollEndDate) {
+    where.push(`r.payroll_end_date = ${addParam(payrollEndDate)}::date`);
+  } else {
+    if (startDate) where.push(`r.payroll_end_date >= ${addParam(startDate)}::date`);
+    if (endDate) where.push(`r.payroll_end_date <= ${addParam(endDate)}::date`);
+  }
+  if (employee) {
+    where.push(`lower(regexp_replace(trim(rr.employee_name), '\\s+', ' ', 'g')) = ${addParam(employee)}`);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  try {
+    const [runsResult, employeeOptionsResult, rowsResult] = await Promise.all([
+      pool.query(
+        `SELECT id, payroll_end_date, working_days, holiday_days, non_bill_file_name, updated_at
+         FROM payroll.payroll_runs
+         ORDER BY payroll_end_date DESC`
+      ),
+      pool.query(
+        `SELECT DISTINCT rr.employee_name
+         FROM payroll.payroll_run_rows rr
+         WHERE trim(rr.employee_name) <> ''
+         ORDER BY rr.employee_name ASC`
+      ),
+      pool.query(
+        `SELECT
+           r.id AS run_id,
+           r.payroll_end_date,
+           rr.employee_name,
+           rr.case_plus_reports,
+           rr.nb_time,
+           rr.travel_wait_hours,
+           rr.total_hours_worked,
+           rr.overtime_hours,
+           rr.pto_time,
+           rr.sick_time,
+           rr.regular_pay,
+           rr.overtime_pay,
+           rr.pto_pay,
+           rr.sick_pay,
+           rr.holiday_pay,
+           rr.training_pay,
+           rr.edu_pay,
+           rr.general_reimbursement,
+           rr.non_disc_bonus
+         FROM payroll.payroll_runs r
+         JOIN payroll.payroll_run_rows rr ON rr.run_id = r.id
+         ${whereSql}
+         ORDER BY r.payroll_end_date ASC, rr.sort_order ASC`,
+        params
+      ),
+    ]);
+
+    const analytics = buildAnalytics(rowsResult.rows);
+    const employeeOptions = employeeOptionsResult.rows
+      .map((r) => String(r.employee_name || "").trim())
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+    return res.status(200).json({
+      ok: true,
+      filters: { startDate, endDate, payrollEndDate, employee },
+      runs: runsResult.rows.map((r) => ({
+        id: r.id,
+        payrollEndDate: String(r.payroll_end_date || "").slice(0, 10),
+        workingDays: r.working_days == null ? null : Number(r.working_days),
+        holidayDays: r.holiday_days == null ? null : Number(r.holiday_days),
+        nonBillFileName: r.non_bill_file_name || "",
+        updatedAt: r.updated_at,
+      })),
+      ...analytics,
+      employeeOptions,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || "Failed to load payroll data" });
+  }
+}

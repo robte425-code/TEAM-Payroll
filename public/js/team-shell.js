@@ -11,6 +11,7 @@
   const ADMIN_LINKS = [
     { href: "./my-leave.html", label: "My balances", key: "my-leave" },
     { href: "./index.html", label: "Analyze spreadsheet", key: "index" },
+    { href: "./payroll-data.html", label: "Payroll data", key: "payroll-data" },
     { href: "./rates.html", label: "Employee pay rates", key: "rates" },
     { href: "./leave.html", label: "PTO/Sick management", key: "leave" },
     { href: "./pay-stubs.html", label: "Upload paystubs", key: "pay-stubs" },

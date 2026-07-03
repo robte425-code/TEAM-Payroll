@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payroll data - TEAM Payroll</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/voc-shell.css" />
+    <link rel="stylesheet" href="./css/app.css" />
+    <style>
+      .payroll-data-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: end;
+      }
+      .payroll-data-filters label {
+        display: grid;
+        gap: 4px;
+        font-size: 0.9rem;
+      }
+      .payroll-data-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+      }
+      .payroll-data-card {
+        border: 1px solid rgba(120, 113, 108, 0.25);
+        border-radius: 12px;
+        padding: 14px;
+        background: #fff;
+      }
+      .payroll-data-card-label {
+        color: #78716c;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .payroll-data-card-value {
+        margin-top: 6px;
+        font-size: 1.45rem;
+        font-weight: 800;
+        color: #1c1917;
+      }
+      .payroll-chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 14px;
+      }
+      .payroll-chart-card {
+        min-height: 360px;
+      }
+      .payroll-chart-wrap {
+        height: 290px;
+      }
+      .payroll-data-table td,
+      .payroll-data-table th {
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body class="voc-page">
+    <div id="team-shell-root"></div>
+    <script src="./js/team-shell.js"></script>
+    <script>
+      TeamShell.mount({
+        mode: "admin",
+        adminPage: "payroll-data",
+        enableViewAs: true,
+        onViewAsChange: () => window.location.assign("./my-leave.html"),
+      });
+    </script>
+
+    <main class="voc-main">
+      <h1 class="voc-page-title">Payroll data</h1>
+      <p class="voc-page-lead">
+        Analyze recorded Payroll 2.0 runs by pay period, employee, hours, and cost categories.
+      </p>
+
+      <div class="card">
+        <div class="payroll-data-filters">
+          <label>
+            From payroll end date
+            <input type="date" id="startDateInput" class="rate-input" />
+          </label>
+          <label>
+            To payroll end date
+            <input type="date" id="endDateInput" class="rate-input" />
+          </label>
+          <label>
+            Single payroll period
+            <select id="periodSelect" class="rate-input">
+              <option value="">All periods</option>
+            </select>
+          </label>
+          <label>
+            Employee
+            <select id="employeeSelect" class="rate-input">
+              <option value="">All employees</option>
+            </select>
+          </label>
+          <button type="button" id="applyFiltersBtn">Apply filters</button>
+          <button type="button" id="clearFiltersBtn" class="btn-secondary">Clear</button>
+        </div>
+        <p id="status" class="muted" aria-live="polite"></p>
+        <p id="error" class="error"></p>
+      </div>
+
+      <div class="payroll-data-grid" id="summaryCards"></div>
+
+      <div class="payroll-chart-grid">
+        <div class="card payroll-chart-card">
+          <h3 style="margin-top: 0">Payroll cost over time</h3>
+          <div class="payroll-chart-wrap"><canvas id="costChart"></canvas></div>
+        </div>
+        <div class="card payroll-chart-card">
+          <h3 style="margin-top: 0">Hours over time</h3>
+          <div class="payroll-chart-wrap"><canvas id="hoursChart"></canvas></div>
+        </div>
+        <div class="card payroll-chart-card">
+          <h3 style="margin-top: 0">Employee cost ranking</h3>
+          <div class="payroll-chart-wrap"><canvas id="employeeCostChart"></canvas></div>
+        </div>
+        <div class="card payroll-chart-card">
+          <h3 style="margin-top: 0">PTO and sick usage</h3>
+          <div class="payroll-chart-wrap"><canvas id="leaveChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Employee totals</h3>
+        <div class="rates-table-scroll">
+          <table class="rates-table payroll-data-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Total cost</th>
+                <th>Regular pay</th>
+                <th>Overtime pay</th>
+                <th>PTO pay</th>
+                <th>Sick pay</th>
+                <th>Bonus</th>
+                <th>Reimb.</th>
+                <th>Total hours</th>
+              </tr>
+            </thead>
+            <tbody id="employeeTotalsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script>
+      const statusEl = document.getElementById("status");
+      const errorEl = document.getElementById("error");
+      const summaryCardsEl = document.getElementById("summaryCards");
+      const employeeTotalsBody = document.getElementById("employeeTotalsBody");
+      const periodSelect = document.getElementById("periodSelect");
+      const employeeSelect = document.getElementById("employeeSelect");
+      const startDateInput = document.getElementById("startDateInput");
+      const endDateInput = document.getElementById("endDateInput");
+      const charts = {};
+      let allEmployeeOptions = [];
+
+      const COLORS = {
+        regularPay: "#2563eb",
+        overtimePay: "#dc2626",
+        ptoPay: "#16a34a",
+        sickPay: "#f97316",
+        holidayPay: "#7c3aed",
+        trainingPay: "#0891b2",
+        eduPay: "#0d9488",
+        generalReimbursement: "#a16207",
+        nonDiscBonus: "#be185d",
+        casePlusReports: "#2563eb",
+        nbTime: "#64748b",
+        travelWaitHours: "#0891b2",
+        overtimeHours: "#dc2626",
+        ptoTime: "#16a34a",
+        sickTime: "#f97316",
+      };
+
+      function money(n) {
+        const v = Number(n) || 0;
+        return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      }
+
+      function hours(n) {
+        const v = Number(n) || 0;
+        return (Math.round((v + Number.EPSILON) * 100) / 100).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
+
+      function formatDate(s) {
+        const raw = String(s || "").slice(0, 10);
+        if (!raw) return "";
+        const d = new Date(`${raw}T00:00:00`);
+        return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString("en-US");
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function destroyChart(key) {
+        if (charts[key]) {
+          charts[key].destroy();
+          charts[key] = null;
+        }
+      }
+
+      function makeStackedBar(ctx, labels, datasets, yLabel, moneyAxis) {
+        return new Chart(ctx, {
+          type: "bar",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: "bottom" },
+              tooltip: {
+                callbacks: {
+                  label(context) {
+                    const value = context.parsed.y || 0;
+                    return `${context.dataset.label}: ${moneyAxis ? money(value) : hours(value)}`;
+                  },
+                },
+              },
+            },
+            scales: {
+              x: { stacked: true },
+              y: {
+                stacked: true,
+                title: { display: true, text: yLabel },
+                ticks: {
+                  callback(value) {
+                    return moneyAxis ? money(value) : value;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function renderSummary(summary) {
+        const cards = [
+          ["Total payroll cost", money(summary.totalPayrollCost)],
+          ["Total hours worked", hours(summary.totalHoursWorked)],
+          ["Overtime hours", hours(summary.overtimeHours)],
+          ["PTO hours", hours(summary.ptoHours)],
+          ["Sick hours", hours(summary.sickHours)],
+          ["Non-discretionary bonus", money(summary.nonDiscBonus)],
+          ["Reimbursements", money(summary.reimbursements)],
+          ["Employees", String(summary.employeeCount || 0)],
+          ["Avg. cost / employee", money(summary.averageCostPerEmployee)],
+        ];
+        summaryCardsEl.innerHTML = cards
+          .map(
+            ([label, value]) => `
+              <div class="payroll-data-card">
+                <div class="payroll-data-card-label">${escapeHtml(label)}</div>
+                <div class="payroll-data-card-value">${escapeHtml(value)}</div>
+              </div>`
+          )
+          .join("");
+      }
+
+      function dataset(label, data, color) {
+        return {
+          label,
+          data,
+          backgroundColor: color,
+          borderColor: color,
+          borderWidth: 1,
+        };
+      }
+
+      function renderCharts(data) {
+        const periods = data.periods || [];
+        const labels = periods.map((p) => formatDate(p.payrollEndDate));
+
+        destroyChart("cost");
+        charts.cost = makeStackedBar(
+          document.getElementById("costChart"),
+          labels,
+          [
+            dataset("Regular", periods.map((p) => p.pay.regularPay), COLORS.regularPay),
+            dataset("Overtime", periods.map((p) => p.pay.overtimePay), COLORS.overtimePay),
+            dataset("PTO", periods.map((p) => p.pay.ptoPay), COLORS.ptoPay),
+            dataset("Sick", periods.map((p) => p.pay.sickPay), COLORS.sickPay),
+            dataset("Holiday", periods.map((p) => p.pay.holidayPay), COLORS.holidayPay),
+            dataset("Training", periods.map((p) => p.pay.trainingPay), COLORS.trainingPay),
+            dataset("Education", periods.map((p) => p.pay.eduPay), COLORS.eduPay),
+            dataset("Reimbursement", periods.map((p) => p.pay.generalReimbursement), COLORS.generalReimbursement),
+            dataset("Bonus", periods.map((p) => p.pay.nonDiscBonus), COLORS.nonDiscBonus),
+          ],
+          "Cost",
+          true
+        );
+
+        destroyChart("hours");
+        charts.hours = makeStackedBar(
+          document.getElementById("hoursChart"),
+          labels,
+          [
+            dataset("Case + reports", periods.map((p) => p.hours.casePlusReports), COLORS.casePlusReports),
+            dataset("NB time", periods.map((p) => p.hours.nbTime), COLORS.nbTime),
+            dataset("Travel/wait", periods.map((p) => p.hours.travelWaitHours), COLORS.travelWaitHours),
+            dataset("Overtime", periods.map((p) => p.hours.overtimeHours), COLORS.overtimeHours),
+            dataset("PTO", periods.map((p) => p.hours.ptoTime), COLORS.ptoTime),
+            dataset("Sick", periods.map((p) => p.hours.sickTime), COLORS.sickTime),
+          ],
+          "Hours",
+          false
+        );
+
+        const topEmployees = (data.employees || []).slice(0, 15).reverse();
+        destroyChart("employeeCost");
+        charts.employeeCost = new Chart(document.getElementById("employeeCostChart"), {
+          type: "bar",
+          data: {
+            labels: topEmployees.map((e) => e.employeeName),
+            datasets: [dataset("Total cost", topEmployees.map((e) => e.totalCost), COLORS.regularPay)],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: (context) => money(context.parsed.x || 0) } },
+            },
+            scales: {
+              x: { ticks: { callback: (value) => money(value) } },
+            },
+          },
+        });
+
+        destroyChart("leave");
+        charts.leave = makeStackedBar(
+          document.getElementById("leaveChart"),
+          labels,
+          [
+            dataset("PTO", periods.map((p) => p.hours.ptoTime), COLORS.ptoTime),
+            dataset("Sick", periods.map((p) => p.hours.sickTime), COLORS.sickTime),
+          ],
+          "Hours",
+          false
+        );
+      }
+
+      function renderEmployeeTable(employees) {
+        const rows = employees || [];
+        if (!rows.length) {
+          employeeTotalsBody.innerHTML = '<tr><td colspan="9" class="muted">No recorded payroll data found.</td></tr>';
+          return;
+        }
+        employeeTotalsBody.innerHTML = rows
+          .slice(0, 50)
+          .map(
+            (e) => `
+              <tr>
+                <td>${escapeHtml(e.employeeName)}</td>
+                <td>${escapeHtml(money(e.totalCost))}</td>
+                <td>${escapeHtml(money(e.pay.regularPay))}</td>
+                <td>${escapeHtml(money(e.pay.overtimePay))}</td>
+                <td>${escapeHtml(money(e.pay.ptoPay))}</td>
+                <td>${escapeHtml(money(e.pay.sickPay))}</td>
+                <td>${escapeHtml(money(e.pay.nonDiscBonus))}</td>
+                <td>${escapeHtml(money(e.pay.generalReimbursement))}</td>
+                <td>${escapeHtml(hours(e.totalHours))}</td>
+              </tr>`
+          )
+          .join("");
+      }
+
+      function populateFilters(data) {
+        const currentPeriod = periodSelect.value;
+        periodSelect.innerHTML = '<option value="">All periods</option>';
+        for (const run of data.runs || []) {
+          const opt = document.createElement("option");
+          opt.value = run.payrollEndDate;
+          opt.textContent = formatDate(run.payrollEndDate);
+          periodSelect.appendChild(opt);
+        }
+        periodSelect.value = currentPeriod;
+
+        if (!allEmployeeOptions.length && Array.isArray(data.employeeOptions)) {
+          allEmployeeOptions = data.employeeOptions;
+        }
+        const currentEmployee = employeeSelect.value;
+        employeeSelect.innerHTML = '<option value="">All employees</option>';
+        for (const name of allEmployeeOptions) {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          employeeSelect.appendChild(opt);
+        }
+        employeeSelect.value = currentEmployee;
+      }
+
+      function buildQuery() {
+        const q = new URLSearchParams();
+        const period = periodSelect.value;
+        if (period) {
+          q.set("payrollEndDate", period);
+        } else {
+          if (startDateInput.value) q.set("startDate", startDateInput.value);
+          if (endDateInput.value) q.set("endDate", endDateInput.value);
+        }
+        if (employeeSelect.value) q.set("employee", employeeSelect.value);
+        return q.toString();
+      }
+
+      async function loadData() {
+        statusEl.textContent = "Loading payroll data...";
+        errorEl.textContent = "";
+        try {
+          const qs = buildQuery();
+          const r = await fetch(`/api/payroll-data${qs ? `?${qs}` : ""}`, {
+            credentials: "same-origin",
+            cache: "no-store",
+          });
+          const text = await r.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = { error: text || "Invalid response" };
+          }
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+
+          populateFilters(data);
+          renderSummary(data.summary || {});
+          renderCharts(data);
+          renderEmployeeTable(data.employees || []);
+          statusEl.textContent = data.summary?.runCount
+            ? `Showing ${data.summary.runCount} recorded payroll period(s).`
+            : "No recorded payroll periods found for these filters.";
+        } catch (e) {
+          statusEl.textContent = "";
+          errorEl.textContent = e.message || "Failed to load payroll data.";
+        }
+      }
+
+      document.getElementById("applyFiltersBtn").addEventListener("click", loadData);
+      document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+        startDateInput.value = "";
+        endDateInput.value = "";
+        periodSelect.value = "";
+        employeeSelect.value = "";
+        startDateInput.disabled = false;
+        endDateInput.disabled = false;
+        loadData();
+      });
+      periodSelect.addEventListener("change", () => {
+        const disabled = Boolean(periodSelect.value);
+        startDateInput.disabled = disabled;
+        endDateInput.disabled = disabled;
+      });
+
+      loadData();
+    </script>
+  </body>
+</html>

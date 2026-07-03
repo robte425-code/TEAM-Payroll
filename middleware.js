@@ -88,6 +88,7 @@ export const config = {
   matcher: [
     "/",
     "/index.html",
+    "/payroll-data.html",
     "/rates.html",
     "/leave.html",
     "/my-leave.html",
@@ -103,6 +104,7 @@ export const config = {
     "/api/view-as-users",
     "/api/pay-stubs/:path*",
     "/api/payroll-unread",
+    "/api/payroll-data",
     "/api/internal/team-access",
   ],
 };
