@@ -5,6 +5,17 @@ const {
   fetchHealthInsuranceSettings,
   updateHealthInsuranceSettings,
 } = require("../../lib/health-insurance-qualification");
+const {
+  buildGrossProfitAnalytics,
+  buildPayrollStartDateByEndDate,
+  fetchMileageRate,
+  fetchEmploymentTypeHistory,
+  fetchLniBillingRateSchedules,
+  fetchEmployeeEmploymentTypes,
+  fetchEmployeesForGrossProfit,
+  upsertEmploymentTypeChange,
+  upsertLniBillingRateSchedule,
+} = require("../../lib/gross-profit-analytics");
 const { buffer } = require("node:stream/consumers");
 
 function parseDateParam(value) {
@@ -253,7 +264,16 @@ async function loadPayrollAnalytics(pool, filters) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const [runsResult, employeeOptionsResult, rowsResult, healthInsuranceSettings] = await Promise.all([
+  const [
+    runsResult,
+    employeeOptionsResult,
+    rowsResult,
+    healthInsuranceSettings,
+    employeesResult,
+    employmentTypeHistory,
+    lniRateSchedules,
+    mileageRate,
+  ] = await Promise.all([
     pool.query(
       `SELECT id, payroll_end_date, working_days, holiday_days, non_bill_file_name, updated_at
        FROM payroll.payroll_runs
@@ -270,6 +290,7 @@ async function loadPayrollAnalytics(pool, filters) {
          r.id AS run_id,
          r.payroll_end_date,
          r.working_days,
+         rr.provider_id,
          rr.employee_name,
          rr.case_plus_reports,
          rr.nb_time,
@@ -285,6 +306,7 @@ async function loadPayrollAnalytics(pool, filters) {
          rr.holiday_pay,
          rr.training_pay,
          rr.edu_pay,
+         rr.mileage,
          rr.general_reimbursement,
          rr.non_disc_bonus
        FROM payroll.payroll_runs r
@@ -294,6 +316,10 @@ async function loadPayrollAnalytics(pool, filters) {
       params
     ),
     fetchHealthInsuranceSettings(pool),
+    fetchEmployeesForGrossProfit(pool),
+    fetchEmploymentTypeHistory(pool),
+    fetchLniBillingRateSchedules(pool),
+    fetchMileageRate(pool),
   ]);
 
   const analytics = buildAnalytics(rowsResult.rows);
@@ -304,6 +330,21 @@ async function loadPayrollAnalytics(pool, filters) {
   const healthInsuranceQualification = buildHealthInsuranceQualification(
     rowsResult.rows,
     healthInsuranceSettings.hoursPerWorkingDay
+  );
+  const payrollStartDateByEndDate = buildPayrollStartDateByEndDate(
+    runsResult.rows.map((r) => formatSqlDate(r.payroll_end_date))
+  );
+  const grossProfit = buildGrossProfitAnalytics({
+    payrollRows: rowsResult.rows,
+    payrollStartDateByEndDate,
+    employees: employeesResult,
+    employmentTypeHistory,
+    lniRateSchedules,
+    mileageRate,
+  });
+  const employeeEmploymentTypes = await fetchEmployeeEmploymentTypes(
+    pool,
+    endDate || payrollEndDate || startDate || new Date()
   );
 
   return {
@@ -320,6 +361,9 @@ async function loadPayrollAnalytics(pool, filters) {
     employeeOptions,
     healthInsuranceSettings,
     healthInsuranceQualification,
+    lniBillingRateSchedules: lniRateSchedules,
+    employeeEmploymentTypes,
+    grossProfit,
   };
 }
 
@@ -346,13 +390,49 @@ export default async function handler(req, res) {
   if (req.method === "PATCH") {
     try {
       const body = await readJsonBody(req);
-      const settings = body.healthInsuranceSettings || body;
-      const healthInsuranceSettings = await updateHealthInsuranceSettings(pool, {
-        hoursPerWorkingDay: settings.hoursPerWorkingDay,
-      });
-      return res.status(200).json({ ok: true, healthInsuranceSettings });
+      const response = { ok: true };
+
+      if (body.healthInsuranceSettings || body.hoursPerWorkingDay != null) {
+        const settings = body.healthInsuranceSettings || body;
+        response.healthInsuranceSettings = await updateHealthInsuranceSettings(pool, {
+          hoursPerWorkingDay: settings.hoursPerWorkingDay,
+        });
+      }
+
+      if (Array.isArray(body.employmentTypeUpdates) && body.employmentTypeUpdates.length) {
+        for (const item of body.employmentTypeUpdates) {
+          await upsertEmploymentTypeChange(pool, {
+            employeeId: item.employeeId,
+            employmentType: item.employmentType,
+            effectiveDate: item.effectiveDate,
+            updatedByEmail: admin.email || admin.name || "",
+          });
+        }
+        response.employeeEmploymentTypes = await fetchEmployeeEmploymentTypes(pool, new Date());
+      }
+
+      if (body.lniRateSchedule) {
+        response.lniRateSchedule = await upsertLniBillingRateSchedule(pool, {
+          employmentType: body.lniRateSchedule.employmentType,
+          effectiveDate: body.lniRateSchedule.effectiveDate,
+          professionalRate: body.lniRateSchedule.professionalRate,
+          travelWaitRate: body.lniRateSchedule.travelWaitRate,
+          updatedByEmail: admin.email || admin.name || "",
+        });
+        response.lniBillingRateSchedules = await fetchLniBillingRateSchedules(pool);
+      }
+
+      if (
+        !response.healthInsuranceSettings &&
+        !response.employeeEmploymentTypes &&
+        !response.lniRateSchedule
+      ) {
+        return res.status(400).json({ error: "No supported settings provided to update." });
+      }
+
+      return res.status(200).json(response);
     } catch (e) {
-      return res.status(500).json({ error: e?.message || "Failed to save health insurance settings" });
+      return res.status(500).json({ error: e?.message || "Failed to save payroll analytics settings" });
     }
   }
 

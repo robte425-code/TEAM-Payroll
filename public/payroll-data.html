@@ -509,6 +509,59 @@
         color: #78716c;
         font-size: 0.92rem;
       }
+      .lni-setup-card {
+        padding: 18px 20px 20px;
+      }
+      .lni-setup-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 18px;
+        align-items: start;
+      }
+      .lni-setup-section h4 {
+        margin: 0 0 8px;
+        font-size: 0.95rem;
+      }
+      .lni-setup-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: end;
+        margin: 10px 0 12px;
+      }
+      .lni-setup-actions label {
+        display: grid;
+        gap: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #44403c;
+      }
+      .lni-rates-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+      .lni-rates-form label {
+        display: grid;
+        gap: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #44403c;
+      }
+      .lni-setup-table td,
+      .lni-setup-table th {
+        font-size: 0.84rem;
+      }
+      .lni-setup-table select.payroll-analytics-input {
+        min-width: 8rem;
+      }
+      .gross-profit-warnings {
+        margin: 0 0 10px;
+        font-size: 0.84rem;
+        color: #a16207;
+      }
     </style>
   </head>
   <body class="voc-page">
@@ -580,6 +633,78 @@
         <p id="error" class="error" style="margin: 12px 0 0"></p>
       </div>
 
+      <div class="card lni-setup-card">
+        <h3 style="margin-top: 0">L&amp;I billing setup</h3>
+        <p class="muted" style="margin-top: 0">
+          Classify employees as intern or full-time (with effective dates) and maintain L&amp;I billable rates for
+          professional time (case + report) and travel &amp; wait. L&amp;I rates and employee types use each period's
+          <strong>payroll start date</strong> (day after the previous recorded period end). Mileage reimbursement is excluded from gross profit as a passthrough.
+        </p>
+        <div class="lni-setup-grid">
+          <div class="lni-setup-section">
+            <h4>Employee types</h4>
+            <div class="lni-setup-actions">
+              <label>
+                Effective date for changes
+                <input type="date" id="employmentTypeEffectiveDate" class="payroll-analytics-input" />
+              </label>
+              <button type="button" id="saveEmploymentTypesBtn">Save employee types</button>
+            </div>
+            <p id="employmentTypeStatus" class="muted" style="margin: 0 0 10px"></p>
+            <div class="rates-table-scroll">
+              <table class="rates-table lni-setup-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody id="employmentTypesBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="lni-setup-section">
+            <h4>L&amp;I billing rates</h4>
+            <div class="lni-rates-form">
+              <label>
+                Type
+                <select id="lniRateType" class="payroll-analytics-input">
+                  <option value="full_time">Full time</option>
+                  <option value="intern">Intern</option>
+                </select>
+              </label>
+              <label>
+                Effective date
+                <input type="date" id="lniRateEffectiveDate" class="payroll-analytics-input" />
+              </label>
+              <label>
+                Professional $/hr
+                <input type="number" id="lniProfessionalRate" class="payroll-analytics-input" min="0" step="0.01" />
+              </label>
+              <label>
+                Travel &amp; wait $/hr
+                <input type="number" id="lniTravelWaitRate" class="payroll-analytics-input" min="0" step="0.01" />
+              </label>
+              <button type="button" id="saveLniRateBtn">Save rate</button>
+            </div>
+            <p id="lniRateStatus" class="muted" style="margin: 0 0 10px"></p>
+            <div class="rates-table-scroll">
+              <table class="rates-table lni-setup-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Effective</th>
+                    <th>Professional</th>
+                    <th>Travel &amp; wait</th>
+                  </tr>
+                </thead>
+                <tbody id="lniRatesBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="payroll-data-grid" id="summaryCards"></div>
 
       <div class="payroll-chart-grid">
@@ -599,6 +724,18 @@
           </div>
           <div class="payroll-chart-panel">
             <div class="payroll-chart-wrap"><canvas id="hoursChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card payroll-chart-card payroll-chart-card--employee-ranking">
+          <div class="payroll-chart-header">
+            <h3>Gross profit by employee</h3>
+            <p>L&amp;I billable revenue minus payroll cost (mileage reimbursement excluded)</p>
+          </div>
+          <p id="grossProfitWarnings" class="gross-profit-warnings" hidden></p>
+          <div class="payroll-chart-panel">
+            <div class="payroll-chart-wrap payroll-chart-wrap--employee-ranking" id="grossProfitChartWrap">
+              <canvas id="grossProfitChart"></canvas>
+            </div>
           </div>
         </div>
         <div class="card payroll-chart-card payroll-chart-card--employee-ranking">
@@ -694,12 +831,18 @@
       const healthInsuranceHead = document.getElementById("healthInsuranceHead");
       const healthInsuranceBody = document.getElementById("healthInsuranceBody");
       const healthInsuranceSettingsStatus = document.getElementById("healthInsuranceSettingsStatus");
+      const employmentTypesBody = document.getElementById("employmentTypesBody");
+      const lniRatesBody = document.getElementById("lniRatesBody");
+      const employmentTypeStatus = document.getElementById("employmentTypeStatus");
+      const lniRateStatus = document.getElementById("lniRateStatus");
+      const grossProfitWarningsEl = document.getElementById("grossProfitWarnings");
       const periodSelect = document.getElementById("periodSelect");
       const employeeSelect = document.getElementById("employeeSelect");
       const startPeriodSelect = document.getElementById("startPeriodSelect");
       const endPeriodSelect = document.getElementById("endPeriodSelect");
       const charts = {};
       let allEmployeeOptions = [];
+      let loadedEmploymentTypes = new Map();
 
       const COLORS = {
         regularPay: "#2563eb",
@@ -717,6 +860,8 @@
         overtimeHours: "#dc2626",
         ptoTime: "#16a34a",
         sickTime: "#f97316",
+        grossProfitPositive: "#16a34a",
+        grossProfitNegative: "#dc2626",
       };
 
       const CHART_THEME = {
@@ -1031,6 +1176,230 @@
           "Hours",
           false
         );
+
+        renderGrossProfitChart(data.grossProfit || {});
+      }
+
+      function employmentTypeLabel(type) {
+        return type === "intern" ? "Intern" : "Full time";
+      }
+
+      function todayIsoDate() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      }
+
+      function renderEmploymentTypes(employeeEmploymentTypes) {
+        const rows = employeeEmploymentTypes || [];
+        loadedEmploymentTypes = new Map(
+          rows.map((row) => [String(row.employeeId), String(row.employmentType || "full_time")])
+        );
+        const effectiveInput = document.getElementById("employmentTypeEffectiveDate");
+        if (effectiveInput && !effectiveInput.value) effectiveInput.value = todayIsoDate();
+
+        if (!rows.length) {
+          employmentTypesBody.innerHTML =
+            '<tr><td colspan="2" class="muted">No employees found.</td></tr>';
+          return;
+        }
+
+        employmentTypesBody.innerHTML = rows
+          .map(
+            (row) => `
+              <tr data-employee-id="${escapeHtml(row.employeeId)}">
+                <td>${escapeHtml(row.displayName)}</td>
+                <td>
+                  <select class="payroll-analytics-input js-employment-type-select" data-employee-id="${escapeHtml(row.employeeId)}">
+                    <option value="full_time"${row.employmentType === "full_time" ? " selected" : ""}>Full time</option>
+                    <option value="intern"${row.employmentType === "intern" ? " selected" : ""}>Intern</option>
+                  </select>
+                </td>
+              </tr>`
+          )
+          .join("");
+      }
+
+      function renderLniRateSchedules(schedules) {
+        const rows = schedules || [];
+        const effectiveInput = document.getElementById("lniRateEffectiveDate");
+        if (effectiveInput && !effectiveInput.value) effectiveInput.value = `${new Date().getFullYear()}-07-01`;
+
+        if (!rows.length) {
+          lniRatesBody.innerHTML =
+            '<tr><td colspan="4" class="muted">No L&amp;I billing rates saved yet.</td></tr>';
+          return;
+        }
+
+        lniRatesBody.innerHTML = [...rows]
+          .sort((a, b) => {
+            const typeCmp = String(a.employmentType).localeCompare(String(b.employmentType));
+            if (typeCmp !== 0) return typeCmp;
+            return String(b.effectiveDate).localeCompare(String(a.effectiveDate));
+          })
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(employmentTypeLabel(row.employmentType))}</td>
+                <td>${escapeHtml(formatDate(row.effectiveDate))}</td>
+                <td>${escapeHtml(money(row.professionalRate))}</td>
+                <td>${escapeHtml(money(row.travelWaitRate))}</td>
+              </tr>`
+          )
+          .join("");
+      }
+
+      function renderGrossProfitChart(grossProfit) {
+        const employees = [...(grossProfit?.employees || [])].sort((a, b) => b.grossProfit - a.grossProfit);
+        const wrap = document.getElementById("grossProfitChartWrap");
+
+        if (grossProfitWarningsEl) {
+          const warnings = grossProfit?.warnings || [];
+          if (warnings.length) {
+            grossProfitWarningsEl.hidden = false;
+            grossProfitWarningsEl.textContent = warnings.join(" ");
+          } else {
+            grossProfitWarningsEl.hidden = true;
+            grossProfitWarningsEl.textContent = "";
+          }
+        }
+
+        if (!employees.length) {
+          if (wrap) wrap.style.height = "320px";
+          destroyChart("grossProfit");
+          return;
+        }
+
+        const barHeight = 36;
+        const chartHeight = Math.max(320, employees.length * barHeight + 64);
+        if (wrap) wrap.style.height = `${chartHeight}px`;
+
+        destroyChart("grossProfit");
+        charts.grossProfit = new Chart(document.getElementById("grossProfitChart"), {
+          type: "bar",
+          data: {
+            labels: employees.map((e) => e.employeeName),
+            datasets: [
+              {
+                label: "Gross profit",
+                data: employees.map((e) => e.grossProfit),
+                backgroundColor: (context) => {
+                  const value = Number(context.raw) || 0;
+                  const color = value >= 0 ? COLORS.grossProfitPositive : COLORS.grossProfitNegative;
+                  return createHorizontalGradient(context.chart, color);
+                },
+                hoverBackgroundColor: (context) => {
+                  const value = Number(context.raw) || 0;
+                  return value >= 0 ? COLORS.grossProfitPositive : COLORS.grossProfitNegative;
+                },
+                borderColor: (context) => {
+                  const value = Number(context.raw) || 0;
+                  return value >= 0 ? "rgba(22, 163, 74, 0.35)" : "rgba(220, 38, 38, 0.35)";
+                },
+                borderWidth: 1,
+                borderRadius: { topRight: 6, bottomRight: 6 },
+                borderSkipped: false,
+                maxBarThickness: 28,
+              },
+            ],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { left: 4, right: 12, top: 4, bottom: 4 } },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label(context) {
+                    const emp = employees[context.dataIndex];
+                    return [
+                      `Gross profit: ${money(context.parsed.x || 0)}`,
+                      `L&I revenue: ${money(emp.lniRevenue)}`,
+                      `Payroll cost: ${money(emp.payrollCost)}`,
+                    ];
+                  },
+                },
+              },
+            },
+            scales: horizontalBarScaleOptions(),
+          },
+        });
+      }
+
+      async function saveEmploymentTypes() {
+        const effectiveDate = document.getElementById("employmentTypeEffectiveDate")?.value?.trim();
+        if (!effectiveDate) {
+          errorEl.textContent = "Enter an effective date for employment type changes.";
+          return;
+        }
+        const updates = [];
+        for (const select of document.querySelectorAll(".js-employment-type-select")) {
+          const employeeId = select.getAttribute("data-employee-id");
+          const employmentType = select.value;
+          const previous = loadedEmploymentTypes.get(String(employeeId));
+          if (employmentType && employmentType !== previous) {
+            updates.push({ employeeId, employmentType, effectiveDate });
+          }
+        }
+        if (!updates.length) {
+          employmentTypeStatus.textContent = "No employment type changes to save.";
+          return;
+        }
+        errorEl.textContent = "";
+        employmentTypeStatus.textContent = "Saving...";
+        try {
+          const r = await fetch("/api/payroll-data", {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ employmentTypeUpdates: updates }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          employmentTypeStatus.textContent = `Saved ${updates.length} employment type change(s).`;
+          await loadData();
+        } catch (e) {
+          employmentTypeStatus.textContent = "";
+          errorEl.textContent = e.message || "Failed to save employment types.";
+        }
+      }
+
+      async function saveLniRateSchedule() {
+        const employmentType = document.getElementById("lniRateType")?.value;
+        const effectiveDate = document.getElementById("lniRateEffectiveDate")?.value?.trim();
+        const professionalRate = Number(document.getElementById("lniProfessionalRate")?.value);
+        const travelWaitRate = Number(document.getElementById("lniTravelWaitRate")?.value);
+        if (!effectiveDate) {
+          errorEl.textContent = "Enter an effective date for the L&I rate.";
+          return;
+        }
+        if (!Number.isFinite(professionalRate) || professionalRate < 0 || !Number.isFinite(travelWaitRate) || travelWaitRate < 0) {
+          errorEl.textContent = "L&I rates must be non-negative numbers.";
+          return;
+        }
+        errorEl.textContent = "";
+        lniRateStatus.textContent = "Saving...";
+        try {
+          const r = await fetch("/api/payroll-data", {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lniRateSchedule: { employmentType, effectiveDate, professionalRate, travelWaitRate },
+            }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          lniRateStatus.textContent = `Saved ${employmentTypeLabel(employmentType)} rates effective ${formatDate(effectiveDate)}.`;
+          await loadData();
+        } catch (e) {
+          lniRateStatus.textContent = "";
+          errorEl.textContent = e.message || "Failed to save L&I rate.";
+        }
       }
 
       function renderHealthInsuranceSettings(settings) {
@@ -1248,6 +1617,8 @@
           renderCharts(data);
           renderHealthInsuranceSettings(data.healthInsuranceSettings || {});
           renderHealthInsuranceQualification(data.healthInsuranceQualification || {});
+          renderEmploymentTypes(data.employeeEmploymentTypes || []);
+          renderLniRateSchedules(data.lniBillingRateSchedules || []);
           renderEmployeeTable(data.employees || []);
           statusEl.textContent = data.summary?.runCount
             ? `Showing ${data.summary.runCount} recorded payroll period(s).`
@@ -1260,6 +1631,8 @@
 
       document.getElementById("applyFiltersBtn").addEventListener("click", loadData);
       document.getElementById("saveHealthInsuranceSettingsBtn").addEventListener("click", saveHealthInsuranceSettings);
+      document.getElementById("saveEmploymentTypesBtn").addEventListener("click", saveEmploymentTypes);
+      document.getElementById("saveLniRateBtn").addEventListener("click", saveLniRateSchedule);
       function syncPeriodRangeDisabledState() {
         const disabled = Boolean(periodSelect.value);
         const periodRangeGroup = document.getElementById("periodRangeGroup");
