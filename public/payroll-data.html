@@ -376,10 +376,23 @@
       }
 
       function formatDate(s) {
-        const raw = String(s || "").slice(0, 10);
+        const raw = toIsoDateString(s);
         if (!raw) return "";
         const d = new Date(`${raw}T00:00:00`);
         return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString("en-US");
+      }
+
+      function toIsoDateString(value) {
+        if (value == null || value === "") return "";
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+          const y = value.getUTCFullYear();
+          const m = String(value.getUTCMonth() + 1).padStart(2, "0");
+          const d = String(value.getUTCDate()).padStart(2, "0");
+          return `${y}-${m}-${d}`;
+        }
+        const s = String(value).trim();
+        const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})/);
+        return isoMatch ? isoMatch[1] : "";
       }
 
       function escapeHtml(s) {
@@ -582,13 +595,14 @@
         const current = select.value;
         select.innerHTML = `<option value="">${allLabel}</option>`;
         const sorted = [...(runs || [])].sort((a, b) => {
-          const cmp = String(a.payrollEndDate).localeCompare(String(b.payrollEndDate));
+          const cmp = toIsoDateString(a.payrollEndDate).localeCompare(toIsoDateString(b.payrollEndDate));
           return descending ? -cmp : cmp;
         });
         for (const run of sorted) {
           const opt = document.createElement("option");
-          opt.value = run.payrollEndDate;
-          opt.textContent = formatDate(run.payrollEndDate);
+          const isoDate = toIsoDateString(run.payrollEndDate);
+          opt.value = isoDate;
+          opt.textContent = formatDate(isoDate);
           select.appendChild(opt);
         }
         if (current && [...select.options].some((opt) => opt.value === current)) {

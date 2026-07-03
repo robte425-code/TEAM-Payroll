@@ -2,10 +2,23 @@ const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
 
 function parseDateParam(value) {
-  const s = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const s = formatSqlDate(value);
+  if (!s) return "";
   const d = new Date(`${s}T00:00:00`);
   return Number.isNaN(d.getTime()) ? "" : s;
+}
+
+function formatSqlDate(value) {
+  if (value == null || value === "") return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(value.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(value).trim();
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return isoMatch ? isoMatch[1] : "";
 }
 
 function toNumber(value) {
@@ -102,7 +115,7 @@ function buildAnalytics(rows) {
 
   for (const row of rows) {
     const runId = String(row.run_id || "");
-    const endDate = String(row.payroll_end_date || "").slice(0, 10);
+    const endDate = formatSqlDate(row.payroll_end_date);
     const employeeName = String(row.employee_name || "").trim();
     const employeeKey = normalizeName(employeeName);
     const cost = moneyTotal(row);
@@ -279,7 +292,7 @@ export default async function handler(req, res) {
       filters: { startDate, endDate, payrollEndDate, employee },
       runs: runsResult.rows.map((r) => ({
         id: r.id,
-        payrollEndDate: String(r.payroll_end_date || "").slice(0, 10),
+        payrollEndDate: formatSqlDate(r.payroll_end_date),
         workingDays: r.working_days == null ? null : Number(r.working_days),
         holidayDays: r.holiday_days == null ? null : Number(r.holiday_days),
         nonBillFileName: r.non_bill_file_name || "",
