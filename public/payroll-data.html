@@ -980,6 +980,40 @@
         return gradient;
       }
 
+      function horizontalBarMoneyLabelsPlugin() {
+        return {
+          id: "horizontalBarMoneyLabels",
+          afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            chart.data.datasets.forEach((dataset, datasetIndex) => {
+              const meta = chart.getDatasetMeta(datasetIndex);
+              if (meta.hidden) return;
+              meta.data.forEach((bar, index) => {
+                const value = Number(dataset.data[index]) || 0;
+                const label = money(value);
+                ctx.save();
+                ctx.font = `600 11px ${CHART_THEME.fontFamily}`;
+                const textWidth = ctx.measureText(label).width;
+                const padding = 6;
+                const barLength = Math.abs(bar.x - bar.base);
+                const fitsInside = barLength >= textWidth + padding * 2;
+                ctx.textBaseline = "middle";
+                if (value >= 0) {
+                  ctx.fillStyle = fitsInside ? "#ffffff" : CHART_THEME.text;
+                  ctx.textAlign = fitsInside ? "right" : "left";
+                  ctx.fillText(label, fitsInside ? bar.x - padding : bar.x + padding, bar.y);
+                } else {
+                  ctx.fillStyle = fitsInside ? "#ffffff" : CHART_THEME.text;
+                  ctx.textAlign = fitsInside ? "left" : "right";
+                  ctx.fillText(label, fitsInside ? bar.x + padding : bar.x - padding, bar.y);
+                }
+                ctx.restore();
+              });
+            });
+          },
+        };
+      }
+
       function money(n) {
         const v = Number(n) || 0;
         return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -1298,6 +1332,7 @@
         destroyChart("grossProfit");
         charts.grossProfit = new Chart(document.getElementById("grossProfitChart"), {
           type: "bar",
+          plugins: [horizontalBarMoneyLabelsPlugin()],
           data: {
             labels: employees.map((e) => e.employeeName),
             datasets: [
@@ -1328,7 +1363,7 @@
             indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
-            layout: { padding: { left: 4, right: 12, top: 4, bottom: 4 } },
+            layout: { padding: { left: 72, right: 72, top: 4, bottom: 4 } },
             plugins: {
               legend: { display: false },
               tooltip: {
