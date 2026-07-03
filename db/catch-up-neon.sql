@@ -276,3 +276,8 @@ CREATE INDEX IF NOT EXISTS idx_payroll_run_rows_run_id
 
 COMMENT ON TABLE payroll.payroll_runs IS 'Payroll 2.0 run header; one row per payroll end date.';
 COMMENT ON TABLE payroll.payroll_run_rows IS 'Per-employee Payroll 2.0 result rows for a stored run.';
+
+-- ========== 020_seed_health_insurance_hours_per_working_day.sql ==========
+INSERT INTO payroll.app_kv (key, value, updated_at)
+VALUES ('health_insurance_hours_per_working_day', '7.2'::jsonb, now())
+ON CONFLICT (key) DO NOTHING;

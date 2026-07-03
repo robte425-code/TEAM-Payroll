@@ -214,6 +214,90 @@
       .payroll-data-table th {
         white-space: nowrap;
       }
+      .health-insurance-card {
+        margin-top: 0;
+      }
+      .health-insurance-settings {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 14px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #e7e5e4;
+      }
+      .health-insurance-settings label {
+        display: grid;
+        gap: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #44403c;
+      }
+      .health-insurance-settings input {
+        min-width: 7rem;
+      }
+      .health-insurance-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin: 0 0 12px;
+        font-size: 0.84rem;
+        color: #57534e;
+      }
+      .health-insurance-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .health-insurance-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        border: 1px solid rgba(120, 113, 108, 0.35);
+        display: inline-block;
+      }
+      .health-insurance-swatch--yes {
+        background: #dcfce7;
+      }
+      .health-insurance-swatch--no {
+        background: #fee2e2;
+      }
+      .health-insurance-table th,
+      .health-insurance-table td {
+        text-align: center;
+        vertical-align: middle;
+      }
+      .health-insurance-table th:first-child,
+      .health-insurance-table td:first-child {
+        text-align: left;
+        position: sticky;
+        left: 0;
+        background: #fff;
+        z-index: 1;
+      }
+      .health-insurance-table th {
+        font-size: 0.72rem;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+      .health-insurance-cell {
+        min-width: 5.5rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        border-radius: 8px;
+      }
+      .health-insurance-cell--yes {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .health-insurance-cell--no {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .health-insurance-cell--empty {
+        color: #a8a29e;
+        font-weight: 500;
+      }
     </style>
   </head>
   <body class="voc-page">
@@ -308,6 +392,39 @@
         </div>
       </div>
 
+      <div class="card health-insurance-card">
+        <h3 style="margin-top: 0">Health insurance qualification</h3>
+        <p class="muted" style="margin-top: 0">
+          Each month, an employee qualifies when
+          <strong>Case + Reports + Travel &amp; Wait + PTO + Sick</strong> hours are at least
+          <strong>X × working days</strong> for that month (working days summed from recorded pay periods).
+        </p>
+        <div class="health-insurance-settings">
+          <label>
+            Hours per working day (X)
+            <input
+              type="number"
+              id="healthInsuranceHoursPerDay"
+              class="payroll-analytics-input"
+              min="0"
+              step="0.01"
+            />
+          </label>
+          <button type="button" id="saveHealthInsuranceSettingsBtn">Save X</button>
+        </div>
+        <p id="healthInsuranceSettingsStatus" class="muted" style="margin: 0 0 12px"></p>
+        <div class="health-insurance-legend">
+          <span><i class="health-insurance-swatch health-insurance-swatch--yes"></i> Qualifies</span>
+          <span><i class="health-insurance-swatch health-insurance-swatch--no"></i> Does not qualify</span>
+        </div>
+        <div class="rates-table-scroll">
+          <table class="rates-table health-insurance-table">
+            <thead id="healthInsuranceHead"></thead>
+            <tbody id="healthInsuranceBody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <h3 style="margin-top: 0">Employee totals</h3>
         <div class="rates-table-scroll">
@@ -337,6 +454,9 @@
       const errorEl = document.getElementById("error");
       const summaryCardsEl = document.getElementById("summaryCards");
       const employeeTotalsBody = document.getElementById("employeeTotalsBody");
+      const healthInsuranceHead = document.getElementById("healthInsuranceHead");
+      const healthInsuranceBody = document.getElementById("healthInsuranceBody");
+      const healthInsuranceSettingsStatus = document.getElementById("healthInsuranceSettingsStatus");
       const periodSelect = document.getElementById("periodSelect");
       const employeeSelect = document.getElementById("employeeSelect");
       const startPeriodSelect = document.getElementById("startPeriodSelect");
@@ -566,6 +686,90 @@
         );
       }
 
+      function renderHealthInsuranceSettings(settings) {
+        const input = document.getElementById("healthInsuranceHoursPerDay");
+        const hoursPerWorkingDay = Number(settings?.hoursPerWorkingDay) || 7.2;
+        if (input) input.value = String(hoursPerWorkingDay);
+        if (healthInsuranceSettingsStatus) {
+          healthInsuranceSettingsStatus.textContent = `Current threshold: ${hours(hoursPerWorkingDay)} hr per working day.`;
+        }
+      }
+
+      function renderHealthInsuranceQualification(qualification) {
+        const months = qualification?.months || [];
+        const employees = qualification?.employees || [];
+        const hoursPerWorkingDay = Number(qualification?.hoursPerWorkingDay) || 7.2;
+
+        if (!months.length || !employees.length) {
+          healthInsuranceHead.innerHTML = "";
+          healthInsuranceBody.innerHTML =
+            '<tr><td colspan="99" class="muted">No recorded payroll data for health insurance qualification.</td></tr>';
+          return;
+        }
+
+        healthInsuranceHead.innerHTML = `
+          <tr>
+            <th>Employee</th>
+            ${months
+              .map(
+                (month) => `
+              <th title="${escapeHtml(`${hours(hoursPerWorkingDay)} hr × ${month.workingDays} working day(s) = ${hours(month.requiredHours)} hr required`)}">
+                ${escapeHtml(month.label)}
+              </th>`
+              )
+              .join("")}
+          </tr>`;
+
+        healthInsuranceBody.innerHTML = employees
+          .map((employee) => {
+            const cells = months
+              .map((month) => {
+                const entry = employee.months?.[month.monthKey];
+                if (!entry) {
+                  return '<td class="health-insurance-cell health-insurance-cell--empty">—</td>';
+                }
+                const title = `${hours(entry.qualifyingHours)} hr of ${hours(entry.requiredHours)} hr required`;
+                if (entry.qualifies) {
+                  return `<td class="health-insurance-cell health-insurance-cell--yes" title="${escapeHtml(title)}">Yes</td>`;
+                }
+                return `<td class="health-insurance-cell health-insurance-cell--no" title="${escapeHtml(title)}">No</td>`;
+              })
+              .join("");
+            return `
+              <tr>
+                <td>${escapeHtml(employee.employeeName)}</td>
+                ${cells}
+              </tr>`;
+          })
+          .join("");
+      }
+
+      async function saveHealthInsuranceSettings() {
+        const input = document.getElementById("healthInsuranceHoursPerDay");
+        const hoursPerWorkingDay = Number(input?.value);
+        if (!Number.isFinite(hoursPerWorkingDay) || hoursPerWorkingDay < 0) {
+          errorEl.textContent = "Hours per working day must be a non-negative number.";
+          return;
+        }
+        errorEl.textContent = "";
+        healthInsuranceSettingsStatus.textContent = "Saving...";
+        try {
+          const r = await fetch("/api/payroll-data", {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ healthInsuranceSettings: { hoursPerWorkingDay } }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          renderHealthInsuranceSettings(data.healthInsuranceSettings || { hoursPerWorkingDay });
+          await loadData();
+        } catch (e) {
+          healthInsuranceSettingsStatus.textContent = "";
+          errorEl.textContent = e.message || "Failed to save health insurance settings.";
+        }
+      }
+
       function renderEmployeeTable(employees) {
         const rows = employees || [];
         if (!rows.length) {
@@ -672,6 +876,8 @@
           populateFilters(data);
           renderSummary(data.summary || {});
           renderCharts(data);
+          renderHealthInsuranceSettings(data.healthInsuranceSettings || {});
+          renderHealthInsuranceQualification(data.healthInsuranceQualification || {});
           renderEmployeeTable(data.employees || []);
           statusEl.textContent = data.summary?.runCount
             ? `Showing ${data.summary.runCount} recorded payroll period(s).`
@@ -683,6 +889,7 @@
       }
 
       document.getElementById("applyFiltersBtn").addEventListener("click", loadData);
+      document.getElementById("saveHealthInsuranceSettingsBtn").addEventListener("click", saveHealthInsuranceSettings);
       function syncPeriodRangeDisabledState() {
         const disabled = Boolean(periodSelect.value);
         const periodRangeGroup = document.getElementById("periodRangeGroup");

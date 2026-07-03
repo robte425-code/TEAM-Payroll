@@ -1,5 +1,11 @@
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
+const {
+  buildHealthInsuranceQualification,
+  fetchHealthInsuranceSettings,
+  updateHealthInsuranceSettings,
+} = require("../../lib/health-insurance-qualification");
+const { buffer } = require("node:stream/consumers");
 
 function parseDateParam(value) {
   const s = formatSqlDate(value);
@@ -198,29 +204,36 @@ function buildAnalytics(rows) {
   };
 }
 
-export default async function handler(req, res) {
-  res.setHeader("Content-Type", "application/json");
-
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ error: "Method not allowed" });
+async function readJsonBody(req) {
+  if (req.body != null) {
+    if (typeof req.body === "object" && !Buffer.isBuffer(req.body)) return req.body;
+    if (typeof req.body === "string") {
+      try {
+        return JSON.parse(req.body || "{}");
+      } catch {
+        return {};
+      }
+    }
+    if (Buffer.isBuffer(req.body)) {
+      try {
+        return JSON.parse(req.body.toString("utf8") || "{}");
+      } catch {
+        return {};
+      }
+    }
   }
-
-  const admin = await requireRealAdmin(req, res);
-  if (!admin) return;
-
-  let pool;
   try {
-    pool = getPool();
+    const buf = await buffer(req);
+    const s = buf.toString("utf8");
+    if (!s.trim()) return {};
+    return JSON.parse(s);
   } catch {
-    return res.status(500).json({ error: "Database not configured" });
+    return {};
   }
+}
 
-  const startDate = parseDateParam(req.query?.startDate);
-  const endDate = parseDateParam(req.query?.endDate);
-  const payrollEndDate = parseDateParam(req.query?.payrollEndDate);
-  const employee = normalizeName(req.query?.employee);
-
+async function loadPayrollAnalytics(pool, filters) {
+  const { startDate, endDate, payrollEndDate, employee } = filters;
   const where = [];
   const params = [];
   function addParam(value) {
@@ -240,67 +253,122 @@ export default async function handler(req, res) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  try {
-    const [runsResult, employeeOptionsResult, rowsResult] = await Promise.all([
-      pool.query(
-        `SELECT id, payroll_end_date, working_days, holiday_days, non_bill_file_name, updated_at
-         FROM payroll.payroll_runs
-         ORDER BY payroll_end_date DESC`
-      ),
-      pool.query(
-        `SELECT DISTINCT rr.employee_name
-         FROM payroll.payroll_run_rows rr
-         WHERE trim(rr.employee_name) <> ''
-         ORDER BY rr.employee_name ASC`
-      ),
-      pool.query(
-        `SELECT
-           r.id AS run_id,
-           r.payroll_end_date,
-           rr.employee_name,
-           rr.case_plus_reports,
-           rr.nb_time,
-           rr.travel_wait_hours,
-           rr.total_hours_worked,
-           rr.overtime_hours,
-           rr.pto_time,
-           rr.sick_time,
-           rr.regular_pay,
-           rr.overtime_pay,
-           rr.pto_pay,
-           rr.sick_pay,
-           rr.holiday_pay,
-           rr.training_pay,
-           rr.edu_pay,
-           rr.general_reimbursement,
-           rr.non_disc_bonus
-         FROM payroll.payroll_runs r
-         JOIN payroll.payroll_run_rows rr ON rr.run_id = r.id
-         ${whereSql}
-         ORDER BY r.payroll_end_date ASC, rr.sort_order ASC`,
-        params
-      ),
-    ]);
+  const [runsResult, employeeOptionsResult, rowsResult, healthInsuranceSettings] = await Promise.all([
+    pool.query(
+      `SELECT id, payroll_end_date, working_days, holiday_days, non_bill_file_name, updated_at
+       FROM payroll.payroll_runs
+       ORDER BY payroll_end_date DESC`
+    ),
+    pool.query(
+      `SELECT DISTINCT rr.employee_name
+       FROM payroll.payroll_run_rows rr
+       WHERE trim(rr.employee_name) <> ''
+       ORDER BY rr.employee_name ASC`
+    ),
+    pool.query(
+      `SELECT
+         r.id AS run_id,
+         r.payroll_end_date,
+         r.working_days,
+         rr.employee_name,
+         rr.case_plus_reports,
+         rr.nb_time,
+         rr.travel_wait_hours,
+         rr.total_hours_worked,
+         rr.overtime_hours,
+         rr.pto_time,
+         rr.sick_time,
+         rr.regular_pay,
+         rr.overtime_pay,
+         rr.pto_pay,
+         rr.sick_pay,
+         rr.holiday_pay,
+         rr.training_pay,
+         rr.edu_pay,
+         rr.general_reimbursement,
+         rr.non_disc_bonus
+       FROM payroll.payroll_runs r
+       JOIN payroll.payroll_run_rows rr ON rr.run_id = r.id
+       ${whereSql}
+       ORDER BY r.payroll_end_date ASC, rr.sort_order ASC`,
+      params
+    ),
+    fetchHealthInsuranceSettings(pool),
+  ]);
 
-    const analytics = buildAnalytics(rowsResult.rows);
-    const employeeOptions = employeeOptionsResult.rows
-      .map((r) => String(r.employee_name || "").trim())
-      .filter(Boolean)
-      .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
-    return res.status(200).json({
-      ok: true,
-      filters: { startDate, endDate, payrollEndDate, employee },
-      runs: runsResult.rows.map((r) => ({
-        id: r.id,
-        payrollEndDate: formatSqlDate(r.payroll_end_date),
-        workingDays: r.working_days == null ? null : Number(r.working_days),
-        holidayDays: r.holiday_days == null ? null : Number(r.holiday_days),
-        nonBillFileName: r.non_bill_file_name || "",
-        updatedAt: r.updated_at,
-      })),
-      ...analytics,
-      employeeOptions,
-    });
+  const analytics = buildAnalytics(rowsResult.rows);
+  const employeeOptions = employeeOptionsResult.rows
+    .map((r) => String(r.employee_name || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+  const healthInsuranceQualification = buildHealthInsuranceQualification(
+    rowsResult.rows,
+    healthInsuranceSettings.hoursPerWorkingDay
+  );
+
+  return {
+    filters: { startDate, endDate, payrollEndDate, employee },
+    runs: runsResult.rows.map((r) => ({
+      id: r.id,
+      payrollEndDate: formatSqlDate(r.payroll_end_date),
+      workingDays: r.working_days == null ? null : Number(r.working_days),
+      holidayDays: r.holiday_days == null ? null : Number(r.holiday_days),
+      nonBillFileName: r.non_bill_file_name || "",
+      updatedAt: r.updated_at,
+    })),
+    ...analytics,
+    employeeOptions,
+    healthInsuranceSettings,
+    healthInsuranceQualification,
+  };
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Content-Type", "application/json");
+
+  if (req.method === "OPTIONS") {
+    res.setHeader("Allow", "GET, PATCH, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(204).end();
+  }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
+
+  let pool;
+  try {
+    pool = getPool();
+  } catch {
+    return res.status(500).json({ error: "Database not configured" });
+  }
+
+  if (req.method === "PATCH") {
+    try {
+      const body = await readJsonBody(req);
+      const settings = body.healthInsuranceSettings || body;
+      const healthInsuranceSettings = await updateHealthInsuranceSettings(pool, {
+        hoursPerWorkingDay: settings.hoursPerWorkingDay,
+      });
+      return res.status(200).json({ ok: true, healthInsuranceSettings });
+    } catch (e) {
+      return res.status(500).json({ error: e?.message || "Failed to save health insurance settings" });
+    }
+  }
+
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET, PATCH, OPTIONS");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const startDate = parseDateParam(req.query?.startDate);
+  const endDate = parseDateParam(req.query?.endDate);
+  const payrollEndDate = parseDateParam(req.query?.payrollEndDate);
+  const employee = normalizeName(req.query?.employee);
+
+  try {
+    const data = await loadPayrollAnalytics(pool, { startDate, endDate, payrollEndDate, employee });
+    return res.status(200).json({ ok: true, ...data });
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Failed to load payroll analytics" });
   }
