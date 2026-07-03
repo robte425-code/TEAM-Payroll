@@ -289,6 +289,6 @@ export default async function handler(req, res) {
       employeeOptions,
     });
   } catch (e) {
-    return res.status(500).json({ error: e?.message || "Failed to load payroll data" });
+    return res.status(500).json({ error: e?.message || "Failed to load payroll analytics" });
   }
 }

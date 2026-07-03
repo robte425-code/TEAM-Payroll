@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Payroll data - TEAM Payroll</title>
+    <title>Payroll analytics - TEAM Payroll</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -78,7 +78,7 @@
     </script>
 
     <main class="voc-main">
-      <h1 class="voc-page-title">Payroll data</h1>
+      <h1 class="voc-page-title">Payroll analytics</h1>
       <p class="voc-page-lead">
         Analyze recorded Payroll 2.0 runs by pay period, employee, hours, and cost categories.
       </p>
@@ -367,7 +367,7 @@
       function renderEmployeeTable(employees) {
         const rows = employees || [];
         if (!rows.length) {
-          employeeTotalsBody.innerHTML = '<tr><td colspan="9" class="muted">No recorded payroll data found.</td></tr>';
+          employeeTotalsBody.innerHTML = '<tr><td colspan="9" class="muted">No recorded payroll analytics found.</td></tr>';
           return;
         }
         employeeTotalsBody.innerHTML = rows
@@ -428,7 +428,7 @@
       }
 
       async function loadData() {
-        statusEl.textContent = "Loading payroll data...";
+        statusEl.textContent = "Loading payroll analytics...";
         errorEl.textContent = "";
         try {
           const qs = buildQuery();
@@ -454,7 +454,7 @@
             : "No recorded payroll periods found for these filters.";
         } catch (e) {
           statusEl.textContent = "";
-          errorEl.textContent = e.message || "Failed to load payroll data.";
+          errorEl.textContent = e.message || "Failed to load payroll analytics.";
         }
       }
 
