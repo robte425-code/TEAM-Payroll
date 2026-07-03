@@ -13,16 +13,159 @@
     <link rel="stylesheet" href="./css/voc-shell.css" />
     <link rel="stylesheet" href="./css/app.css" />
     <style>
-      .payroll-data-filters {
+      .payroll-analytics-filters-card {
+        padding: 18px 20px 16px;
+      }
+      .payroll-analytics-filters-header {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 8px 16px;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border, #e7e5e4);
+      }
+      .payroll-analytics-filters-header h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .payroll-analytics-filters-header p {
+        margin: 0;
+        font-size: 0.88rem;
+        max-width: 42ch;
+      }
+      .payroll-analytics-filters-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 14px 12px;
         align-items: end;
       }
-      .payroll-data-filters label {
-        display: grid;
-        gap: 4px;
+      .payroll-analytics-filter-group {
+        display: contents;
+      }
+      .payroll-analytics-group-label {
+        grid-column: 1 / -1;
+        margin: 0;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #78716c;
+      }
+      .payroll-analytics-group-label--spaced {
+        margin-top: 4px;
+        padding-top: 14px;
+        border-top: 1px dashed #e7e5e4;
+      }
+      .payroll-analytics-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .payroll-analytics-field--from {
+        grid-column: span 3;
+      }
+      .payroll-analytics-field--to {
+        grid-column: span 3;
+      }
+      .payroll-analytics-field--period {
+        grid-column: span 3;
+      }
+      .payroll-analytics-field--employee {
+        grid-column: span 3;
+      }
+      .payroll-analytics-field-label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #44403c;
+        line-height: 1.2;
+      }
+      .payroll-analytics-input {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        box-sizing: border-box;
+        min-height: 2.5rem;
+        padding: 9px 11px;
+        border-radius: 8px;
+        border: 1px solid #d6d3d1;
+        background: #fff;
+        color: #1c1917;
+        font: inherit;
         font-size: 0.9rem;
+        line-height: 1.2;
+      }
+      select.payroll-analytics-input {
+        appearance: none;
+        padding-right: 2.25rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2378716c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 11px center;
+        cursor: pointer;
+      }
+      .payroll-analytics-input:focus {
+        outline: none;
+        border-color: #6264a7;
+        box-shadow: 0 0 0 3px rgba(98, 100, 167, 0.18);
+      }
+      .payroll-analytics-input:disabled {
+        background: #f5f5f4;
+        color: #a8a29e;
+        cursor: not-allowed;
+      }
+      .payroll-analytics-date-range.is-disabled .payroll-analytics-field-label {
+        color: #a8a29e;
+      }
+      .payroll-analytics-filter-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        justify-content: flex-end;
+        margin-top: 4px;
+        padding-top: 14px;
+        border-top: 1px solid #e7e5e4;
+      }
+      .payroll-analytics-filter-status {
+        flex: 1 1 auto;
+        margin: 0;
+        min-width: 12rem;
+        font-size: 0.88rem;
+      }
+      .payroll-analytics-filter-actions-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      @media (max-width: 900px) {
+        .payroll-analytics-field--from,
+        .payroll-analytics-field--to,
+        .payroll-analytics-field--period,
+        .payroll-analytics-field--employee {
+          grid-column: span 6;
+        }
+      }
+      @media (max-width: 560px) {
+        .payroll-analytics-field--from,
+        .payroll-analytics-field--to,
+        .payroll-analytics-field--period,
+        .payroll-analytics-field--employee {
+          grid-column: 1 / -1;
+        }
+        .payroll-analytics-filter-actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .payroll-analytics-filter-actions-buttons {
+          width: 100%;
+        }
+        .payroll-analytics-filter-actions-buttons button {
+          flex: 1 1 auto;
+        }
       }
       .payroll-data-grid {
         display: grid;
@@ -83,33 +226,51 @@
         Analyze recorded Payroll 2.0 runs by pay period, employee, hours, and cost categories.
       </p>
 
-      <div class="card">
-        <div class="payroll-data-filters">
-          <label>
-            From payroll end date
-            <input type="date" id="startDateInput" class="rate-input" />
-          </label>
-          <label>
-            To payroll end date
-            <input type="date" id="endDateInput" class="rate-input" />
-          </label>
-          <label>
-            Single payroll period
-            <select id="periodSelect" class="rate-input">
-              <option value="">All periods</option>
-            </select>
-          </label>
-          <label>
-            Employee
-            <select id="employeeSelect" class="rate-input">
-              <option value="">All employees</option>
-            </select>
-          </label>
-          <button type="button" id="applyFiltersBtn">Apply filters</button>
-          <button type="button" id="clearFiltersBtn" class="btn-secondary">Clear</button>
+      <div class="card payroll-analytics-filters-card">
+        <div class="payroll-analytics-filters-header">
+          <h3>Filters</h3>
+          <p class="muted">
+            Choose a date range or one payroll period. Pick an employee to focus the charts and table.
+          </p>
         </div>
-        <p id="status" class="muted" aria-live="polite"></p>
-        <p id="error" class="error"></p>
+        <div class="payroll-analytics-filters-grid">
+          <p class="payroll-analytics-group-label">Pay period range</p>
+          <div class="payroll-analytics-date-range payroll-analytics-filter-group" id="dateRangeGroup">
+            <div class="payroll-analytics-field payroll-analytics-field--from">
+              <label class="payroll-analytics-field-label" for="startDateInput">From end date</label>
+              <input type="date" id="startDateInput" class="payroll-analytics-input" />
+            </div>
+            <div class="payroll-analytics-field payroll-analytics-field--to">
+              <label class="payroll-analytics-field-label" for="endDateInput">To end date</label>
+              <input type="date" id="endDateInput" class="payroll-analytics-input" />
+            </div>
+          </div>
+
+          <p class="payroll-analytics-group-label payroll-analytics-group-label--spaced">Focus</p>
+          <div class="payroll-analytics-filter-group">
+            <div class="payroll-analytics-field payroll-analytics-field--period">
+              <label class="payroll-analytics-field-label" for="periodSelect">Single payroll period</label>
+              <select id="periodSelect" class="payroll-analytics-input">
+                <option value="">All periods</option>
+              </select>
+            </div>
+            <div class="payroll-analytics-field payroll-analytics-field--employee">
+              <label class="payroll-analytics-field-label" for="employeeSelect">Employee</label>
+              <select id="employeeSelect" class="payroll-analytics-input">
+                <option value="">All employees</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="payroll-analytics-filter-actions">
+            <p id="status" class="muted payroll-analytics-filter-status" aria-live="polite"></p>
+            <div class="payroll-analytics-filter-actions-buttons">
+              <button type="button" id="clearFiltersBtn" class="btn-secondary">Clear filters</button>
+              <button type="button" id="applyFiltersBtn">Apply filters</button>
+            </div>
+          </div>
+        </div>
+        <p id="error" class="error" style="margin: 12px 0 0"></p>
       </div>
 
       <div class="payroll-data-grid" id="summaryCards"></div>
@@ -459,20 +620,23 @@
       }
 
       document.getElementById("applyFiltersBtn").addEventListener("click", loadData);
+      function syncDateRangeDisabledState() {
+        const disabled = Boolean(periodSelect.value);
+        const dateRangeGroup = document.getElementById("dateRangeGroup");
+        startDateInput.disabled = disabled;
+        endDateInput.disabled = disabled;
+        if (dateRangeGroup) dateRangeGroup.classList.toggle("is-disabled", disabled);
+      }
+
       document.getElementById("clearFiltersBtn").addEventListener("click", () => {
         startDateInput.value = "";
         endDateInput.value = "";
         periodSelect.value = "";
         employeeSelect.value = "";
-        startDateInput.disabled = false;
-        endDateInput.disabled = false;
+        syncDateRangeDisabledState();
         loadData();
       });
-      periodSelect.addEventListener("change", () => {
-        const disabled = Boolean(periodSelect.value);
-        startDateInput.disabled = disabled;
-        endDateInput.disabled = disabled;
-      });
+      periodSelect.addEventListener("change", syncDateRangeDisabledState);
 
       loadData();
     </script>
