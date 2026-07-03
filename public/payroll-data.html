@@ -557,6 +557,17 @@
       .lni-setup-table select.payroll-analytics-input {
         min-width: 8rem;
       }
+      .lni-intern-cell {
+        text-align: center;
+        width: 5rem;
+      }
+      .lni-intern-checkbox {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        cursor: pointer;
+        accent-color: #b45309;
+      }
       .gross-profit-warnings {
         margin: 0 0 10px;
         font-size: 0.84rem;
@@ -636,7 +647,7 @@
       <div class="card lni-setup-card">
         <h3 style="margin-top: 0">L&amp;I billing setup</h3>
         <p class="muted" style="margin-top: 0">
-          Classify employees as intern or full-time (with effective dates) and maintain L&amp;I billable rates for
+          Check <strong>Intern</strong> for interns; leave unchecked for full-time employees (with effective dates). Maintain L&amp;I billable rates for
           professional time (case + report) and travel &amp; wait. L&amp;I rates and employee types use each period's
           <strong>payroll start date</strong> (day after the previous recorded period end). Mileage reimbursement is excluded from gross profit as a passthrough.
         </p>
@@ -656,7 +667,7 @@
                 <thead>
                   <tr>
                     <th>Employee</th>
-                    <th>Type</th>
+                    <th class="lni-intern-cell">Intern</th>
                   </tr>
                 </thead>
                 <tbody id="employmentTypesBody"></tbody>
@@ -1192,6 +1203,10 @@
         return `${y}-${m}-${day}`;
       }
 
+      function employmentTypeFromInternChecked(isIntern) {
+        return isIntern ? "intern" : "full_time";
+      }
+
       function renderEmploymentTypes(employeeEmploymentTypes) {
         const rows = employeeEmploymentTypes || [];
         loadedEmploymentTypes = new Map(
@@ -1207,18 +1222,22 @@
         }
 
         employmentTypesBody.innerHTML = rows
-          .map(
-            (row) => `
+          .map((row) => {
+            const isIntern = row.employmentType === "intern";
+            return `
               <tr data-employee-id="${escapeHtml(row.employeeId)}">
                 <td>${escapeHtml(row.displayName)}</td>
-                <td>
-                  <select class="payroll-analytics-input js-employment-type-select" data-employee-id="${escapeHtml(row.employeeId)}">
-                    <option value="full_time"${row.employmentType === "full_time" ? " selected" : ""}>Full time</option>
-                    <option value="intern"${row.employmentType === "intern" ? " selected" : ""}>Intern</option>
-                  </select>
+                <td class="lni-intern-cell">
+                  <input
+                    type="checkbox"
+                    class="lni-intern-checkbox js-employment-intern-checkbox"
+                    data-employee-id="${escapeHtml(row.employeeId)}"
+                    aria-label="Intern: ${escapeHtml(row.displayName)}"
+                    ${isIntern ? "checked" : ""}
+                  />
                 </td>
-              </tr>`
-          )
+              </tr>`;
+          })
           .join("");
       }
 
@@ -1337,11 +1356,11 @@
           return;
         }
         const updates = [];
-        for (const select of document.querySelectorAll(".js-employment-type-select")) {
-          const employeeId = select.getAttribute("data-employee-id");
-          const employmentType = select.value;
+        for (const checkbox of document.querySelectorAll(".js-employment-intern-checkbox")) {
+          const employeeId = checkbox.getAttribute("data-employee-id");
+          const employmentType = employmentTypeFromInternChecked(checkbox.checked);
           const previous = loadedEmploymentTypes.get(String(employeeId));
-          if (employmentType && employmentType !== previous) {
+          if (employmentType !== previous) {
             updates.push({ employeeId, employmentType, effectiveDate });
           }
         }
