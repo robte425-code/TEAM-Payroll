@@ -742,7 +742,7 @@
         <div class="lni-setup-header">
           <h3>L&amp;I billing setup</h3>
           <p class="muted">
-            Check <strong>Intern</strong> for interns; leave unchecked for full-time employees (with effective dates). Maintain L&amp;I billable rates for
+            Check <strong>Intern</strong> for interns; leave unchecked for Full VRC employees (with effective dates). Maintain L&amp;I billable rates for
             professional time (case + report) and travel &amp; wait. L&amp;I rates and employee types use each period's
             <strong>payroll start date</strong> (day after the previous recorded period end). Mileage reimbursement is excluded from gross profit as a passthrough.
           </p>
@@ -780,7 +780,7 @@
               <div class="lni-setup-field">
                 <span class="lni-setup-field-label">Type</span>
                 <select id="lniRateType" class="payroll-analytics-input">
-                  <option value="full_time">Full time</option>
+                  <option value="full_time">Full VRC</option>
                   <option value="intern">Intern</option>
                 </select>
               </div>
@@ -1330,7 +1330,7 @@
       }
 
       function employmentTypeLabel(type) {
-        return type === "intern" ? "Intern" : "Full time";
+        return type === "intern" ? "Intern" : "Full VRC";
       }
 
       function todayIsoDate() {
