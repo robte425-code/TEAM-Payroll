@@ -12,6 +12,23 @@
     />
     <link rel="stylesheet" href="./css/voc-shell.css" />
     <link rel="stylesheet" href="./css/app.css" />
+    <style>
+      .adj-units-cell {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        align-items: center;
+      }
+      .adj-previous-units {
+        font-size: 0.82rem;
+        color: #57534e;
+        white-space: nowrap;
+      }
+      .adj-previous-units strong {
+        color: #1c1917;
+        font-weight: 700;
+      }
+    </style>
   </head>
   <body class="voc-page">
     <div id="team-shell-root"></div>
@@ -71,7 +88,8 @@
       <p class="muted">
         Rows where <strong>Adj / Resub</strong> is only an <strong>A</strong> and/or <strong>R</strong> flag (e.g. A, R, A/R) are
         not included in the summary above. For <strong>adjustments</strong> (flag includes <strong>A</strong>), enter the correct
-        <strong>Units</strong> once; that value is added to the employee summary and the field locks.
+        <strong>Units</strong> once; that value is added to the employee summary and the field locks. Set
+        <strong>Payroll end date</strong> above so unit edits are saved and previous values are shown when you analyze again for the same period.
       </p>
       <table id="adjResubTable">
         <thead>
@@ -84,6 +102,7 @@
             <th>Claimant</th>
             <th>Rate Code</th>
             <th>Units</th>
+            <th>Previous units</th>
             <th>Adj / Resub</th>
           </tr>
         </thead>
@@ -655,6 +674,114 @@
           .replace(/[^a-z]/gi, "")
           .toUpperCase();
         return letters.includes("A");
+      }
+
+      function buildAdjResubRowKey(row) {
+        const providerId = String(row.providerId || "").trim();
+        const employeeKey = providerId || normalizeEmployeeName(row.employeeName);
+        const adjLetters = String(row.adjResub || "")
+          .replace(/[^a-z]/gi, "")
+          .toUpperCase();
+        return [
+          employeeKey,
+          String(row.referralNumber || "").trim(),
+          String(row.rateCode || "").trim().toUpperCase(),
+          String(row.dateFrom || "").trim(),
+          String(row.dateTo || "").trim(),
+          adjLetters,
+        ].join("\x1e");
+      }
+
+      function getPayrollEndDateInput() {
+        return String(document.getElementById("payrollEndDateInput")?.value || "").trim();
+      }
+
+      async function fetchStoredAdjResubMap(payrollEndDate) {
+        if (!payrollEndDate) return new Map();
+        try {
+          const r = await fetch(
+            `/api/payroll-adj-resub?payrollEndDate=${encodeURIComponent(payrollEndDate)}`,
+            { credentials: "same-origin", cache: "no-store" }
+          );
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) return new Map();
+          const map = new Map();
+          for (const row of data.rows || []) {
+            if (row?.rowKey) map.set(row.rowKey, row);
+          }
+          return map;
+        } catch {
+          return new Map();
+        }
+      }
+
+      function applyStoredAdjResubRows(storedMap) {
+        if (!storedMap || !storedMap.size) return;
+        for (const row of sessionAdjResubRows) {
+          const stored = storedMap.get(buildAdjResubRowKey(row));
+          if (!stored) continue;
+          if (stored.resolvedUnits != null && Number.isFinite(Number(stored.resolvedUnits))) {
+            row.previousResolvedUnits = Number(stored.resolvedUnits);
+          }
+          if (
+            stored.unitsLocked &&
+            isAdjustmentRow(row.adjResub) &&
+            !row.unitsLocked &&
+            stored.resolvedUnits != null &&
+            Number.isFinite(Number(stored.resolvedUnits))
+          ) {
+            row.resolvedUnits = Number(stored.resolvedUnits);
+            row.unitsLocked = true;
+          }
+        }
+      }
+
+      async function mergeStoredAdjResubFromDatabase() {
+        const payrollEndDate = getPayrollEndDateInput();
+        const storedMap = await fetchStoredAdjResubMap(payrollEndDate);
+        applyStoredAdjResubRows(storedMap);
+      }
+
+      async function saveAdjResubRowToDatabase(row) {
+        const payrollEndDate = getPayrollEndDateInput();
+        if (!payrollEndDate) {
+          return { ok: false, error: "Enter payroll end date to save adjustment units." };
+        }
+        try {
+          const r = await fetch("/api/payroll-adj-resub", {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              payrollEndDate,
+              row: {
+                rowKey: buildAdjResubRowKey(row),
+                sourceFile: row.sourceFile,
+                employeeName: row.employeeName,
+                providerId: row.providerId,
+                claimant: row.claimant,
+                referralNumber: row.referralNumber,
+                rateCode: row.rateCode,
+                dateFrom: row.dateFrom,
+                dateTo: row.dateTo,
+                adjResub: row.adjResub,
+                spreadsheetUnits: row.units,
+                resolvedUnits: row.resolvedUnits,
+                unitsLocked: row.unitsLocked,
+              },
+            }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            return { ok: false, error: data.error || `HTTP ${r.status}` };
+          }
+          if (data.row?.resolvedUnits != null) {
+            row.previousResolvedUnits = Number(data.row.resolvedUnits);
+          }
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || "Failed to save adjustment units." };
+        }
       }
 
       function summarizeByEmployee(rows) {
@@ -1253,6 +1380,8 @@
 
         renderSessionFiles();
 
+        await mergeStoredAdjResubFromDatabase();
+
         // Restore analysis tables.
         renderAdjResubTable(sessionAdjResubRows);
         updatePayroll10Visibility();
@@ -1491,7 +1620,15 @@
         }
         row.resolvedUnits = num;
         row.unitsLocked = true;
+        row.previousResolvedUnits = num;
         clearPayroll10Results();
+        const saveResult = await saveAdjResubRowToDatabase(row);
+        const errorEl = document.getElementById("error");
+        if (!saveResult.ok && errorEl) {
+          errorEl.textContent = saveResult.error || "Failed to save adjustment units to the database.";
+        } else if (errorEl && errorEl.textContent && errorEl.textContent.includes("adjustment units")) {
+          errorEl.textContent = "";
+        }
         renderAdjResubTable(sessionAdjResubRows);
         try {
           const rateMap = await fetchEmployeeRateMap();
@@ -1533,11 +1670,19 @@
           if (isAdjustmentRow(r.adjResub) && !r.unitsLocked) {
             const id = r._adjId;
             const val = escapeHtml(String(r.units));
-            unitsCell = `<input type="number" class="adj-units-input" data-adj-id="${id}" step="any" value="${val}" aria-label="Units for adjustment" />`;
+            unitsCell = `<div class="adj-units-cell"><input type="number" class="adj-units-input" data-adj-id="${id}" step="any" value="${val}" aria-label="Units for adjustment" /></div>`;
           } else if (isAdjustmentRow(r.adjResub) && r.unitsLocked) {
-            unitsCell = escapeHtml(String(r.resolvedUnits));
+            unitsCell = `<div class="adj-units-cell">${escapeHtml(String(r.resolvedUnits))}</div>`;
           } else {
-            unitsCell = escapeHtml(String(r.units));
+            unitsCell = `<div class="adj-units-cell">${escapeHtml(String(r.units))}</div>`;
+          }
+          let previousUnitsCell = '<span class="muted">—</span>';
+          if (
+            isAdjustmentRow(r.adjResub) &&
+            r.previousResolvedUnits != null &&
+            Number.isFinite(Number(r.previousResolvedUnits))
+          ) {
+            previousUnitsCell = `<span class="adj-previous-units">Previously: <strong>${escapeHtml(String(r.previousResolvedUnits))}</strong></span>`;
           }
           const tr = document.createElement("tr");
           tr.innerHTML = `
@@ -1549,6 +1694,7 @@
             <td>${claimantCell}</td>
             <td>${escapeHtml(r.rateCode)}</td>
             <td>${unitsCell}</td>
+            <td>${previousUnitsCell}</td>
             <td>${escapeHtml(r.adjResub)}</td>
           `;
           tbody.appendChild(tr);
@@ -1622,6 +1768,8 @@
               }
             }
           }
+
+          await mergeStoredAdjResubFromDatabase();
 
           // Used for preserving session across navigation.
           sessionCalcSummary = summarizeByEmployee(sessionCalcRows);

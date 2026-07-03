@@ -105,6 +105,7 @@ export const config = {
     "/api/pay-stubs/:path*",
     "/api/payroll-unread",
     "/api/payroll-data",
+    "/api/payroll-adj-resub",
     "/api/internal/team-access",
   ],
 };
