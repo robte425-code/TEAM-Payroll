@@ -8,6 +8,7 @@ const {
 } = require("../../lib/impersonation");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
 const { requireRealAdmin, resolveIsAdmin } = require("../../lib/apiAuth");
+const { isSuperAdminEmailRemote } = require("../../lib/super-admin");
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
@@ -26,11 +27,12 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const email = String(token?.email || "").trim().toLowerCase();
     const isAdmin = email ? await resolveIsAdmin(email) : false;
-    if (!isAdmin) {
+    const isSuperAdmin = email ? await isSuperAdminEmailRemote(email) : false;
+    if (!isAdmin && !isSuperAdmin) {
       return res.status(200).json({
         canImpersonate: false,
         impersonating: false,
-        real: { email: "", name: "" },
+        real: { email: "", name: "", isSuperAdmin: false },
         effective: { email: "", name: "", role: "member" },
         target: null,
       });
@@ -53,7 +55,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       canImpersonate: !impersonating,
       impersonating,
-      real: { email: realEmail, name: token.name || realEmail },
+      real: { email: realEmail, name: token.name || realEmail, isSuperAdmin },
       effective: {
         email: impersonating ? targetEmail : realEmail,
         name: effectiveName,

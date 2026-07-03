@@ -17,13 +17,31 @@
     { href: "./pay-stubs.html", label: "Upload paystubs", key: "pay-stubs" },
   ];
 
-  /** Matches @team/shell payrollAdminSections (no platform hub links). */
-  const PAYROLL_ADMIN_SECTIONS = [
+  const PLATFORM_HUB_ITEMS = [
     {
-      label: "Admin",
-      items: ADMIN_LINKS,
+      href: `${UPDATES_URL}/manage/access`,
+      label: "Access hub",
+      separatorBefore: true,
+      external: true,
+    },
+    {
+      href: `${UPDATES_URL}/manage/backup`,
+      label: "Backup hub",
+      external: true,
     },
   ];
+
+  function buildPayrollAdminSections({ includeAppAdmin, includePlatformHub }) {
+    const items = [];
+    if (includeAppAdmin) {
+      for (const link of ADMIN_LINKS) items.push({ ...link });
+    }
+    if (includePlatformHub) {
+      for (const link of PLATFORM_HUB_ITEMS) items.push({ ...link });
+    }
+    if (!items.length) return [];
+    return [{ label: "Admin", items }];
+  }
 
   function escapeHtml(s) {
     return String(s ?? "")
@@ -136,10 +154,12 @@
     const adminNavTrigger = root.querySelector("#adminNavTrigger");
     const adminNavMenu = root.querySelector("#adminNavMenu");
     if (!adminNavRoot || !adminNavTrigger || !adminNavMenu) {
-      return { setVisible() {}, renderMenu() {} };
+      return { setVisible() {}, renderMenu() {}, setMenuOptions() {} };
     }
 
     let adminNavOpen = false;
+    let includeAppAdmin = true;
+    let includePlatformHub = false;
 
     function setAdminNavOpen(open) {
       adminNavOpen = open;
@@ -149,7 +169,8 @@
 
     function renderMenu() {
       adminNavMenu.innerHTML = "";
-      for (const section of PAYROLL_ADMIN_SECTIONS) {
+      const sections = buildPayrollAdminSections({ includeAppAdmin, includePlatformHub });
+      for (const section of sections) {
         const heading = document.createElement("li");
         heading.setAttribute("role", "presentation");
         heading.className = "team-admin-nav-menu-heading";
@@ -198,8 +219,24 @@
         adminNavRoot.hidden = !visible;
         if (!visible) setAdminNavOpen(false);
       },
+      setMenuOptions({ includeAppAdmin: appAdmin, includePlatformHub: platformHub } = {}) {
+        if (typeof appAdmin === "boolean") includeAppAdmin = appAdmin;
+        if (typeof platformHub === "boolean") includePlatformHub = platformHub;
+      },
       renderMenu,
     };
+  }
+
+  function applyAdminNavAccess(adminNav, { effectiveIsAdmin, isRealSuperAdmin, impersonating }) {
+    if (!adminNav?.setMenuOptions) return;
+    const includePlatformHub = Boolean(isRealSuperAdmin && !impersonating);
+    const includeAppAdmin = Boolean(effectiveIsAdmin);
+    adminNav.setMenuOptions({ includeAppAdmin, includePlatformHub });
+    const showAdminNav =
+      (includeAppAdmin || includePlatformHub) &&
+      buildPayrollAdminSections({ includeAppAdmin, includePlatformHub }).length > 0;
+    adminNav.setVisible(showAdminNav);
+    adminNav.renderMenu();
   }
 
   function createViewAsController(root, onChange, adminNav) {
@@ -466,8 +503,12 @@
           viewerEmployeeId = data.viewerEmployeeId || null;
           viewerDisplayName = data.viewerDisplayName || "Yourself";
           viewAsRoot.hidden = Boolean(data.impersonating);
-          adminNav?.setVisible(Boolean(data.effectiveIsAdmin));
         }
+        applyAdminNavAccess(adminNav, {
+          effectiveIsAdmin: Boolean(data.effectiveIsAdmin),
+          isRealSuperAdmin: Boolean(data.isSuperAdmin),
+          impersonating: Boolean(data.impersonating),
+        });
         if (data.impersonating && data.employeeId) {
           activeImpersonateId = data.employeeId;
         } else {
@@ -482,7 +523,11 @@
           const status = r.ok ? await r.json() : null;
           if (status) {
             viewAsRoot.hidden = !status.canImpersonate;
-            adminNav?.setVisible(status.effective?.role === "admin");
+            applyAdminNavAccess(adminNav, {
+              effectiveIsAdmin: status.effective?.role === "admin",
+              isRealSuperAdmin: Boolean(status.real?.isSuperAdmin),
+              impersonating: Boolean(status.impersonating),
+            });
             if (status.impersonating && status.target) {
               updateImpersonationBanner({
                 impersonating: true,
@@ -523,7 +568,13 @@
 
     if (options.mode === "admin") {
       void controller.refreshFromImpersonateApi?.().then((handled) => {
-        if (!handled) adminNav.setVisible(true);
+        if (!handled) {
+          applyAdminNavAccess(adminNav, {
+            effectiveIsAdmin: true,
+            isRealSuperAdmin: false,
+            impersonating: false,
+          });
+        }
       });
     }
 

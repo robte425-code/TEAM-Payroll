@@ -11,6 +11,7 @@ const { getPtoHighBalanceNoticeForEmployee } = require("../../lib/pto-high-balan
 const { readImpersonateEmail } = require("../../lib/impersonation");
 const { respondAuthMisconfigured } = require("../../lib/authConfig");
 const { resolveIsAdmin } = require("../../lib/apiAuth");
+const { isSuperAdminEmailRemote } = require("../../lib/super-admin");
 
 function getQueryEmployeeId(req) {
   const raw = req.query?.employeeId;
@@ -61,6 +62,7 @@ export default async function handler(req, res) {
   }
 
   const isAdmin = await resolveIsAdmin(email);
+  const isSuperAdmin = await isSuperAdminEmailRemote(email);
   let impersonateId = getQueryEmployeeId(req);
 
   if (impersonateId && !isUuid(impersonateId)) {
@@ -110,6 +112,7 @@ export default async function handler(req, res) {
         if (isAdmin) {
           return res.status(200).json({
             isAdmin: true,
+            isSuperAdmin,
             needsEmployeeSelection: true,
             ...viewerInfo,
           });
@@ -129,6 +132,7 @@ export default async function handler(req, res) {
       ...payload,
       ptoHighBalanceNotice,
       isAdmin,
+      isSuperAdmin,
       effectiveIsAdmin,
       impersonating,
       ...viewerInfo,
