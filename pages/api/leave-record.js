@@ -1,5 +1,6 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
+const { ensureEmployee } = require("../../lib/ensure-employee");
 const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
 const { findPayPeriodPtoOverLimitViolations } = require("../../lib/pay-period-pto-billed-check");
 const { sendPayPeriodPtoOverlimitAdminEmail } = require("../../lib/pay-period-pto-overlimit-email");
@@ -126,7 +127,14 @@ export default async function handler(req, res) {
       const sickAccrual = toNonNegativeNumber(r.sickAccrualHours);
       const sickUsed = toNonNegativeNumber(r.sickUsedHours);
 
-      const before = await resolveEmployeeForUpdate(client, providerId, employeeName);
+      let before = await resolveEmployeeForUpdate(client, providerId, employeeName);
+      if (!before) {
+        before = await ensureEmployee(client, {
+          providerId,
+          displayName: employeeName,
+          forUpdate: true,
+        });
+      }
       if (!before) continue;
 
       const beforePtoAccrued = Number(before.pto_ytd_hours_accrued) || 0;
@@ -227,7 +235,7 @@ export default async function handler(req, res) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         error:
-          "No employees were recorded. Please regenerate Payroll 2.0 and ensure employee Provider IDs are present.",
+          "No employees were recorded. Each row needs an employee name (and Provider ID when available).",
       });
     }
 

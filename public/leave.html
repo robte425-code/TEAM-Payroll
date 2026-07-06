@@ -12,38 +12,6 @@
     />
     <link rel="stylesheet" href="./css/voc-shell.css" />
     <link rel="stylesheet" href="./css/app.css" />
-    <style>
-      /* Keep log tables readable inside card width. */
-      #ptoLogTable,
-      #sickLogTable {
-        table-layout: fixed;
-        width: 100%;
-      }
-      #ptoLogTable th:nth-child(1),
-      #ptoLogTable td:nth-child(1),
-      #sickLogTable th:nth-child(1),
-      #sickLogTable td:nth-child(1) {
-        width: 12%;
-      }
-      #ptoLogTable th:nth-child(2),
-      #ptoLogTable td:nth-child(2),
-      #sickLogTable th:nth-child(2),
-      #sickLogTable td:nth-child(2) {
-        width: 14%;
-      }
-      #ptoLogTable th:nth-child(3),
-      #ptoLogTable td:nth-child(3),
-      #sickLogTable th:nth-child(3),
-      #sickLogTable td:nth-child(3) {
-        width: 12%;
-      }
-      #ptoLogTable th:nth-child(4),
-      #ptoLogTable td:nth-child(4),
-      #sickLogTable th:nth-child(4),
-      #sickLogTable td:nth-child(4) {
-        width: 62%;
-      }
-    </style>
   </head>
   <body class="voc-page">
     <div id="team-shell-root"></div>
@@ -60,8 +28,8 @@
     <main class="voc-main">
     <h1 class="voc-page-title">PTO and Sick time management</h1>
     <p class="voc-page-lead">
-      Adjust employee YTD PTO/Sick accrued and used hours. Values are saved directly to the employees table. New
-      employees need a <strong>Provider ID</strong> and name (same as
+      View employee YTD PTO/Sick accrued and used hours. Balances update from payroll and leave logs. New employees
+      need a <strong>Provider ID</strong> and name (same as
       <a href="./rates.html">Employee pay rates</a>); pay rates default to 0 until you edit them there.
     </p>
 
@@ -147,66 +115,163 @@
       </div>
       <p style="margin-top: 14px; margin-bottom: 0">
         <button type="button" id="loadBtn">Reload from database</button>
-        <button type="button" id="saveBtn">Save to database</button>
+        <button type="button" id="saveBtn" hidden>Save new employee</button>
       </p>
     </div>
 
-    <div class="card">
-      <h3 style="margin-top: 0">PTO logs</h3>
-      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
-        <label for="logEmployeeSelect">Employee</label>
-        <select id="logEmployeeSelect"></select>
-        <label for="logStartDate">Start date</label>
-        <input type="date" id="logStartDate" class="rate-input" />
-        <label for="logEndDate">End date</label>
-        <input type="date" id="logEndDate" class="rate-input" />
-        <button type="button" id="loadLogsBtn">Load logs</button>
-      </div>
-      <div class="rates-table-scroll" style="margin-top: 10px">
-        <table class="rates-table" id="ptoLogTable">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Action</th>
-              <th>Hours</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody id="ptoLogBody"></tbody>
-        </table>
-      </div>
-    </div>
+    <div class="voc-grid leave-logs-grid">
+      <section class="voc-card leave-log-card" aria-labelledby="ptoLogsHeading">
+        <h2 id="ptoLogsHeading" class="voc-card-title">PTO logs</h2>
+        <p class="leave-log-lead">View activity and add accrual or used hours for an employee.</p>
 
-    <div class="card">
-      <h3 style="margin-top: 0">Sick time logs</h3>
-      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
-        <label for="sickLogEmployeeSelect">Employee</label>
-        <select id="sickLogEmployeeSelect"></select>
-        <label for="sickLogStartDate">Start date</label>
-        <input type="date" id="sickLogStartDate" class="rate-input" />
-        <label for="sickLogEndDate">End date</label>
-        <input type="date" id="sickLogEndDate" class="rate-input" />
-        <button type="button" id="loadSickLogsBtn">Load logs</button>
-      </div>
-      <div class="rates-table-scroll" style="margin-top: 10px">
-        <table class="rates-table" id="sickLogTable">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Action</th>
-              <th>Hours</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody id="sickLogBody"></tbody>
-        </table>
-      </div>
+        <div class="leave-log-subpanel">
+          <h3 class="leave-log-subpanel-title">Find entries</h3>
+          <div class="leave-log-form-grid leave-log-form-grid--filters">
+            <div class="leave-log-field leave-log-field--employee">
+              <label for="logEmployeeSelect">Employee</label>
+              <select id="logEmployeeSelect" class="rate-input"></select>
+            </div>
+            <div class="leave-log-field">
+              <label for="logStartDate">Start date</label>
+              <input type="date" id="logStartDate" class="rate-input" />
+            </div>
+            <div class="leave-log-field">
+              <label for="logEndDate">End date</label>
+              <input type="date" id="logEndDate" class="rate-input" />
+            </div>
+            <div class="leave-log-field leave-log-filter-actions">
+              <button type="button" id="loadLogsBtn">Load logs</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="leave-log-subpanel leave-log-subpanel--add">
+          <h3 class="leave-log-subpanel-title">Add entry</h3>
+          <div class="leave-log-form-grid">
+            <div class="leave-log-field">
+              <label for="ptoLogAction">Action</label>
+              <select id="ptoLogAction" class="rate-input">
+                <option value="Accrual">Accrual</option>
+                <option value="Used">Used</option>
+              </select>
+            </div>
+            <div class="leave-log-field">
+              <label for="ptoLogHours">Hours</label>
+              <input
+                type="number"
+                id="ptoLogHours"
+                class="rate-input"
+                min="0.01"
+                step="0.01"
+              />
+            </div>
+            <div class="leave-log-field leave-log-field--wide">
+              <label for="ptoLogReason">Reason</label>
+              <input type="text" id="ptoLogReason" class="rate-input" />
+            </div>
+          </div>
+          <div class="leave-log-actions">
+            <button type="button" id="addPtoLogBtn">Add log entry</button>
+          </div>
+          <p id="ptoLogAddStatus" class="leave-log-add-status muted" aria-live="polite"></p>
+        </div>
+
+        <h3 class="voc-log-heading">Activity log</h3>
+        <p id="ptoLogMeta" class="leave-log-meta" aria-live="polite">Select an employee to view logs.</p>
+        <div class="voc-log-wrap voc-log-wrap-10">
+          <table id="ptoLogTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Action</th>
+                <th class="col-hours">Hours</th>
+                <th class="col-reason">Reason</th>
+              </tr>
+            </thead>
+            <tbody id="ptoLogBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="voc-card leave-log-card" aria-labelledby="sickLogsHeading">
+        <h2 id="sickLogsHeading" class="voc-card-title">Sick time logs</h2>
+        <p class="leave-log-lead">View activity and add accrual or used hours for an employee.</p>
+
+        <div class="leave-log-subpanel">
+          <h3 class="leave-log-subpanel-title">Find entries</h3>
+          <div class="leave-log-form-grid leave-log-form-grid--filters">
+            <div class="leave-log-field leave-log-field--employee">
+              <label for="sickLogEmployeeSelect">Employee</label>
+              <select id="sickLogEmployeeSelect" class="rate-input"></select>
+            </div>
+            <div class="leave-log-field">
+              <label for="sickLogStartDate">Start date</label>
+              <input type="date" id="sickLogStartDate" class="rate-input" />
+            </div>
+            <div class="leave-log-field">
+              <label for="sickLogEndDate">End date</label>
+              <input type="date" id="sickLogEndDate" class="rate-input" />
+            </div>
+            <div class="leave-log-field leave-log-filter-actions">
+              <button type="button" id="loadSickLogsBtn">Load logs</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="leave-log-subpanel leave-log-subpanel--add">
+          <h3 class="leave-log-subpanel-title">Add entry</h3>
+          <div class="leave-log-form-grid">
+            <div class="leave-log-field">
+              <label for="sickLogAction">Action</label>
+              <select id="sickLogAction" class="rate-input">
+                <option value="Accrual">Accrual</option>
+                <option value="Used">Used</option>
+              </select>
+            </div>
+            <div class="leave-log-field">
+              <label for="sickLogHours">Hours</label>
+              <input
+                type="number"
+                id="sickLogHours"
+                class="rate-input"
+                min="0.01"
+                step="0.01"
+              />
+            </div>
+            <div class="leave-log-field leave-log-field--wide">
+              <label for="sickLogReason">Reason</label>
+              <input type="text" id="sickLogReason" class="rate-input" />
+            </div>
+          </div>
+          <div class="leave-log-actions">
+            <button type="button" id="addSickLogBtn">Add log entry</button>
+          </div>
+          <p id="sickLogAddStatus" class="leave-log-add-status muted" aria-live="polite"></p>
+        </div>
+
+        <h3 class="voc-log-heading">Activity log</h3>
+        <p id="sickLogMeta" class="leave-log-meta" aria-live="polite">Select an employee to view logs.</p>
+        <div class="voc-log-wrap voc-log-wrap-10">
+          <table id="sickLogTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Action</th>
+                <th class="col-hours">Hours</th>
+                <th class="col-reason">Reason</th>
+              </tr>
+            </thead>
+            <tbody id="sickLogBody"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
     </main>
 
     <script>
       const API = "/api/leave-ytd";
       const LOGS_API = "/api/leave-logs";
+      const LOG_ENTRY_API = "/api/leave-log-entry";
       const ROLLBACK_API = "/api/leave-rollback";
       const tbody = document.getElementById("leaveBody");
       const ptoLogBody = document.getElementById("ptoLogBody");
@@ -296,41 +361,30 @@
         tr.innerHTML = `
           <td>${escapeHtml(String(e.displayName || ""))}</td>
           <td>${escapeHtml(String(e.providerId || ""))}</td>
-          <td><input type="number" class="js-pto-accrued rate-input" min="0" step="0.01" /></td>
-          <td><input type="number" class="js-pto-used rate-input" min="0" step="0.01" /></td>
-          <td><input type="number" class="js-sick-accrued rate-input" min="0" step="0.01" /></td>
-          <td><input type="number" class="js-sick-used rate-input" min="0" step="0.01" /></td>
+          <td>${money2(e.ptoYtdHoursAccrued)}</td>
+          <td>${money2(e.ptoYtdHoursUsed)}</td>
+          <td>${money2(e.sickYtdHoursAccrued)}</td>
+          <td>${money2(e.sickYtdHoursUsed)}</td>
         `;
-        tr.querySelector(".js-pto-accrued").value = String(Number(e.ptoYtdHoursAccrued) || 0);
-        tr.querySelector(".js-pto-used").value = String(Number(e.ptoYtdHoursUsed) || 0);
-        tr.querySelector(".js-sick-accrued").value = String(Number(e.sickYtdHoursAccrued) || 0);
-        tr.querySelector(".js-sick-used").value = String(Number(e.sickYtdHoursUsed) || 0);
         return tr;
       }
 
-      function readRow(tr) {
-        const ptoYtdHoursAccrued = Number(tr.querySelector(".js-pto-accrued").value || 0);
-        const ptoYtdHoursUsed = Number(tr.querySelector(".js-pto-used").value || 0);
-        const sickYtdHoursAccrued = Number(tr.querySelector(".js-sick-accrued").value || 0);
-        const sickYtdHoursUsed = Number(tr.querySelector(".js-sick-used").value || 0);
-        if (tr.dataset.new === "1") {
-          return {
-            isNew: true,
-            displayName: String(tr.querySelector(".js-name")?.value || "").trim(),
-            providerId: String(tr.querySelector(".js-pid")?.value || "").trim(),
-            ptoYtdHoursAccrued,
-            ptoYtdHoursUsed,
-            sickYtdHoursAccrued,
-            sickYtdHoursUsed,
-          };
-        }
+      function readNewRow(tr) {
+        if (tr.dataset.new !== "1") return null;
         return {
-          id: tr.dataset.id,
-          ptoYtdHoursAccrued,
-          ptoYtdHoursUsed,
-          sickYtdHoursAccrued,
-          sickYtdHoursUsed,
+          displayName: String(tr.querySelector(".js-name")?.value || "").trim(),
+          providerId: String(tr.querySelector(".js-pid")?.value || "").trim(),
+          ptoYtdHoursAccrued: Number(tr.querySelector(".js-pto-accrued").value || 0),
+          ptoYtdHoursUsed: Number(tr.querySelector(".js-pto-used").value || 0),
+          sickYtdHoursAccrued: Number(tr.querySelector(".js-sick-accrued").value || 0),
+          sickYtdHoursUsed: Number(tr.querySelector(".js-sick-used").value || 0),
         };
+      }
+
+      function updateSaveButtonVisibility() {
+        const saveBtn = document.getElementById("saveBtn");
+        if (!saveBtn) return;
+        saveBtn.hidden = !tbody.querySelector("tr[data-new]");
       }
 
       function appendNewEmployeeLeaveRow() {
@@ -338,9 +392,10 @@
           tbody.innerHTML = "";
         }
         tbody.appendChild(rowTemplate({}, true));
+        updateSaveButtonVisibility();
         const last = tbody.querySelector("tr:last-child .js-name");
         if (last) last.focus();
-        flash("New row — enter name, Provider ID, and YTD hours, then Save.");
+        flash("New row — enter name, Provider ID, and YTD hours, then Save new employee.");
       }
 
       function clearLogs() {
@@ -431,21 +486,67 @@
         }
       }
 
-      function renderLogsTable(tbodyEl, rows) {
+      function formatDate(d) {
+        if (d == null || d === "") return "—";
+        const s = String(d);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          const [y, m, day] = s.slice(0, 10).split("-");
+          return `${m}/${day}/${y}`;
+        }
+        return s;
+      }
+
+      function formatDateRange(start, end) {
+        if (start && end) return `${formatDate(start)}–${formatDate(end)}`;
+        if (start) return `from ${formatDate(start)}`;
+        if (end) return `through ${formatDate(end)}`;
+        return "all dates";
+      }
+
+      function getEmployeeDisplayName(employeeId) {
+        const e = employeesCache.find((x) => String(x.id) === String(employeeId));
+        return e ? String(e.displayName || "(No name)") : "";
+      }
+
+      function buildLogMeta(count, employeeName, startDate, endDate) {
+        const parts = [];
+        parts.push(count === 0 ? "No entries" : `${count} ${count === 1 ? "entry" : "entries"}`);
+        if (employeeName) parts.push(employeeName);
+        parts.push(formatDateRange(startDate, endDate));
+        return parts.join(" · ");
+      }
+
+      function actionBadge(action) {
+        const a = String(action || "").trim();
+        const lower = a.toLowerCase();
+        const cls = lower === "used" ? "leave-log-badge--used" : "leave-log-badge--accrual";
+        return `<span class="leave-log-badge ${cls}">${escapeHtml(a)}</span>`;
+      }
+
+      function renderLogsTable(tbodyEl, rows, metaEl, opts = {}) {
         tbodyEl.innerHTML = "";
+        const { employeeId, employeeName, startDate, endDate } = opts;
+        if (metaEl) {
+          if (!employeeId) {
+            metaEl.textContent = "Select an employee to view logs.";
+          } else {
+            metaEl.textContent = buildLogMeta(rows.length, employeeName, startDate, endDate);
+          }
+        }
         if (!rows.length) {
           const tr = document.createElement("tr");
-          tr.innerHTML = '<td colspan="4" class="muted">No logs found for selected filters.</td>';
+          tr.innerHTML =
+            '<td colspan="4" class="col-empty">No entries match these filters.</td>';
           tbodyEl.appendChild(tr);
           return;
         }
         for (const r of rows) {
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td>${String(r.action_date || "").slice(0, 10)}</td>
-            <td>${String(r.action || "")}</td>
-            <td>${money2(r.hours)}</td>
-            <td>${String(r.reason || "")}</td>
+            <td>${escapeHtml(formatDate(r.action_date))}</td>
+            <td>${actionBadge(r.action)}</td>
+            <td class="col-hours">${escapeHtml(money2(r.hours))}</td>
+            <td class="col-reason">${escapeHtml(String(r.reason || ""))}</td>
           `;
           tbodyEl.appendChild(tr);
         }
@@ -461,17 +562,25 @@
       async function loadPtoLogs() {
         err.textContent = "";
         const employeeId = String(document.getElementById("logEmployeeSelect")?.value || "").trim();
+        const metaEl = document.getElementById("ptoLogMeta");
         if (!employeeId) {
-          ptoLogBody.innerHTML = "";
+          renderLogsTable(ptoLogBody, [], metaEl, {});
           return;
         }
         const startDate = String(document.getElementById("logStartDate")?.value || "").trim();
         const endDate = String(document.getElementById("logEndDate")?.value || "").trim();
+        const employeeName = getEmployeeDisplayName(employeeId);
         try {
           const d = await fetchLogs(employeeId, startDate, endDate);
-          renderLogsTable(ptoLogBody, d.ptoLogs || []);
+          renderLogsTable(ptoLogBody, d.ptoLogs || [], metaEl, {
+            employeeId,
+            employeeName,
+            startDate,
+            endDate,
+          });
         } catch (e) {
           ptoLogBody.innerHTML = "";
+          if (metaEl) metaEl.textContent = "Failed to load logs.";
           flash(e.message || "Failed to load PTO logs.", true);
         }
       }
@@ -479,18 +588,71 @@
       async function loadSickLogs() {
         err.textContent = "";
         const employeeId = String(document.getElementById("sickLogEmployeeSelect")?.value || "").trim();
+        const metaEl = document.getElementById("sickLogMeta");
         if (!employeeId) {
-          sickLogBody.innerHTML = "";
+          renderLogsTable(sickLogBody, [], metaEl, {});
           return;
         }
         const startDate = String(document.getElementById("sickLogStartDate")?.value || "").trim();
         const endDate = String(document.getElementById("sickLogEndDate")?.value || "").trim();
+        const employeeName = getEmployeeDisplayName(employeeId);
         try {
           const d = await fetchLogs(employeeId, startDate, endDate);
-          renderLogsTable(sickLogBody, d.sickLogs || []);
+          renderLogsTable(sickLogBody, d.sickLogs || [], metaEl, {
+            employeeId,
+            employeeName,
+            startDate,
+            endDate,
+          });
         } catch (e) {
           sickLogBody.innerHTML = "";
+          if (metaEl) metaEl.textContent = "Failed to load logs.";
           flash(e.message || "Failed to load Sick logs.", true);
+        }
+      }
+
+      async function addLogEntry({ logType, employeeSelectId, actionId, hoursId, reasonId, statusId, reloadLogs }) {
+        err.textContent = "";
+        const statusEl = document.getElementById(statusId);
+        if (statusEl) statusEl.textContent = "";
+
+        const employeeId = String(document.getElementById(employeeSelectId)?.value || "").trim();
+        if (!employeeId) {
+          flash("Select an employee first.", true);
+          return;
+        }
+
+        const action = String(document.getElementById(actionId)?.value || "").trim();
+        const hoursRaw = document.getElementById(hoursId)?.value;
+        const hours = Number(hoursRaw);
+        const reason = String(document.getElementById(reasonId)?.value || "").trim();
+
+        if (!Number.isFinite(hours) || hours <= 0) {
+          flash("Enter a positive number of hours.", true);
+          return;
+        }
+
+        try {
+          await apiJson(LOG_ENTRY_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              employeeId,
+              logType,
+              action,
+              hours,
+              reason,
+            }),
+          });
+          const hoursInput = document.getElementById(hoursId);
+          const reasonInput = document.getElementById(reasonId);
+          if (hoursInput) hoursInput.value = "";
+          if (reasonInput) reasonInput.value = "";
+          if (statusEl) statusEl.textContent = "Log entry added (today's date). YTD balances updated.";
+          await render();
+          await reloadLogs();
+        } catch (e) {
+          flash(e.message || "Failed to add log entry.", true);
         }
       }
 
@@ -600,6 +762,7 @@
             }
           }
           fillEmployeeSelect(list);
+          updateSaveButtonVisibility();
           await Promise.all([loadPtoLogs(), loadSickLogs()]);
           msg.textContent = "";
         } catch (e) {
@@ -614,14 +777,13 @@
       document.getElementById("addEmployeeLeaveBtn").addEventListener("click", appendNewEmployeeLeaveRow);
       document.getElementById("saveBtn").addEventListener("click", async () => {
         err.textContent = "";
-        const rows = Array.from(tbody.querySelectorAll("tr[data-id], tr[data-new]")).filter(
+        const rows = Array.from(tbody.querySelectorAll("tr[data-new]")).filter(
           (tr) => !tr.querySelector("td[colspan]")
         );
         if (!rows.length) {
           flash("Nothing to save.", true);
           return;
         }
-        const patchRows = [];
         function validateYtd(row) {
           if (
             !Number.isFinite(row.ptoYtdHoursAccrued) ||
@@ -639,64 +801,39 @@
           return true;
         }
         try {
-          let createdNewEmployee = false;
           for (const tr of rows) {
-            const row = readRow(tr);
-            if (row.isNew) {
-              if (!row.providerId) {
-                flash("Each new row needs a Provider ID.", true);
-                return;
-              }
-              if (!row.displayName) {
-                flash("Each new row needs a display name.", true);
-                return;
-              }
-              if (!validateYtd(row)) return;
-              await apiJson(EMPLOYEES_API, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  providerId: row.providerId,
-                  displayName: row.displayName,
-                  hourlyRate: 0,
-                  minWageRate: 0,
-                  travelRate: 0,
-                  ptoRate: 0,
-                  eduRate: 0,
-                  trainingRate: 0,
-                  healthInsuranceDeduction: 0,
-                  ptoYtdHoursAccrued: row.ptoYtdHoursAccrued,
-                  ptoYtdHoursUsed: row.ptoYtdHoursUsed,
-                  sickYtdHoursAccrued: row.sickYtdHoursAccrued,
-                  sickYtdHoursUsed: row.sickYtdHoursUsed,
-                }),
-              });
-              createdNewEmployee = true;
-            } else {
-              if (!validateYtd(row)) return;
-              patchRows.push({
-                id: row.id,
+            const row = readNewRow(tr);
+            if (!row) continue;
+            if (!row.providerId) {
+              flash("Each new row needs a Provider ID.", true);
+              return;
+            }
+            if (!row.displayName) {
+              flash("Each new row needs a display name.", true);
+              return;
+            }
+            if (!validateYtd(row)) return;
+            await apiJson(EMPLOYEES_API, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                providerId: row.providerId,
+                displayName: row.displayName,
+                hourlyRate: 0,
+                minWageRate: 0,
+                travelRate: 0,
+                ptoRate: 0,
+                eduRate: 0,
+                trainingRate: 0,
+                healthInsuranceDeduction: 0,
                 ptoYtdHoursAccrued: row.ptoYtdHoursAccrued,
                 ptoYtdHoursUsed: row.ptoYtdHoursUsed,
                 sickYtdHoursAccrued: row.sickYtdHoursAccrued,
                 sickYtdHoursUsed: row.sickYtdHoursUsed,
-              });
-            }
-          }
-          if (patchRows.length) {
-            const patchRes = await apiJson(API, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ rows: patchRows }),
+              }),
             });
-            if (patchRes && patchRes.unchanged && !createdNewEmployee) {
-              flash(patchRes.message || "No PTO/Sick YTD values changed.");
-            } else {
-              flash("Saved.");
-            }
-          } else {
-            flash("Saved.");
           }
+          flash("Saved.");
           await render();
         } catch (e) {
           flash(e.message || "Save failed.", true);
@@ -707,6 +844,28 @@
       document.getElementById("logEmployeeSelect").addEventListener("change", loadPtoLogs);
       document.getElementById("loadSickLogsBtn").addEventListener("click", loadSickLogs);
       document.getElementById("sickLogEmployeeSelect").addEventListener("change", loadSickLogs);
+      document.getElementById("addPtoLogBtn").addEventListener("click", () =>
+        addLogEntry({
+          logType: "pto",
+          employeeSelectId: "logEmployeeSelect",
+          actionId: "ptoLogAction",
+          hoursId: "ptoLogHours",
+          reasonId: "ptoLogReason",
+          statusId: "ptoLogAddStatus",
+          reloadLogs: loadPtoLogs,
+        })
+      );
+      document.getElementById("addSickLogBtn").addEventListener("click", () =>
+        addLogEntry({
+          logType: "sick",
+          employeeSelectId: "sickLogEmployeeSelect",
+          actionId: "sickLogAction",
+          hoursId: "sickLogHours",
+          reasonId: "sickLogReason",
+          statusId: "sickLogAddStatus",
+          reloadLogs: loadSickLogs,
+        })
+      );
 
       document.getElementById("rollbackBtn").addEventListener("click", async () => {
         err.textContent = "";
@@ -740,7 +899,6 @@
 
       document.getElementById("exportCsvBtn").addEventListener("click", () => {
         try {
-          const rows = Array.from(tbody.querySelectorAll("tr[data-id]")).map((tr) => readRow(tr));
           const header = [
             "id",
             "providerId",
@@ -750,21 +908,17 @@
             "sickYtdHoursAccrued",
             "sickYtdHoursUsed",
           ];
-          const employeeById = new Map(
-            (employeesCache || []).map((e) => [String(e.id), e])
-          );
           const lines = [header.map(csvEscape).join(",")];
-          for (const r of rows) {
-            const emp = employeeById.get(String(r.id)) || {};
+          for (const e of employeesCache || []) {
             lines.push(
               [
-                r.id,
-                emp.providerId || "",
-                emp.displayName || "",
-                r.ptoYtdHoursAccrued,
-                r.ptoYtdHoursUsed,
-                r.sickYtdHoursAccrued,
-                r.sickYtdHoursUsed,
+                e.id,
+                e.providerId || "",
+                e.displayName || "",
+                Number(e.ptoYtdHoursAccrued) || 0,
+                Number(e.ptoYtdHoursUsed) || 0,
+                Number(e.sickYtdHoursAccrued) || 0,
+                Number(e.sickYtdHoursUsed) || 0,
               ]
                 .map(csvEscape)
                 .join(",")

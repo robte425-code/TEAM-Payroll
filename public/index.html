@@ -897,43 +897,27 @@
       }
 
       async function syncMissingEmployeesFromRows(rows) {
-        let list = [];
-        try {
-          const r = await fetch("/api/employees");
-          if (!r.ok) return;
-          const data = await r.json();
-          list = data.employees || [];
-        } catch {
-          return;
-        }
-
-        const existingProviderIds = new Set(
-          list.map((e) => String(e.providerId || "").trim()).filter(Boolean)
-        );
-
-        const seenInSheet = new Set();
-        for (const row of rows) {
+        const payload = [];
+        const seen = new Set();
+        const theList = Array.isArray(rows) ? rows : [];
+        for (const row of theList) {
           const providerId = String(row.providerId || "").trim();
-          if (!providerId) continue;
-          if (existingProviderIds.has(providerId)) continue;
-          if (seenInSheet.has(providerId)) continue;
-          seenInSheet.add(providerId);
-
-          const displayName = String(row.employeeName || "").trim();
-          try {
-            await fetch("/api/employees", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                providerId,
-                displayName,
-                hourlyRate: 0,
-              }),
-            });
-            existingProviderIds.add(providerId);
-          } catch {
-            // Ignore best-effort sync failures; analysis should still render.
-          }
+          const employeeName = String(row.employeeName || row.displayName || "").trim();
+          if (!providerId && !employeeName) continue;
+          const key = `${providerId}::${employeeName.toLowerCase()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          payload.push({ providerId, employeeName });
+        }
+        if (!payload.length) return;
+        try {
+          await fetch("/api/employees-ensure", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows: payload }),
+          });
+        } catch {
+          // Ignore best-effort sync failures; analysis should still render.
         }
       }
 
@@ -1848,6 +1832,13 @@
           return;
         }
 
+        await syncMissingEmployeesFromRows(
+          summary.map((item) => ({
+            providerId: item.providerId,
+            employeeName: item.employeeName,
+          }))
+        );
+
         const [empDetails, orgRates] = await Promise.all([
           fetchEmployeeDetailMap(),
           fetchOrgRates(),
@@ -2150,12 +2141,23 @@
           const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
           const parsed = parseNonBillWorkbook(workbook);
           const nbMap = aggregateNonBillByEmployee(parsed.rows);
-          const { detailMap, providerIdByNormName } = await fetchEmployeeDetailMap();
           const incentiveThreshold = Number(lastPayroll10Results.incentiveThreshold) || 0;
           const p1Keys = new Set(
             lastPayroll10Results.rows.map((r) => normalizeEmployeeName(r.employeeName))
           );
           const nbOnlyList = collectNbOnlyEmployees(parsed.rows, p1Keys);
+
+          await syncMissingEmployeesFromRows([
+            ...lastPayroll10Results.rows.map((r) => ({
+              providerId: r.providerId,
+              employeeName: r.employeeName,
+            })),
+            ...nbOnlyList.map((entry) => ({
+              employeeName: entry.displayName,
+            })),
+          ]);
+
+          const { detailMap, providerIdByNormName } = await fetchEmployeeDetailMap();
 
           const tbody = document.querySelector("#payroll20Table tbody");
           tbody.innerHTML = "";

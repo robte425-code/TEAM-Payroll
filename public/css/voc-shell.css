@@ -643,3 +643,136 @@
   font-size: 0.875rem;
   color: #78716c;
 }
+
+/* Admin leave log panels (leave.html) */
+.leave-logs-grid {
+  margin-top: 1rem;
+}
+
+.leave-log-card .leave-log-lead {
+  margin: -0.35rem 0 0;
+  font-size: 0.875rem;
+  color: #78716c;
+  line-height: 1.45;
+}
+
+.leave-log-subpanel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 0.5rem;
+  background: #fafaf9;
+}
+
+.leave-log-subpanel--add {
+  border-color: #d6d3d1;
+  background: #ffffff;
+}
+
+.leave-log-subpanel-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #78716c;
+}
+
+.leave-log-form-grid {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 480px) {
+  .leave-log-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leave-log-form-grid--filters .leave-log-field--employee {
+    grid-column: 1 / -1;
+  }
+}
+
+.leave-log-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.leave-log-field label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #57534e;
+}
+
+.leave-log-field input,
+.leave-log-field select {
+  width: 100%;
+}
+
+.leave-log-field--wide {
+  grid-column: 1 / -1;
+}
+
+.leave-log-filter-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.leave-log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.leave-log-add-status {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.leave-log-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: #78716c;
+}
+
+.leave-log-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.leave-log-badge--accrual {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.leave-log-badge--used {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.leave-log-card .voc-log-wrap td.col-hours,
+.leave-log-card .voc-log-wrap th.col-hours {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.leave-log-card .voc-log-wrap td.col-reason,
+.leave-log-card .voc-log-wrap th.col-reason {
+  word-break: break-word;
+}
+
+.leave-log-card .voc-log-wrap td.col-empty {
+  color: #78716c;
+  text-align: center;
+  padding: 1.25rem 0.625rem;
+}
