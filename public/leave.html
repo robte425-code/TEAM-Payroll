@@ -124,56 +124,63 @@
         <h2 id="ptoLogsHeading" class="voc-card-title">PTO logs</h2>
         <p class="leave-log-lead">View activity and add accrual or used hours for an employee.</p>
 
-        <div class="leave-log-subpanel">
-          <h3 class="leave-log-subpanel-title">Find entries</h3>
-          <div class="leave-log-form-grid leave-log-form-grid--filters">
-            <div class="leave-log-field leave-log-field--employee">
-              <label for="logEmployeeSelect">Employee</label>
-              <select id="logEmployeeSelect" class="rate-input"></select>
+        <div class="leave-log-controls">
+          <div class="leave-log-section">
+            <h3 class="leave-log-section-title">Find entries</h3>
+            <div class="leave-log-row">
+              <div class="leave-log-field leave-log-field--employee">
+                <label for="logEmployeeSelect">Employee</label>
+                <select id="logEmployeeSelect" class="leave-log-input"></select>
+              </div>
             </div>
-            <div class="leave-log-field">
-              <label for="logStartDate">Start date</label>
-              <input type="date" id="logStartDate" class="rate-input" />
-            </div>
-            <div class="leave-log-field">
-              <label for="logEndDate">End date</label>
-              <input type="date" id="logEndDate" class="rate-input" />
-            </div>
-            <div class="leave-log-field leave-log-filter-actions">
-              <button type="button" id="loadLogsBtn">Load logs</button>
+            <div class="leave-log-row leave-log-row--filter-dates">
+              <div class="leave-log-field leave-log-field--date">
+                <label for="logStartDate">Start date</label>
+                <input type="date" id="logStartDate" class="leave-log-input" />
+              </div>
+              <div class="leave-log-field leave-log-field--date">
+                <label for="logEndDate">End date</label>
+                <input type="date" id="logEndDate" class="leave-log-input" />
+              </div>
+              <div class="leave-log-field leave-log-field--btn">
+                <span class="leave-log-btn-label" aria-hidden="true">Load</span>
+                <button type="button" id="loadLogsBtn" class="btn-secondary leave-log-btn">Load logs</button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="leave-log-subpanel leave-log-subpanel--add">
-          <h3 class="leave-log-subpanel-title">Add entry</h3>
-          <div class="leave-log-form-grid">
-            <div class="leave-log-field">
-              <label for="ptoLogAction">Action</label>
-              <select id="ptoLogAction" class="rate-input">
-                <option value="Accrual">Accrual</option>
-                <option value="Used">Used</option>
-              </select>
+          <div class="leave-log-section">
+            <h3 class="leave-log-section-title">Add entry</h3>
+            <div class="leave-log-row">
+              <div class="leave-log-field leave-log-field--action">
+                <label for="ptoLogAction">Action</label>
+                <select id="ptoLogAction" class="leave-log-input">
+                  <option value="Accrual">Accrual</option>
+                  <option value="Used">Used</option>
+                </select>
+              </div>
+              <div class="leave-log-field leave-log-field--hours">
+                <label for="ptoLogHours">Hours</label>
+                <input
+                  type="number"
+                  id="ptoLogHours"
+                  class="leave-log-input"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                />
+              </div>
+              <div class="leave-log-field leave-log-field--reason">
+                <label for="ptoLogReason">Reason</label>
+                <input type="text" id="ptoLogReason" class="leave-log-input" placeholder="Optional note" />
+              </div>
+              <div class="leave-log-field leave-log-field--btn">
+                <span class="leave-log-btn-label" aria-hidden="true">Add</span>
+                <button type="button" id="addPtoLogBtn" class="leave-log-btn">Add entry</button>
+              </div>
             </div>
-            <div class="leave-log-field">
-              <label for="ptoLogHours">Hours</label>
-              <input
-                type="number"
-                id="ptoLogHours"
-                class="rate-input"
-                min="0.01"
-                step="0.01"
-              />
-            </div>
-            <div class="leave-log-field leave-log-field--wide">
-              <label for="ptoLogReason">Reason</label>
-              <input type="text" id="ptoLogReason" class="rate-input" />
-            </div>
+            <p id="ptoLogAddStatus" class="leave-log-add-status muted" aria-live="polite"></p>
           </div>
-          <div class="leave-log-actions">
-            <button type="button" id="addPtoLogBtn">Add log entry</button>
-          </div>
-          <p id="ptoLogAddStatus" class="leave-log-add-status muted" aria-live="polite"></p>
         </div>
 
         <h3 class="voc-log-heading">Activity log</h3>
@@ -197,56 +204,63 @@
         <h2 id="sickLogsHeading" class="voc-card-title">Sick time logs</h2>
         <p class="leave-log-lead">View activity and add accrual or used hours for an employee.</p>
 
-        <div class="leave-log-subpanel">
-          <h3 class="leave-log-subpanel-title">Find entries</h3>
-          <div class="leave-log-form-grid leave-log-form-grid--filters">
-            <div class="leave-log-field leave-log-field--employee">
-              <label for="sickLogEmployeeSelect">Employee</label>
-              <select id="sickLogEmployeeSelect" class="rate-input"></select>
+        <div class="leave-log-controls">
+          <div class="leave-log-section">
+            <h3 class="leave-log-section-title">Find entries</h3>
+            <div class="leave-log-row">
+              <div class="leave-log-field leave-log-field--employee">
+                <label for="sickLogEmployeeSelect">Employee</label>
+                <select id="sickLogEmployeeSelect" class="leave-log-input"></select>
+              </div>
             </div>
-            <div class="leave-log-field">
-              <label for="sickLogStartDate">Start date</label>
-              <input type="date" id="sickLogStartDate" class="rate-input" />
-            </div>
-            <div class="leave-log-field">
-              <label for="sickLogEndDate">End date</label>
-              <input type="date" id="sickLogEndDate" class="rate-input" />
-            </div>
-            <div class="leave-log-field leave-log-filter-actions">
-              <button type="button" id="loadSickLogsBtn">Load logs</button>
+            <div class="leave-log-row leave-log-row--filter-dates">
+              <div class="leave-log-field leave-log-field--date">
+                <label for="sickLogStartDate">Start date</label>
+                <input type="date" id="sickLogStartDate" class="leave-log-input" />
+              </div>
+              <div class="leave-log-field leave-log-field--date">
+                <label for="sickLogEndDate">End date</label>
+                <input type="date" id="sickLogEndDate" class="leave-log-input" />
+              </div>
+              <div class="leave-log-field leave-log-field--btn">
+                <span class="leave-log-btn-label" aria-hidden="true">Load</span>
+                <button type="button" id="loadSickLogsBtn" class="btn-secondary leave-log-btn">Load logs</button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="leave-log-subpanel leave-log-subpanel--add">
-          <h3 class="leave-log-subpanel-title">Add entry</h3>
-          <div class="leave-log-form-grid">
-            <div class="leave-log-field">
-              <label for="sickLogAction">Action</label>
-              <select id="sickLogAction" class="rate-input">
-                <option value="Accrual">Accrual</option>
-                <option value="Used">Used</option>
-              </select>
+          <div class="leave-log-section">
+            <h3 class="leave-log-section-title">Add entry</h3>
+            <div class="leave-log-row">
+              <div class="leave-log-field leave-log-field--action">
+                <label for="sickLogAction">Action</label>
+                <select id="sickLogAction" class="leave-log-input">
+                  <option value="Accrual">Accrual</option>
+                  <option value="Used">Used</option>
+                </select>
+              </div>
+              <div class="leave-log-field leave-log-field--hours">
+                <label for="sickLogHours">Hours</label>
+                <input
+                  type="number"
+                  id="sickLogHours"
+                  class="leave-log-input"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                />
+              </div>
+              <div class="leave-log-field leave-log-field--reason">
+                <label for="sickLogReason">Reason</label>
+                <input type="text" id="sickLogReason" class="leave-log-input" placeholder="Optional note" />
+              </div>
+              <div class="leave-log-field leave-log-field--btn">
+                <span class="leave-log-btn-label" aria-hidden="true">Add</span>
+                <button type="button" id="addSickLogBtn" class="leave-log-btn">Add entry</button>
+              </div>
             </div>
-            <div class="leave-log-field">
-              <label for="sickLogHours">Hours</label>
-              <input
-                type="number"
-                id="sickLogHours"
-                class="rate-input"
-                min="0.01"
-                step="0.01"
-              />
-            </div>
-            <div class="leave-log-field leave-log-field--wide">
-              <label for="sickLogReason">Reason</label>
-              <input type="text" id="sickLogReason" class="rate-input" />
-            </div>
+            <p id="sickLogAddStatus" class="leave-log-add-status muted" aria-live="polite"></p>
           </div>
-          <div class="leave-log-actions">
-            <button type="button" id="addSickLogBtn">Add log entry</button>
-          </div>
-          <p id="sickLogAddStatus" class="leave-log-add-status muted" aria-live="polite"></p>
         </div>
 
         <h3 class="voc-log-heading">Activity log</h3>
