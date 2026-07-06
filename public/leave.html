@@ -490,12 +490,16 @@
           document.getElementById("sickLogEmployeeSelect"),
         ].filter(Boolean);
         for (const sel of selects) {
+          const previous = String(sel.value || "").trim();
           sel.innerHTML = "";
           for (const e of list) {
             const opt = document.createElement("option");
             opt.value = e.id;
             opt.textContent = `${e.displayName || "(No name)"} (${e.providerId || "-"})`;
             sel.appendChild(opt);
+          }
+          if (previous && list.some((e) => String(e.id) === previous)) {
+            sel.value = previous;
           }
         }
       }
