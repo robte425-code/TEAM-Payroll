@@ -28,52 +28,105 @@
         color: #1c1917;
         font-weight: 700;
       }
-      .analyzer-notes-list {
+      .analyzer-notes-card-title {
         display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 14px;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 12px;
+        margin-bottom: 8px;
       }
-      .analyzer-note-item {
-        border: 1px solid #e7e5e4;
-        border-radius: 8px;
-        padding: 12px 14px;
+      .analyzer-notes-card-title h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+      .analyzer-notes-card-title .muted {
+        font-size: 0.8rem;
+      }
+      .analyzer-notes-scroll {
+        overflow-x: auto;
+        margin-bottom: 8px;
+      }
+      .analyzer-notes-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.84rem;
+      }
+      .analyzer-notes-table th,
+      .analyzer-notes-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid #e7e5e4;
+        vertical-align: top;
+        text-align: left;
+      }
+      .analyzer-notes-table th {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #57534e;
         background: #fafaf9;
       }
-      .analyzer-note-meta {
-        font-size: 0.82rem;
-        color: #78716c;
-        margin: 0 0 8px;
+      .analyzer-notes-table th:last-child,
+      .analyzer-notes-table td.analyzer-note-actions-cell {
+        width: 6.5rem;
+        text-align: right;
+        white-space: nowrap;
+      }
+      .analyzer-note-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 6px 10px;
       }
       .analyzer-note-body {
+        flex: 1 1 10rem;
         white-space: pre-wrap;
-        margin: 0 0 10px;
-        line-height: 1.45;
+        margin: 0;
+        line-height: 1.35;
+      }
+      .analyzer-note-meta {
+        flex: 0 0 auto;
+        font-size: 0.74rem;
+        color: #78716c;
+        white-space: nowrap;
       }
       .analyzer-note-actions {
+        display: inline-flex;
+        gap: 4px;
+        justify-content: flex-end;
+      }
+      .analyzer-note-actions button {
+        font-size: 0.76rem;
+        padding: 2px 7px;
+        min-height: 0;
+      }
+      .analyzer-note-edit textarea,
+      .analyzer-notes-add textarea {
+        width: 100%;
+        min-height: 2.4rem;
+        margin: 0;
+        font: inherit;
+        font-size: 0.84rem;
+        padding: 5px 8px;
+        border: 1px solid #d6d3d1;
+        border-radius: 4px;
+        resize: vertical;
+      }
+      .analyzer-notes-add {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-      }
-      .analyzer-note-edit textarea {
-        width: 100%;
-        min-height: 5rem;
-        margin-bottom: 8px;
-        font: inherit;
-        padding: 8px 10px;
-        border: 1px solid #d6d3d1;
-        border-radius: 6px;
-        resize: vertical;
+        align-items: flex-start;
       }
       .analyzer-notes-add textarea {
-        width: 100%;
-        min-height: 4.5rem;
-        margin: 0 0 8px;
-        font: inherit;
-        padding: 8px 10px;
-        border: 1px solid #d6d3d1;
-        border-radius: 6px;
-        resize: vertical;
+        flex: 1 1 14rem;
+      }
+      .analyzer-notes-add button {
+        flex: 0 0 auto;
+        font-size: 0.84rem;
+        padding: 5px 10px;
+      }
+      .analyzer-notes-status-row {
+        margin: 6px 0 0;
+        font-size: 0.8rem;
       }
     </style>
   </head>
@@ -97,18 +150,27 @@
     </p>
 
     <div class="card" id="analyzerNotesCard">
-      <h3 style="margin-top: 0">Notes</h3>
-      <p class="muted" style="margin-top: 0">
-        Persistent notes for payroll admins. Saved to the database and shared across sessions.
-      </p>
-      <div id="analyzerNotesList" class="analyzer-notes-list" aria-live="polite"></div>
-      <div class="analyzer-notes-add">
-        <label for="analyzerNewNote" class="muted" style="display: block; margin-bottom: 4px">Add note</label>
-        <textarea id="analyzerNewNote" placeholder="Enter a note…"></textarea>
-        <button type="button" id="analyzerAddNoteBtn">Add note</button>
+      <div class="analyzer-notes-card-title">
+        <h3>Notes</h3>
+        <span class="muted">Saved to database · shared across sessions</span>
       </div>
-      <p id="analyzerNotesStatus" class="muted" style="margin: 10px 0 0"></p>
-      <p id="analyzerNotesError" class="error" style="margin: 6px 0 0"></p>
+      <div class="analyzer-notes-scroll">
+        <table class="analyzer-notes-table" aria-label="Payroll analyzer notes">
+          <thead>
+            <tr>
+              <th>Note</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="analyzerNotesList" aria-live="polite"></tbody>
+        </table>
+      </div>
+      <div class="analyzer-notes-add">
+        <textarea id="analyzerNewNote" placeholder="Add a note…" aria-label="New note"></textarea>
+        <button type="button" id="analyzerAddNoteBtn">Add</button>
+      </div>
+      <p id="analyzerNotesStatus" class="muted analyzer-notes-status-row" aria-live="polite"></p>
+      <p id="analyzerNotesError" class="error analyzer-notes-status-row" style="margin-top: 0"></p>
     </div>
 
     <div class="card">
@@ -969,7 +1031,6 @@
         const d = new Date(value);
         if (Number.isNaN(d.getTime())) return "";
         return d.toLocaleString(undefined, {
-          year: "numeric",
           month: "short",
           day: "numeric",
           hour: "numeric",
@@ -1009,40 +1070,48 @@
         if (!listEl) return;
         listEl.innerHTML = "";
         if (!analyzerNotesCache.length) {
-          const p = document.createElement("p");
-          p.className = "muted";
-          p.style.margin = "0";
-          p.textContent = "No notes yet.";
-          listEl.appendChild(p);
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="2" class="muted">No notes yet.</td>';
+          listEl.appendChild(tr);
           return;
         }
         for (const note of analyzerNotesCache) {
-          const item = document.createElement("article");
-          item.className = "analyzer-note-item";
-          item.dataset.noteId = note.id;
+          const tr = document.createElement("tr");
+          tr.dataset.noteId = note.id;
           const updatedLabel = formatAnalyzerNoteTimestamp(note.updatedAt || note.createdAt);
           const by = String(note.updatedByEmail || note.createdByEmail || "").trim();
           const metaParts = [];
-          if (updatedLabel) metaParts.push(`Updated ${updatedLabel}`);
+          if (updatedLabel) metaParts.push(updatedLabel);
           if (by) metaParts.push(by);
-          item.innerHTML = `
-            <p class="analyzer-note-meta">${escapeHtml(metaParts.join(" · "))}</p>
-            <div class="analyzer-note-view">
-              <p class="analyzer-note-body">${escapeHtml(note.content || "")}</p>
-              <div class="analyzer-note-actions">
-                <button type="button" class="btn-secondary js-analyzer-note-edit">Edit</button>
-                <button type="button" class="btn-secondary js-analyzer-note-delete">Delete</button>
+          const metaHtml = metaParts.length
+            ? `<span class="analyzer-note-meta">${escapeHtml(metaParts.join(" · "))}</span>`
+            : "";
+          tr.innerHTML = `
+            <td>
+              <div class="analyzer-note-view">
+                <div class="analyzer-note-line">
+                  <span class="analyzer-note-body">${escapeHtml(note.content || "")}</span>
+                  ${metaHtml}
+                </div>
               </div>
-            </div>
-            <div class="analyzer-note-edit" hidden>
-              <textarea class="js-analyzer-note-edit-input" aria-label="Edit note">${escapeHtml(note.content || "")}</textarea>
-              <div class="analyzer-note-actions">
-                <button type="button" class="js-analyzer-note-save">Save</button>
-                <button type="button" class="btn-secondary js-analyzer-note-cancel">Cancel</button>
+              <div class="analyzer-note-edit" hidden>
+                <textarea class="js-analyzer-note-edit-input" aria-label="Edit note">${escapeHtml(note.content || "")}</textarea>
+                <div class="analyzer-note-actions" style="margin-top: 4px; justify-content: flex-start">
+                  <button type="button" class="js-analyzer-note-save">Save</button>
+                  <button type="button" class="btn-secondary js-analyzer-note-cancel">Cancel</button>
+                </div>
               </div>
-            </div>
+            </td>
+            <td class="analyzer-note-actions-cell">
+              <div class="analyzer-note-view">
+                <div class="analyzer-note-actions">
+                  <button type="button" class="btn-secondary js-analyzer-note-edit">Edit</button>
+                  <button type="button" class="btn-secondary js-analyzer-note-delete">Del</button>
+                </div>
+              </div>
+            </td>
           `;
-          listEl.appendChild(item);
+          listEl.appendChild(tr);
         }
       }
 
@@ -1121,12 +1190,14 @@
         document.getElementById("analyzerNotesList")?.addEventListener("click", (e) => {
           const btn = e.target.closest("button");
           if (!btn) return;
-          const item = btn.closest(".analyzer-note-item");
+          const item = btn.closest("tr[data-note-id]");
           const id = item?.dataset?.noteId;
           if (!id) return;
 
           if (btn.classList.contains("js-analyzer-note-edit")) {
-            item.querySelector(".analyzer-note-view").hidden = true;
+            item.querySelectorAll(".analyzer-note-view").forEach((el) => {
+              el.hidden = true;
+            });
             item.querySelector(".analyzer-note-edit").hidden = false;
             const ta = item.querySelector(".js-analyzer-note-edit-input");
             if (ta) ta.focus();
@@ -1134,7 +1205,9 @@
           }
           if (btn.classList.contains("js-analyzer-note-cancel")) {
             item.querySelector(".analyzer-note-edit").hidden = true;
-            item.querySelector(".analyzer-note-view").hidden = false;
+            item.querySelectorAll(".analyzer-note-view").forEach((el) => {
+              el.hidden = false;
+            });
             const note = analyzerNotesCache.find((n) => n.id === id);
             const ta = item.querySelector(".js-analyzer-note-edit-input");
             if (ta && note) ta.value = note.content || "";
