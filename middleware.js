@@ -108,6 +108,7 @@ export const config = {
     "/api/payroll-unread",
     "/api/payroll-data",
     "/api/payroll-adj-resub",
+    "/api/analyzer-notes",
     "/api/internal/team-access",
   ],
 };
