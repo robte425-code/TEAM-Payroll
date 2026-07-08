@@ -112,6 +112,39 @@
   color: #1c1917;
 }
 
+.team-nav-voc-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.team-nav-try-me {
+  margin-bottom: 0.125rem;
+  align-self: center;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(to right, #8b5cf6, #d946ef);
+  box-shadow: 0 1px 2px rgba(139, 92, 246, 0.3);
+  animation: team-nav-try-me-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes team-nav-try-me-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
 .team-header-nav a.has-unread-paystub {
   background: #ecfdf5;
   color: #065f46;
