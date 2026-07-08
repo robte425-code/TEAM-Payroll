@@ -176,7 +176,7 @@
         After Payroll 1.0 is generated, upload the <strong>non-bill time</strong> spreadsheet. Only rows whose
         <strong>Activity Type</strong> starts with <strong>NB</strong> or <strong>Z</strong> are used (see below).
         <strong>Timekeeper VRC</strong> is matched to Payroll 1.0 by name (spacing ignored). Employees who appear
-        only on the non-bill file are still added to Payroll 2.0, general reimbursement, and PTO/Sick recording when
+        only on the non-bill file are still added to Payroll 2.0, general reimbursement, discretionary bonus, and PTO/Sick recording when
         they exist in
         <a href="./rates.html">Employee pay rates</a> (matched by display name).
       </p>
@@ -207,6 +207,23 @@
               </tr>
             </thead>
             <tbody id="payroll20GenReimTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="payroll20DiscBonusSection" style="margin: 14px 0">
+        <p class="muted" style="margin: 0 0 8px">
+          <strong>Discretionary bonus ($)</strong> — per employee (blank or 0 if none). Use for year-end or
+          other discretionary bonuses. Same employee list as general reimbursement above.
+        </p>
+        <div class="payroll20-genreim-scroll">
+          <table class="payroll20-genreim-table" aria-label="Discretionary bonus by employee">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Discretionary bonus ($)</th>
+              </tr>
+            </thead>
+            <tbody id="payroll20DiscBonusTbody"></tbody>
           </table>
         </div>
       </div>
@@ -280,6 +297,7 @@
                 <th>Mileage units</th>
                 <th>General reim. ($)</th>
                 <th>Non-discretionary bonus ($)</th>
+                <th>Discretionary bonus ($)</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -1023,6 +1041,7 @@
         setPayroll10ExtrasEnabled(false);
         clearPayroll20Results();
         clearPayroll20GeneralReimTbody();
+        clearPayroll20DiscBonusTbody();
         const nbIn = document.getElementById("nonBillFileInput");
         if (nbIn) nbIn.value = "";
         updatePayroll20Visibility();
@@ -1201,6 +1220,7 @@
             <td>${escapeHtml(money2(r.mileage ?? r.mileageReimb))}</td>
               <td>${escapeHtml(money2(r.generalReimbursement))}</td>
               <td>${escapeHtml(money2(r.nonDiscBonus))}</td>
+              <td>${escapeHtml(money2(r.discretionaryBonus ?? 0))}</td>
             `;
             tbody.appendChild(tr);
           }
@@ -1257,6 +1277,7 @@
             <td>${escapeHtml(money2(s.mileage))}</td>
             <td>${escapeHtml(money2(s.generalReimbursement))}</td>
             <td>${escapeHtml(money2(s.nonDiscBonus))}</td>
+            <td>${escapeHtml(money2(s.discretionaryBonus ?? 0))}</td>
           `;
           tbody.appendChild(trTotal);
         }
@@ -1265,7 +1286,7 @@
         if (metaEl) {
           let metaText = `Non-bill file: ${p.fileName || ""} · Incentive threshold (from Payroll 1.0): ${money2(
             p.incentiveThreshold
-          )} hr · General reimbursement: per-employee amounts per table above`;
+          )} hr · General reimbursement and discretionary bonus: per-employee amounts per tables above`;
           const nbOnlyMeta = Array.isArray(p.nbOnlyEmployeeNames)
             ? p.nbOnlyEmployeeNames
             : Array.isArray(p.unmatchedNonBillNames)
@@ -1320,6 +1341,7 @@
             }))
           : [];
         renderPayroll20GeneralReimInputs(nbOnlyForReim);
+        renderPayroll20DiscretionaryBonusInputs(nbOnlyForReim);
         if (lastPayroll10Results && Array.isArray(p.rows)) {
           const grByName = new Map(
             p.rows.map((row) => [normalizeEmployeeName(row.employeeName), row.generalReimbursement])
@@ -1328,6 +1350,16 @@
             const label = inp.closest("tr")?.querySelector("td")?.textContent?.trim() || "";
             const k = normalizeEmployeeName(label);
             const v = grByName.get(k);
+            if (v == null || !Number.isFinite(Number(v))) return;
+            inp.value = String(Number(v));
+          });
+          const dbByName = new Map(
+            p.rows.map((row) => [normalizeEmployeeName(row.employeeName), row.discretionaryBonus])
+          );
+          document.querySelectorAll("input.js-p20-discbonus").forEach((inp) => {
+            const label = inp.closest("tr")?.querySelector("td")?.textContent?.trim() || "";
+            const k = normalizeEmployeeName(label);
+            const v = dbByName.get(k);
             if (v == null || !Number.isFinite(Number(v))) return;
             inp.value = String(Number(v));
           });
@@ -1484,6 +1516,11 @@
         if (tb) tb.innerHTML = "";
       }
 
+      function clearPayroll20DiscBonusTbody() {
+        const tb = document.getElementById("payroll20DiscBonusTbody");
+        if (tb) tb.innerHTML = "";
+      }
+
       /**
        * @param {{ normKey: string, displayName: string }[]} [nbOnlyList] — from non-bill file only (after Payroll 1.0).
        */
@@ -1528,17 +1565,60 @@
         });
       }
 
-      async function refreshPayroll20GenReimFromNbFile() {
+      function renderPayroll20DiscretionaryBonusInputs(nbOnlyList) {
+        const tb = document.getElementById("payroll20DiscBonusTbody");
+        if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) return;
+        const extras = Array.isArray(nbOnlyList) ? nbOnlyList : [];
+        const preserved = new Map();
+        tb.querySelectorAll("input.js-p20-discbonus").forEach((inp) => {
+          const i = Number(inp.dataset.p20RowIndex);
+          if (Number.isFinite(i)) preserved.set(i, inp.value);
+        });
+        tb.innerHTML = "";
+        const discP1 = lastPayroll10Results.rows
+          .map((r, idx) => ({ r, idx }))
+          .sort((a, b) => compareEmployeeByLastName(a.r.employeeName, b.r.employeeName));
+        const appendRow = (label, rowIndex) => {
+          const tr = document.createElement("tr");
+          const tdName = document.createElement("td");
+          tdName.textContent = label;
+          const tdAmt = document.createElement("td");
+          const inp = document.createElement("input");
+          inp.type = "number";
+          inp.min = "0";
+          inp.step = "0.01";
+          inp.className = "rate-input js-p20-discbonus";
+          inp.style.width = "7rem";
+          inp.dataset.p20RowIndex = String(rowIndex);
+          inp.setAttribute("aria-label", `Discretionary bonus for ${label}`);
+          if (preserved.has(rowIndex)) inp.value = preserved.get(rowIndex);
+          tdAmt.appendChild(inp);
+          tr.appendChild(tdName);
+          tr.appendChild(tdAmt);
+          tb.appendChild(tr);
+        };
+        for (const { r, idx } of discP1) {
+          appendRow(r.employeeName, idx);
+        }
+        const baseLen = lastPayroll10Results.rows.length;
+        extras.forEach((entry, j) => {
+          appendRow(entry.displayName, baseLen + j);
+        });
+      }
+
+      async function refreshPayroll20EmployeeExtrasFromNbFile() {
         const fi = document.getElementById("nonBillFileInput");
         const f = fi?.files?.[0];
         const errEl = document.getElementById("payroll20Error");
         if (errEl) errEl.textContent = "";
         if (!lastPayroll10Results?.rows?.length) {
           renderPayroll20GeneralReimInputs([]);
+          renderPayroll20DiscretionaryBonusInputs([]);
           return;
         }
         if (!f) {
           renderPayroll20GeneralReimInputs([]);
+          renderPayroll20DiscretionaryBonusInputs([]);
           return;
         }
         try {
@@ -1549,10 +1629,16 @@
           );
           const nbOnly = collectNbOnlyEmployees(parsed.rows, p1Keys);
           renderPayroll20GeneralReimInputs(nbOnly);
+          renderPayroll20DiscretionaryBonusInputs(nbOnly);
         } catch (e) {
           if (errEl) errEl.textContent = e.message || "Could not read non-bill file.";
           renderPayroll20GeneralReimInputs([]);
+          renderPayroll20DiscretionaryBonusInputs([]);
         }
+      }
+
+      async function refreshPayroll20GenReimFromNbFile() {
+        await refreshPayroll20EmployeeExtrasFromNbFile();
       }
 
       function readPayroll20GeneralReimbursements() {
@@ -1578,6 +1664,35 @@
               inp.closest("tr")?.querySelector("td")?.textContent?.trim() ||
               "Employee";
             return { error: `Invalid general reimbursement for ${name} (enter 0 or more).` };
+          }
+          amounts[i] = v;
+        }
+        return { amounts };
+      }
+
+      function readPayroll20DiscretionaryBonuses() {
+        const tb = document.getElementById("payroll20DiscBonusTbody");
+        if (!tb || !lastPayroll10Results || !Array.isArray(lastPayroll10Results.rows)) {
+          return { error: "Generate Payroll 1.0 first." };
+        }
+        const inputs = tb.querySelectorAll("input.js-p20-discbonus");
+        let n = lastPayroll10Results.rows.length;
+        for (const inp of inputs) {
+          const i = Number(inp.dataset.p20RowIndex);
+          if (Number.isFinite(i)) n = Math.max(n, i + 1);
+        }
+        const amounts = new Array(n).fill(0);
+        for (const inp of inputs) {
+          const i = Number(inp.dataset.p20RowIndex);
+          if (!Number.isFinite(i) || i < 0 || i >= n) continue;
+          const t = String(inp.value).trim();
+          const v = t === "" ? 0 : parseFloat(t);
+          if (!Number.isFinite(v) || v < 0) {
+            const name =
+              lastPayroll10Results.rows[i]?.employeeName ||
+              inp.closest("tr")?.querySelector("td")?.textContent?.trim() ||
+              "Employee";
+            return { error: `Invalid discretionary bonus for ${name} (enter 0 or more).` };
           }
           amounts[i] = v;
         }
@@ -1809,6 +1924,7 @@
         errEl.textContent = "";
         clearPayroll20Results();
         clearPayroll20GeneralReimTbody();
+        clearPayroll20DiscBonusTbody();
         const wdRaw = document.getElementById("workingDaysInput").value;
         const wd = parseInt(String(wdRaw).trim(), 10);
         if (!Number.isFinite(wd) || wd < 1) {
@@ -2134,7 +2250,13 @@
           errEl.textContent = grRead.error;
           return;
         }
+        const dbRead = readPayroll20DiscretionaryBonuses();
+        if (dbRead.error) {
+          errEl.textContent = dbRead.error;
+          return;
+        }
         const generalReimByRow = grRead.amounts;
+        const discBonusByRow = dbRead.amounts;
 
         try {
           const file = fileInput.files[0];
@@ -2173,6 +2295,7 @@
           let sumMileage = 0;
           let sumGenReim = 0;
           let sumBonus = 0;
+          let sumDiscBonus = 0;
           let sumCasePlusReports = 0;
           let sumNbTime = 0;
           let sumTravelWait = 0;
@@ -2206,6 +2329,7 @@
           const payroll20Pairs = [];
           for (const { rowIdx, r } of workItems) {
             const generalReimbursement = Number(generalReimByRow[rowIdx]) || 0;
+            const discretionaryBonus = Number(discBonusByRow[rowIdx]) || 0;
             const nameKey = normalizeEmployeeName(r.employeeName);
             const nbh = nbMap.get(nameKey) || { nb: 0, pto: 0, sick: 0, training: 0, edu: 0 };
             const caseWork = Number(r.caseWork) || 0;
@@ -2269,6 +2393,7 @@
             sumMileage += mileageUnits;
             sumGenReim += generalReimbursement;
             sumBonus += nonDiscBonus;
+            sumDiscBonus += discretionaryBonus;
             sumCasePlusReports += casePlusReports;
             sumNbTime += nbh.nb;
             sumTravelWait += travelWait;
@@ -2297,6 +2422,7 @@
               mileage: mileageUnits,
               generalReimbursement,
               nonDiscBonus,
+              discretionaryBonus,
             };
 
             const ptoAccrualHours = (casePlusReports + travelWait) * 0.058;
@@ -2346,6 +2472,7 @@
               <td>${escapeHtml(money2(o.mileage))}</td>
               <td>${escapeHtml(money2(o.generalReimbursement))}</td>
               <td>${escapeHtml(money2(o.nonDiscBonus))}</td>
+              <td>${escapeHtml(money2(o.discretionaryBonus ?? 0))}</td>
             `;
             tbody.appendChild(tr);
           }
@@ -2371,11 +2498,12 @@
             <td>${escapeHtml(money2(sumMileage))}</td>
             <td>${escapeHtml(money2(sumGenReim))}</td>
             <td>${escapeHtml(money2(sumBonus))}</td>
+            <td>${escapeHtml(money2(sumDiscBonus))}</td>
           `;
           tbody.appendChild(trTotal);
 
           let metaText =
-            `Non-bill file: ${file.name} · Incentive threshold (from Payroll 1.0): ${money2(incentiveThreshold)} hr · General reimbursement: per-employee amounts per table above`;
+            `Non-bill file: ${file.name} · Incentive threshold (from Payroll 1.0): ${money2(incentiveThreshold)} hr · General reimbursement and discretionary bonus: per-employee amounts per tables above`;
           if (nbOnlyList.length) {
             metaText += ` · Non-bill only (not on LNI invoice this period): ${nbOnlyList
               .map((e) => e.displayName)
@@ -2426,6 +2554,7 @@
               mileage: sumMileage,
               generalReimbursement: sumGenReim,
               nonDiscBonus: sumBonus,
+              discretionaryBonus: sumDiscBonus,
             },
           };
           setPayroll20ExtrasEnabled(true);
@@ -2526,6 +2655,7 @@
           "Mileage",
           "General reim. ($)",
           "Non-discretionary bonus ($)",
+          "Discretionary bonus ($)",
         ];
         const lines = [
           ["Payroll 2.0", "Non-bill file", lastPayroll20Results.fileName, "General reim.", "per employee row"]
@@ -2554,6 +2684,7 @@
               money2(row.mileage ?? row.mileageReimb),
               money2(row.generalReimbursement),
               money2(row.nonDiscBonus),
+              money2(row.discretionaryBonus ?? 0),
             ]
               .map(csvEscape)
               .join(",")
@@ -2580,6 +2711,7 @@
             money2(s.mileage),
             money2(s.generalReimbursement),
             money2(s.nonDiscBonus),
+            money2(s.discretionaryBonus ?? 0),
           ]
             .map(csvEscape)
             .join(",")
@@ -2617,14 +2749,15 @@
               <meta charset="utf-8" />
               <title>${escapeHtml(payroll20Title)}</title>
               <style>
-                body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
-                h2 { margin: 0 0 6px; }
-                .muted { color: #666; }
-                table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 11px; }
-                th, td { border: 1px solid #ccc; padding: 4px 6px; }
-                th { background: #f6f6f6; text-align: right; }
+                @page { size: landscape; margin: 0.35in; }
+                body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 12px; }
+                h2 { margin: 0 0 6px; font-size: 14px; }
+                .muted { color: #666; font-size: 10px; }
+                table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 7.5px; table-layout: fixed; }
+                th, td { border: 1px solid #ccc; padding: 2px 3px; overflow: hidden; text-overflow: ellipsis; }
+                th { background: #f6f6f6; text-align: right; font-weight: 600; }
                 td { text-align: right; }
-                th:first-child, td:first-child { text-align: left; }
+                th:first-child, td:first-child { text-align: left; width: 9%; }
               </style>
             </head>
             <body>

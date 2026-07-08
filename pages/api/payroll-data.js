@@ -60,7 +60,8 @@ function moneyTotal(row) {
     toNumber(row.training_pay) +
     toNumber(row.edu_pay) +
     toNumber(row.general_reimbursement) +
-    toNumber(row.non_disc_bonus)
+    toNumber(row.non_disc_bonus) +
+    toNumber(row.discretionary_bonus)
   );
 }
 
@@ -75,6 +76,7 @@ function emptyPayBuckets() {
     eduPay: 0,
     generalReimbursement: 0,
     nonDiscBonus: 0,
+    discretionaryBonus: 0,
   };
 }
 
@@ -99,6 +101,7 @@ function addRowToBuckets(target, row) {
   target.pay.eduPay += toNumber(row.edu_pay);
   target.pay.generalReimbursement += toNumber(row.general_reimbursement);
   target.pay.nonDiscBonus += toNumber(row.non_disc_bonus);
+  target.pay.discretionaryBonus += toNumber(row.discretionary_bonus);
 
   target.hours.casePlusReports += toNumber(row.case_plus_reports);
   target.hours.nbTime += toNumber(row.nb_time);
@@ -308,7 +311,8 @@ async function loadPayrollAnalytics(pool, filters) {
          rr.edu_pay,
          rr.mileage,
          rr.general_reimbursement,
-         rr.non_disc_bonus
+         rr.non_disc_bonus,
+         rr.discretionary_bonus
        FROM payroll.payroll_runs r
        JOIN payroll.payroll_run_rows rr ON rr.run_id = r.id
        ${whereSql}
