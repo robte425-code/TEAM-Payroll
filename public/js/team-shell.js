@@ -63,14 +63,9 @@
     ];
     return links
       .map((l) => {
-        const isCurrent = l.key === currentApp;
-        const current = isCurrent ? ' aria-current="page"' : "";
+        const current = l.key === currentApp ? ' aria-current="page"' : "";
         const idAttr = l.key === "payroll" ? ' id="teamNavPayroll" data-nav-key="payroll"' : "";
-        const linkHtml = `<a href="${escapeHtml(l.href)}"${idAttr}${current}>${escapeHtml(l.label)}</a>`;
-        if (l.key === "voc-hotline" && !isCurrent) {
-          return `<span class="team-nav-voc-wrap"><span class="team-nav-try-me" aria-hidden="true">Try me</span>${linkHtml}</span>`;
-        }
-        return linkHtml;
+        return `<a href="${escapeHtml(l.href)}"${idAttr}${current}>${escapeHtml(l.label)}</a>`;
       })
       .join("");
   }
