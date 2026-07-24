@@ -71,14 +71,20 @@ export default async function handler(req, res) {
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const employeeId = body.employeeId ? String(body.employeeId) : "";
     let email = body.email ? String(body.email).trim().toLowerCase() : "";
+    const pool = getPool();
     if (employeeId) {
-      const pool = getPool();
       const emp = await findEmployeeById(pool, employeeId);
       const signIn = emp?.login_email;
       if (!signIn) {
         return res.status(400).json({ error: "Employee has no sign-in email." });
       }
       email = String(signIn).trim().toLowerCase();
+    } else if (email) {
+      const emp = await findEmployeeByEmail(pool, email);
+      if (!emp?.login_email) {
+        return res.status(404).json({ error: "That person is not available to view as." });
+      }
+      email = String(emp.login_email).trim().toLowerCase();
     }
     if (!email || !email.includes("@")) {
       return res.status(400).json({ error: "A valid email or employeeId is required." });
