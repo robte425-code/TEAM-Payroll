@@ -1,5 +1,6 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
+const { requireRealAdmin } = require("../../lib/apiAuth");
 const { ensureEmployee } = require("../../lib/ensure-employee");
 const { applyYearEndRolloverIfNeeded } = require("../../lib/leave-rollover");
 const { findPayPeriodPtoOverLimitViolations } = require("../../lib/pay-period-pto-billed-check");
@@ -62,8 +63,8 @@ async function resolveEmployeeForUpdate(client, providerId, employeeName) {
               pto_ytd_hours_accrued, pto_ytd_hours_used,
               sick_ytd_hours_accrued, sick_ytd_hours_used
        FROM payroll.employees
-       WHERE lower(regexp_replace(trim(display_name), '\s+', ' ', 'g')) =
-             lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+       WHERE lower(regexp_replace(trim(display_name), '\\s+', ' ', 'g')) =
+             lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
        ORDER BY updated_at DESC NULLS LAST, created_at DESC
        LIMIT 1
        FOR UPDATE`,
@@ -88,6 +89,9 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "POST, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   let pool;
   try {

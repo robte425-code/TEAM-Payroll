@@ -1,5 +1,6 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
+const { requireRealAdmin } = require("../../lib/apiAuth");
 const {
   applyYearEndRolloverIfNeeded,
   fetchRolloverSettings,
@@ -52,6 +53,9 @@ export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(204).end();
   }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   let pool;
   try {

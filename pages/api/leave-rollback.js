@@ -1,4 +1,5 @@
 const { getPool } = require("../../lib/db");
+const { requireRealAdmin } = require("../../lib/apiAuth");
 
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
@@ -7,6 +8,9 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   let pool;
   try {

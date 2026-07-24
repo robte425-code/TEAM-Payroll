@@ -1,5 +1,6 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
+const { requireRealAdmin } = require("../../lib/apiAuth");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -60,6 +61,9 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "POST, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   let pool;
   try {

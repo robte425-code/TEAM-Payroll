@@ -1,4 +1,5 @@
 const { getPool } = require("../../lib/db");
+const { requireRealAdmin } = require("../../lib/apiAuth");
 
 function parseDateOrNull(v) {
   const s = String(v || "").trim();
@@ -14,6 +15,9 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const admin = await requireRealAdmin(req, res);
+  if (!admin) return;
 
   let pool;
   try {
@@ -79,8 +83,8 @@ export default async function handler(req, res) {
       const fallback = await pool.query(
         `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
          FROM payroll.pto_log l
-         WHERE lower(regexp_replace(trim(l.employee_name), '\s+', ' ', 'g')) =
-               lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+         WHERE lower(regexp_replace(trim(l.employee_name), '\\s+', ' ', 'g')) =
+               lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
          ${whereDateByName}
          ORDER BY l.action_date DESC, l.created_at DESC`,
         [displayName, ...params]
@@ -91,8 +95,8 @@ export default async function handler(req, res) {
       const fallback = await pool.query(
         `SELECT l.id, l.employee_name, l.action_date, l.action, l.hours, l.reason, l.created_at
          FROM payroll.sick_time_log l
-         WHERE lower(regexp_replace(trim(l.employee_name), '\s+', ' ', 'g')) =
-               lower(regexp_replace(trim($1), '\s+', ' ', 'g'))
+         WHERE lower(regexp_replace(trim(l.employee_name), '\\s+', ' ', 'g')) =
+               lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
          ${whereDateByName}
          ORDER BY l.action_date DESC, l.created_at DESC`,
         [displayName, ...params]
