@@ -976,10 +976,20 @@
           );
           if (!ok) return;
 
+          // Which of the two questions was asked decides what is sent.
+          //
+          // A batch picked by name is acted on by name: the operator chose that
+          // row, and a later recording by someone else does not change what they
+          // meant. "Roll back last change" names nothing, so it sends only the
+          // expectation and lets the server re-resolve — if the last change is
+          // no longer the one just previewed, it refuses instead of quietly
+          // undoing something else. Sending both, as this did, compared the
+          // batch against itself and could never refuse anything.
+          const payload = batchId ? { batchId: b.batchId } : { expectedBatchId: b.batchId };
           const d = await apiJson(ROLLBACK_API, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ batchId: b.batchId, expectedBatchId: b.batchId }),
+            body: JSON.stringify(payload),
           });
           flash(
             `Rolled back ${d.operationType || "batch"} (${when} UTC): ` +

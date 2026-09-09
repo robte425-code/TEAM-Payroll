@@ -161,7 +161,11 @@ export default async function handler(req, res) {
     // With no working-days figure there is no ceiling to compare against, and
     // the check returns nothing. That is indistinguishable from "all clear",
     // so say which one it was rather than implying hours were verified.
-    const limitCheckRan = Number.isFinite(workingDays) && workingDays > 0;
+    // Floored the same way resolveMaxPayPeriodHours floors it. Reporting
+    // workingDays > 0 was wrong: 0.5 floors to 0, so the check compares nothing
+    // and returns an empty list, which is indistinguishable from a clean pass —
+    // the very disguise this flag exists to strip off.
+    const limitCheckRan = Number.isFinite(workingDays) && Math.floor(workingDays) > 0;
 
     // Deliberately not a silent allowance: an override is recorded on the batch
     // and still emails the admins, so exceeding the limit stays visible.
@@ -183,9 +187,16 @@ export default async function handler(req, res) {
 
     await client.query("BEGIN");
 
-    // Refuse a repeat of the same recording. Checked inside the transaction so
-    // two clicks racing each other cannot both pass the check: the second waits
-    // on the first batch's row before reading.
+    // Serialise identical recordings against each other before looking for one.
+    //
+    // The SELECT below cannot do this on its own: under READ COMMITTED it takes
+    // no lock and cannot see another transaction's uncommitted insert, so two
+    // simultaneous submissions would both find nothing and both apply. The lock
+    // is keyed on the fingerprint, so only genuinely identical recordings wait
+    // on each other, and it is released when the transaction ends either way.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, [fingerprint]);
+
+    // Refuse a repeat of the same recording.
     const priorR = await client.query(
       `SELECT id, created_at
          FROM payroll.leave_change_batches

@@ -1,5 +1,9 @@
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
+const {
+  LATEST_BATCH_ORDER_BY,
+  findLatestRollbackableBatchId,
+} = require("../../lib/leave-batch-order");
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -63,16 +67,14 @@ export default async function handler(req, res) {
              FROM payroll.leave_change_batch_details d
             WHERE d.batch_id = b.id
          ) agg ON TRUE
-        ORDER BY COALESCE(agg.max_detail_id, 0) DESC, b.created_at DESC
+        ORDER BY ${LATEST_BATCH_ORDER_BY}
         LIMIT $1`,
       [limit]
     );
 
-    // The one a no-argument rollback would take: newest that still has rows and
-    // has not already been undone.
-    const latest = r.rows.find(
-      (x) => !x.rolled_back_at && Number(x.detail_rows) > 0
-    );
+    // Asked of the same helper the rollback uses, rather than re-derived here:
+    // the label and the button must never disagree about which batch is current.
+    const latestId = await findLatestRollbackableBatchId(pool);
 
     return res.status(200).json({
       batches: r.rows.map((x) => ({
@@ -81,7 +83,7 @@ export default async function handler(req, res) {
         createdAt: x.created_at,
         rolledBackAt: x.rolled_back_at,
         detailRows: Number(x.detail_rows) || 0,
-        isLatestRollbackable: Boolean(latest && latest.id === x.id),
+        isLatestRollbackable: Boolean(latestId && latestId === x.id),
         totals: {
           ptoAccrued: Number(x.pto_accrued) || 0,
           ptoUsed: Number(x.pto_used) || 0,

@@ -1,5 +1,6 @@
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
+const { BATCH_COLUMNS, latestRollbackableSql } = require("../../lib/leave-batch-order");
 
 /**
  * Undo one PTO/Sick change batch.
@@ -37,29 +38,6 @@ async function readBody(req) {
   } catch {
     return {};
   }
-}
-
-const BATCH_COLUMNS = `b.id, b.operation_type, b.created_at, b.rolled_back_at`;
-
-/**
- * Newest batch that still has rows and has not been undone.
- *
- * Ordered by the largest detail id: batch UUIDs are not chronological, and
- * created_at cannot separate two batches recorded seconds apart.
- */
-function latestRollbackableSql(forUpdate) {
-  return `SELECT ${BATCH_COLUMNS}
-            FROM payroll.leave_change_batches b
-           WHERE b.rolled_back_at IS NULL
-             AND EXISTS (SELECT 1 FROM payroll.leave_change_batch_details d
-                          WHERE d.batch_id = b.id)
-           ORDER BY (
-             SELECT COALESCE(MAX(d2.id), 0)
-               FROM payroll.leave_change_batch_details d2
-              WHERE d2.batch_id = b.id
-           ) DESC, b.created_at DESC
-           LIMIT 1
-           ${forUpdate ? "FOR UPDATE OF b" : ""}`;
 }
 
 /** What undoing this batch would do to each employee, and what it would break. */
