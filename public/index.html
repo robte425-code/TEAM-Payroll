@@ -3098,14 +3098,22 @@
         w.document.close();
       });
 
-      document.getElementById("recordLeaveBtn").addEventListener("click", async () => {
+      document.getElementById("recordLeaveBtn").addEventListener("click", async (ev) => {
         const msgEl = document.getElementById("leaveRecordMsg");
         const errEl = document.getElementById("payroll20Error");
         if (msgEl) msgEl.textContent = "";
         if (errEl) errEl.textContent = "";
 
+        // Locked while the request is in flight. A second click here applies the
+        // same hours a second time, and the result looks like a normal payroll
+        // until someone checks a balance weeks later.
+        const btn = ev.currentTarget;
+        if (btn.disabled) return;
+        btn.disabled = true;
+
         if (!lastPayroll20Results || !Array.isArray(lastPayroll20Results.leaveRows)) {
           if (errEl) errEl.textContent = "Generate Payroll 2.0 before recording PTO/Sick time.";
+          btn.disabled = false;
           return;
         }
         if (msgEl) msgEl.textContent = "Recording...";
@@ -3150,6 +3158,8 @@
         } catch (e) {
           if (msgEl) msgEl.textContent = "";
           if (errEl) errEl.textContent = e.message || "Failed to record PTO/Sick time.";
+        } finally {
+          btn.disabled = false;
         }
       });
 

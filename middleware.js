@@ -101,6 +101,7 @@ export const config = {
     "/api/leave-logs",
     "/api/leave-log-entry",
     "/api/leave-rollback",
+    "/api/leave-batches",
     "/api/my-leave",
     "/api/impersonate",
     "/api/view-as-users",
