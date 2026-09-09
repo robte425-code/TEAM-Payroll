@@ -1,3 +1,4 @@
+const { createHash } = require("node:crypto");
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
@@ -38,6 +39,30 @@ function toNonNegativeNumber(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
   return n;
+}
+
+/** How long an identical recording counts as an accidental repeat. */
+const DUPLICATE_WINDOW_MINUTES = 10;
+
+/**
+ * A stable identity for what this request would apply.
+ *
+ * Only the fields that move balances, normalised and sorted, so the same
+ * recording submitted twice hashes the same way regardless of row order or
+ * incidental formatting.
+ */
+function fingerprintRows(rows) {
+  const normalised = rows
+    .map((r) => [
+      String(r.providerId || "").trim().toLowerCase(),
+      String(r.employeeName || "").trim().replace(/\s+/g, " ").toLowerCase(),
+      toNonNegativeNumber(r.ptoAccrualHours).toFixed(4),
+      toNonNegativeNumber(r.ptoUsedHours).toFixed(4),
+      toNonNegativeNumber(r.sickAccrualHours).toFixed(4),
+      toNonNegativeNumber(r.sickUsedHours).toFixed(4),
+    ].join("|"))
+    .sort();
+  return createHash("sha256").update(normalised.join("\n")).digest("hex");
 }
 
 async function resolveEmployeeForUpdate(client, providerId, employeeName) {
@@ -112,11 +137,39 @@ export default async function handler(req, res) {
     const rows = Array.isArray(body.rows) ? body.rows : [];
     if (!rows.length) return res.status(400).json({ error: "rows[] is required" });
 
+    const fingerprint = fingerprintRows(rows);
+
     await client.query("BEGIN");
+
+    // Refuse a repeat of the same recording. Checked inside the transaction so
+    // two clicks racing each other cannot both pass the check: the second waits
+    // on the first batch's row before reading.
+    const priorR = await client.query(
+      `SELECT id, created_at
+         FROM payroll.leave_change_batches
+        WHERE request_fingerprint = $1
+          AND rolled_back_at IS NULL
+          AND created_at > now() - ($2 || ' minutes')::interval
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [fingerprint, String(DUPLICATE_WINDOW_MINUTES)]
+    );
+    const prior = priorR.rows[0];
+    if (prior) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        error:
+          "This looks like the same PTO/Sick recording that was already applied. " +
+          "Nothing has been changed. Roll back the earlier one first if you meant to redo it.",
+        duplicateOf: { batchId: prior.id, createdAt: prior.created_at },
+      });
+    }
+
     const batchInserted = await client.query(
-      `INSERT INTO payroll.leave_change_batches (operation_type)
-       VALUES ('record')
-       RETURNING id`
+      `INSERT INTO payroll.leave_change_batches (operation_type, request_fingerprint)
+       VALUES ('record', $1)
+       RETURNING id`,
+      [fingerprint]
     );
     const batchId = batchInserted.rows[0]?.id;
     let updatedEmployees = 0;

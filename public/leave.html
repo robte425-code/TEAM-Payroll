@@ -85,6 +85,29 @@
       </label>
       <div style="margin-top: 8px">
         <button type="button" id="rollbackBtn" class="btn-secondary">Roll back last change</button>
+        <button type="button" id="historyBtn" class="btn-secondary">Change history…</button>
+      </div>
+      <div id="historyPanel" hidden style="margin-top: 12px">
+        <p class="muted" style="margin: 0 0 6px">
+          Every PTO/Sick change, newest first. Rolling one back subtracts just that
+          change — anything recorded after it is left alone.
+        </p>
+        <div style="overflow-x: auto">
+          <table id="historyTable">
+            <thead>
+              <tr>
+                <th>When (UTC)</th>
+                <th>Type</th>
+                <th class="num">Employees</th>
+                <th class="num">PTO +/−</th>
+                <th class="num">Sick +/−</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
       </div>
       <p id="msg" class="muted" aria-live="polite"></p>
       <p id="err" class="error"></p>
@@ -287,6 +310,7 @@
       const LOGS_API = "/api/leave-logs";
       const LOG_ENTRY_API = "/api/leave-log-entry";
       const ROLLBACK_API = "/api/leave-rollback";
+      const BATCHES_API = "/api/leave-batches";
       const tbody = document.getElementById("leaveBody");
       const ptoLogBody = document.getElementById("ptoLogBody");
       const sickLogBody = document.getElementById("sickLogBody");
@@ -885,34 +909,155 @@
         })
       );
 
-      document.getElementById("rollbackBtn").addEventListener("click", async () => {
+      function hrs(n) {
+        const v = Number(n) || 0;
+        return v ? v.toFixed(2) : "—";
+      }
+
+      /**
+       * Ask what the undo would do, show it, and only then apply it.
+       *
+       * The preview is the whole point: a rollback moves real balances, and
+       * until now the only signal was a yes/no box that did not say whose.
+       */
+      async function rollBackBatch(batchId, buttonEl) {
         err.textContent = "";
-        if (!confirm("Roll back the last PTO/Sick change batch?")) return;
+        if (buttonEl) buttonEl.disabled = true;
         try {
+          const url = batchId
+            ? `${ROLLBACK_API}?batchId=${encodeURIComponent(batchId)}`
+            : ROLLBACK_API;
+          const preview = await apiJson(url, { method: "GET" });
+          const b = preview && preview.batch;
+          if (!b) {
+            flash("There is no change to roll back.", true);
+            return;
+          }
+
+          if (preview.blocked && preview.blocked.length) {
+            const who = preview.blocked
+              .map((x) => `  ${x.name} — ${x.field} would be ${Number(x.resulting).toFixed(2)}`)
+              .join("\n");
+            alert(
+              `This change cannot be rolled back.\n\n` +
+                `It would take these balances below zero, which means the hours have ` +
+                `already been used or adjusted since:\n\n${who}\n\nNothing has been changed.`
+            );
+            return;
+          }
+
+          const when = String(b.createdAt || "").slice(0, 16).replace("T", " ");
+          const changed = (preview.rows || []).filter(
+            (r) =>
+              r.ptoAccrued.from !== r.ptoAccrued.to ||
+              r.ptoUsed.from !== r.ptoUsed.to ||
+              r.sickAccrued.from !== r.sickAccrued.to ||
+              r.sickUsed.from !== r.sickUsed.to
+          );
+          const lines = changed.slice(0, 12).map((r) => {
+            const bits = [];
+            if (r.ptoAccrued.from !== r.ptoAccrued.to)
+              bits.push(`PTO accrued ${r.ptoAccrued.from.toFixed(2)}→${r.ptoAccrued.to.toFixed(2)}`);
+            if (r.ptoUsed.from !== r.ptoUsed.to)
+              bits.push(`PTO used ${r.ptoUsed.from.toFixed(2)}→${r.ptoUsed.to.toFixed(2)}`);
+            if (r.sickAccrued.from !== r.sickAccrued.to)
+              bits.push(`sick accrued ${r.sickAccrued.from.toFixed(2)}→${r.sickAccrued.to.toFixed(2)}`);
+            if (r.sickUsed.from !== r.sickUsed.to)
+              bits.push(`sick used ${r.sickUsed.from.toFixed(2)}→${r.sickUsed.to.toFixed(2)}`);
+            return `  ${r.name}: ${bits.join(", ")}`;
+          });
+          const more = changed.length > lines.length ? `\n  …and ${changed.length - lines.length} more` : "";
+
+          const ok = confirm(
+            `Roll back this PTO/Sick change?\n\n` +
+              `  ${b.operationType || "batch"} recorded ${when} UTC — ${changed.length} employee(s)\n\n` +
+              `${lines.join("\n")}${more}\n\n` +
+              `Anything recorded after this change is left as it is.`
+          );
+          if (!ok) return;
+
           const d = await apiJson(ROLLBACK_API, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ batchId: b.batchId, expectedBatchId: b.batchId }),
           });
-          const n = Number(d.employeesUpdated) || 0;
-          const detailRows = Number(d.detailRows) || 0;
-          const batchWhen = d.batchCreatedAt ? String(d.batchCreatedAt).slice(0, 19).replace("T", " ") : "";
-          if (n > 0) {
-            flash(
-              `Rolled back ${d.operationType || "batch"} (${batchWhen} UTC): restored ${n} employee row(s).`
-            );
-          } else if (detailRows > 0) {
-            flash(
-              `Rollback ran on ${d.operationType || "batch"} (${batchWhen} UTC) but no employee rows matched (IDs changed?). Click Reload from database.`,
-              true
-            );
-          } else {
-            flash("Rollback found nothing to apply.", true);
-          }
+          flash(
+            `Rolled back ${d.operationType || "batch"} (${when} UTC): ` +
+              `${Number(d.employeesUpdated) || 0} employee(s), ` +
+              `${Number(d.ptoLogRowsDeleted) || 0} PTO and ${Number(d.sickLogRowsDeleted) || 0} sick log line(s) removed.`
+          );
           await render();
+          if (!document.getElementById("historyPanel").hidden) await loadHistory();
         } catch (e) {
           flash(e.message || "Rollback failed.", true);
+        } finally {
+          if (buttonEl) buttonEl.disabled = false;
         }
+      }
+
+      async function loadHistory() {
+        const body = document.getElementById("historyBody");
+        body.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+        try {
+          const d = await apiJson(BATCHES_API, { method: "GET" });
+          const rows = (d && d.batches) || [];
+          if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="7" class="muted">No changes recorded yet.</td></tr>';
+            return;
+          }
+          body.innerHTML = "";
+          for (const b of rows) {
+            const tr = document.createElement("tr");
+            const when = String(b.createdAt || "").slice(0, 16).replace("T", " ");
+            const pto = `${hrs(b.totals.ptoAccrued)} / ${hrs(b.totals.ptoUsed)}`;
+            const sick = `${hrs(b.totals.sickAccrued)} / ${hrs(b.totals.sickUsed)}`;
+            const status = b.rolledBackAt
+              ? "rolled back"
+              : b.isLatestRollbackable
+                ? "current — most recent"
+                : "applied";
+
+            for (const [text, cls] of [
+              [when, ""],
+              [b.operationType || "", ""],
+              [String(b.detailRows), "num"],
+              [pto, "num"],
+              [sick, "num"],
+              [status, ""],
+            ]) {
+              const td = document.createElement("td");
+              td.textContent = text;
+              if (cls) td.className = cls;
+              tr.appendChild(td);
+            }
+
+            const actionTd = document.createElement("td");
+            if (!b.rolledBackAt && b.detailRows > 0) {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "btn-secondary";
+              btn.textContent = "Roll back";
+              btn.addEventListener("click", () => rollBackBatch(b.batchId, btn));
+              actionTd.appendChild(btn);
+            }
+            tr.appendChild(actionTd);
+            body.appendChild(tr);
+          }
+        } catch (e) {
+          body.innerHTML = "";
+          flash(e.message || "Could not load change history.", true);
+        }
+      }
+
+      document.getElementById("historyBtn").addEventListener("click", async () => {
+        const panel = document.getElementById("historyPanel");
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) await loadHistory();
+      });
+
+      // "Last change" is the same operation aimed at nothing in particular.
+      document.getElementById("rollbackBtn").addEventListener("click", (ev) => {
+        rollBackBatch(null, ev.currentTarget);
       });
 
       document.getElementById("exportCsvBtn").addEventListener("click", () => {
