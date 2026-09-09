@@ -137,6 +137,48 @@ export default async function handler(req, res) {
     const rows = Array.isArray(body.rows) ? body.rows : [];
     if (!rows.length) return res.status(400).json({ error: "rows[] is required" });
 
+    // Checked before a single row is written.
+    //
+    // This ran after COMMIT until now, which made it a notification rather than
+    // a guard: on 26 Aug 2026 one employee's sick time arrived as 800 hours
+    // instead of 8 — a pay period holds about 80 — and the only effect of the
+    // limit check was an email telling admins it had already been applied. It
+    // took four hours to spot and undo, and the correction that followed is
+    // what went in twice.
+    const payPeriodHoursCheck =
+      body.payPeriodHoursCheck && typeof body.payPeriodHoursCheck === "object"
+        ? body.payPeriodHoursCheck
+        : body.dailyHoursCheck && typeof body.dailyHoursCheck === "object"
+          ? body.dailyHoursCheck
+          : {};
+    const workingDays = Number(payPeriodHoursCheck.workingDays);
+    const payPeriodPtoViolations = findPayPeriodPtoOverLimitViolations({
+      invoiceRows: Array.isArray(payPeriodHoursCheck.invoiceRows) ? payPeriodHoursCheck.invoiceRows : [],
+      nonBillRows: Array.isArray(payPeriodHoursCheck.nonBillRows) ? payPeriodHoursCheck.nonBillRows : [],
+      workingDays: Number.isFinite(workingDays) ? workingDays : 0,
+    });
+
+    // With no working-days figure there is no ceiling to compare against, and
+    // the check returns nothing. That is indistinguishable from "all clear",
+    // so say which one it was rather than implying hours were verified.
+    const limitCheckRan = Number.isFinite(workingDays) && workingDays > 0;
+
+    // Deliberately not a silent allowance: an override is recorded on the batch
+    // and still emails the admins, so exceeding the limit stays visible.
+    const overrideLimit = body.overridePayPeriodLimit === true;
+
+    if (payPeriodPtoViolations.length && !overrideLimit) {
+      // No BEGIN yet, and the finally releases the client.
+      return res.status(409).json({
+        error:
+          "Some hours are above what this pay period can hold, so nothing has been " +
+          "recorded. Check the source file — a decimal point in the wrong place is " +
+          "the usual cause.",
+        payPeriodPtoViolations,
+        canOverride: true,
+      });
+    }
+
     const fingerprint = fingerprintRows(rows);
 
     await client.query("BEGIN");
@@ -298,18 +340,8 @@ export default async function handler(req, res) {
 
     await client.query("COMMIT");
 
-    const payPeriodHoursCheck =
-      body.payPeriodHoursCheck && typeof body.payPeriodHoursCheck === "object"
-        ? body.payPeriodHoursCheck
-        : body.dailyHoursCheck && typeof body.dailyHoursCheck === "object"
-          ? body.dailyHoursCheck
-          : {};
-    const workingDays = Number(payPeriodHoursCheck.workingDays);
-    const payPeriodPtoViolations = findPayPeriodPtoOverLimitViolations({
-      invoiceRows: Array.isArray(payPeriodHoursCheck.invoiceRows) ? payPeriodHoursCheck.invoiceRows : [],
-      nonBillRows: Array.isArray(payPeriodHoursCheck.nonBillRows) ? payPeriodHoursCheck.nonBillRows : [],
-      workingDays: Number.isFinite(workingDays) ? workingDays : 0,
-    });
+    // Only reachable when the limit was overridden, so the email is now the
+    // record of a deliberate decision rather than notice of an accident.
     let payPeriodPtoOverlimitEmail = { sent: false, reason: "no_violations" };
     try {
       payPeriodPtoOverlimitEmail = await sendPayPeriodPtoOverlimitAdminEmail(pool, {
@@ -327,6 +359,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      limitCheckRan,
+      limitOverridden: overrideLimit && payPeriodPtoViolations.length > 0,
       updatedEmployees,
       batchId,
       payPeriodPtoViolations,

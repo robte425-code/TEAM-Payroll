@@ -3119,27 +3119,77 @@
         if (msgEl) msgEl.textContent = "Recording...";
         try {
           const endDateRaw = document.getElementById("payrollEndDateInput")?.value || "";
-          const r = await fetch("/api/leave-record", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              rows: lastPayroll20Results.leaveRows,
-              payPeriodHoursCheck: resolvePayPeriodHoursCheckPayload(),
-              payrollEndDate: endDateRaw || null,
-            }),
-          });
-          const text = await r.text();
-          let data = {};
-          try {
-            data = text ? JSON.parse(text) : {};
-          } catch {
-            data = { error: text || "Invalid response" };
+
+          async function postRecord(overridePayPeriodLimit) {
+            const r = await fetch("/api/leave-record", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                rows: lastPayroll20Results.leaveRows,
+                payPeriodHoursCheck: resolvePayPeriodHoursCheckPayload(),
+                payrollEndDate: endDateRaw || null,
+                ...(overridePayPeriodLimit ? { overridePayPeriodLimit: true } : {}),
+              }),
+            });
+            const text = await r.text();
+            let data = {};
+            try {
+              data = text ? JSON.parse(text) : {};
+            } catch {
+              data = { error: text || "Invalid response" };
+            }
+            return { r, data, text };
           }
+
+          let { r, data, text } = await postRecord(false);
+
+          // Nothing was recorded. Show who is over and let the operator decide,
+          // rather than applying impossible hours and emailing about it after.
+          if (r.status === 409 && data.canOverride && Array.isArray(data.payPeriodPtoViolations)) {
+            if (msgEl) msgEl.textContent = "";
+            const lines = data.payPeriodPtoViolations
+              .slice(0, 10)
+              .map(
+                (v) =>
+                  `  ${v.employeeName}: ${Number(v.totalHours).toFixed(2)} hr ` +
+                  `(billed ${Number(v.billedHours).toFixed(2)}, PTO ${Number(v.ptoHours).toFixed(2)}, ` +
+                  `sick ${Number(v.sickHours).toFixed(2)}) — limit ${Number(v.maxHours).toFixed(2)}`
+              );
+            const more =
+              data.payPeriodPtoViolations.length > lines.length
+                ? `\n  …and ${data.payPeriodPtoViolations.length - lines.length} more`
+                : "";
+            const proceed = confirm(
+              `Nothing has been recorded.\n\n` +
+                `These hours are above what this pay period can hold:\n\n` +
+                `${lines.join("\n")}${more}\n\n` +
+                `A decimal point in the wrong place in the source file is the usual cause — ` +
+                `check it before continuing.\n\n` +
+                `Record anyway? Payroll admins will be emailed that the limit was overridden.`
+            );
+            if (!proceed) {
+              if (errEl)
+                errEl.textContent =
+                  "Not recorded — hours above the pay-period limit. Fix the source file and generate Payroll 2.0 again.";
+              return;
+            }
+            if (msgEl) msgEl.textContent = "Recording (limit overridden)...";
+            ({ r, data, text } = await postRecord(true));
+          }
+
           if (!r.ok) {
             throw new Error(data.error || data.message || text || `HTTP ${r.status}`);
           }
           const updatedEmployees = Number(data.updatedEmployees) || 0;
           let msg = `Recorded for ${updatedEmployees} employee(s).`;
+          if (data.limitCheckRan === false) {
+            msg +=
+              " Pay-period hour limits were NOT checked — no working-days figure was available." +
+              " Generate Payroll 1.0 first if you want that check to run.";
+          }
+          if (data.limitOverridden) {
+            msg += " Pay-period limit was overridden; payroll admins have been emailed.";
+          }
           const violationCount = Array.isArray(data.payPeriodPtoViolations)
             ? data.payPeriodPtoViolations.length
             : 0;
