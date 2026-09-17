@@ -627,10 +627,10 @@
 
       const endDateInput = document.getElementById("payrollEndDateInput");
       if (endDateInput) {
-        endDateInput.addEventListener("change", updatePayrollTitles);
-        // A different period has a different set of holds.
+        // One handler, so the order of what a date change does is explicit.
         endDateInput.addEventListener("change", () => {
-          loadHoldsForDisplay();
+          updatePayrollTitles();
+          onPayrollEndDateChanged();
         });
         updatePayrollTitles();
       }
@@ -1127,6 +1127,7 @@
       async function fetchStoredExclusions() {
         const payrollEndDate = getPayrollEndDateInput();
         sessionExcludedRowKeys = new Map();
+        sessionHoldsPeriod = "";
         if (!payrollEndDate) {
           throw new Error(
             "Enter the payroll end date before analyzing. Billing lines held out of pay " +
@@ -1163,6 +1164,7 @@
         for (const row of data.rows) {
           if (row?.rowKey) sessionExcludedRowKeys.set(row.rowKey, row);
         }
+        sessionHoldsPeriod = payrollEndDate;
       }
 
       /**
@@ -1182,12 +1184,85 @@
         if (!getPayrollEndDateInput()) return;
         try {
           await fetchStoredExclusions();
-        } catch {
-          // Display only — nothing is being paid off the back of this, so a
-          // failure is reported in the card rather than stopping the page.
+        } catch (e) {
+          // Display only, so it does not stop the page — but it is said out
+          // loud. An empty map hides the card, which looks exactly like
+          // nothing being held, and that is the wrong thing to conclude.
           sessionExcludedRowKeys = new Map();
+          sessionHoldsPeriod = "";
+          const errorEl = document.getElementById("error");
+          if (errorEl) {
+            errorEl.textContent =
+              `Could not load which billing lines are held out of pay (${e.message || "unknown error"}). ` +
+              "This is not the same as nothing being held — reload before running payroll.";
+          }
         }
         renderExcludedRowsTable();
+      }
+
+      /**
+       * The period changed, so the totals no longer describe it.
+       *
+       * Holds belong to a period. With an invoice loaded, the summary was built
+       * with the old period's holds and the leave-record path reads its period
+       * straight from this field — so leaving the totals alone would record one
+       * period's pay under another's name, which is exactly the silent mismatch
+       * the date check was added to catch. It cannot catch this one, because it
+       * only runs during analysis.
+       *
+       * Fails closed: if the new period's holds cannot be loaded, the totals are
+       * cleared rather than recalculated from a set we are not sure of.
+       */
+      async function onPayrollEndDateChanged() {
+        if (!sessionCalcRows.length) return loadHoldsForDisplay();
+
+        const errorEl = document.getElementById("error");
+        const statusEl = document.getElementById("status");
+        if (errorEl) errorEl.textContent = "";
+        clearPayroll10Results();
+        sessionCalcSummary = [];
+
+        try {
+          await fetchStoredExclusions();
+        } catch (e) {
+          sessionExcludedRowKeys = new Map();
+          sessionHoldsPeriod = "";
+          if (errorEl) errorEl.textContent = e.message || "Could not load holds for that period.";
+          renderSummary([], lastRateMap);
+          renderExcludedRowsTable();
+          saveSessionToStorage();
+          return;
+        }
+
+        const problem = payrollEndDateProblem();
+        if (problem) {
+          const range = invoiceServiceDateRange();
+          const ok = confirm(
+            `Check the payroll end date.\n\n` +
+              `This invoice covers ${range.min} to ${range.max}, but ${problem}.\n\n` +
+              `Continue with ${parseDateKey(getPayrollEndDateInput())} anyway?`
+          );
+          if (!ok) {
+            if (errorEl) {
+              errorEl.textContent =
+                "Totals cleared. Correct the payroll end date, or analyze the invoice again.";
+            }
+            renderSummary([], lastRateMap);
+            renderExcludedRowsTable();
+            saveSessionToStorage();
+            return;
+          }
+        }
+
+        sessionCalcSummary = summarizeByEmployee(payableCalcRows());
+        renderExcludedRowsTable();
+        renderSummary(buildFullSummary(), lastRateMap);
+        saveSessionToStorage();
+        if (statusEl) {
+          statusEl.textContent =
+            `Payroll end date changed — totals recalculated for this period ` +
+            `(${sessionExcludedRowKeys.size} line(s) held out of pay).`;
+        }
       }
 
       /** The stored holds on their own, with no invoice loaded. */
@@ -1249,18 +1324,30 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              payrollEndDate: getPayrollEndDateInput(),
+              // The period these holds were loaded under, not whatever the
+              // field reads now — the key only exists under that period.
+              payrollEndDate: sessionHoldsPeriod || getPayrollEndDateInput(),
               excluded: false,
               row: { rowKey: held.rowKey },
             }),
           });
           const data = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          // Deleting nothing is not releasing something. Without this the row
+          // leaves the table while the hold stays live in the database, and the
+          // next analysis holds that line out again for no visible reason.
+          if (Number(data.removed) === 0) {
+            throw new Error(
+              "That hold was not found on the server, so nothing was released. " +
+                "Reload the page and try again."
+            );
+          }
           sessionExcludedRowKeys.delete(held.rowKey);
           sessionCalcSummary = [];
           clearPayroll10Results();
           renderExcludedRowsTable();
           renderSummary(buildFullSummary(), lastRateMap);
+          saveSessionToStorage();
           const statusEl = document.getElementById("status");
           if (statusEl) {
             statusEl.textContent =
@@ -1389,7 +1476,7 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              payrollEndDate,
+              payrollEndDate: sessionHoldsPeriod || payrollEndDate,
               excluded: wantHeld,
               reason,
               row: {
@@ -1432,6 +1519,7 @@
           // redraw is what the operator is waiting on — so the copy from the
           // analyze run is used rather than fetching the same data again.
           renderSummary(buildFullSummary(), lastRateMap);
+          saveSessionToStorage();
         } catch (e) {
           // Re-enabled only here. On the success path renderExcludedRowsTable
           // has already replaced this checkbox, so touching it would mutate a
@@ -1872,8 +1960,16 @@
       let sessionSourceFiles = [];
       /** Excluded adj/resub rows with source file name (session, until Clear). */
       let sessionAdjResubRows = [];
-      /** rowKey -> { reason } for lines held out of pay this period. */
+      /** rowKey -> the stored row, for lines held out of pay this period. */
       let sessionExcludedRowKeys = new Map();
+      /**
+       * The period the holds in that map were loaded under.
+       *
+       * Releasing has to quote this, not whatever the date field says now: a
+       * rowKey only exists under the period it was stored against, so a release
+       * aimed at a different one deletes nothing while looking like it worked.
+       */
+      let sessionHoldsPeriod = "";
       /** False whenever sessionCalcRows has changed since keys were stamped. */
       let calcRowKeysAssigned = false;
       /** Monotonic id for adj rows (editable units). */
