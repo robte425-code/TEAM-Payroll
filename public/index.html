@@ -1428,14 +1428,17 @@
           clearPayroll10Results();
           sessionCalcSummary = summarizeByEmployee(payableCalcRows());
           renderExcludedRowsTable();
-          const rateMap = await fetchEmployeeRateMap();
-          lastRateMap = rateMap;
-          renderSummary(buildFullSummary(), rateMap);
+          // The rates cannot have changed because a line was held, and the
+          // redraw is what the operator is waiting on — so the copy from the
+          // analyze run is used rather than fetching the same data again.
+          renderSummary(buildFullSummary(), lastRateMap);
         } catch (e) {
+          // Re-enabled only here. On the success path renderExcludedRowsTable
+          // has already replaced this checkbox, so touching it would mutate a
+          // node that is no longer in the document.
           checkboxEl.checked = !wantHeld;
-          if (errorEl) errorEl.textContent = e.message || "Could not update that billing line.";
-        } finally {
           checkboxEl.disabled = false;
+          if (errorEl) errorEl.textContent = e.message || "Could not update that billing line.";
         }
       }
 
