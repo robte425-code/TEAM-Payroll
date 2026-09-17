@@ -1051,8 +1051,18 @@
       /** How far after the last service date a period may plausibly end. */
       const MAX_DAYS_AFTER_LAST_SERVICE = 31;
 
-      /** Earliest and latest service date in the loaded invoice, as YYYY-MM-DD. */
+      /** Cleared whenever sessionCalcRows changes; see invoiceServiceDateRange. */
+      let invoiceDateRangeCache;
+
+      /**
+       * Earliest and latest service date in the loaded invoice, as YYYY-MM-DD.
+       *
+       * Cached because the holds table asks for it on every render, and every
+       * keystroke in the filter is a render — rescanning every billing row for
+       * each character is work that cannot change between them.
+       */
       function invoiceServiceDateRange() {
+        if (invoiceDateRangeCache !== undefined) return invoiceDateRangeCache;
         let min = "";
         let max = "";
         for (const row of sessionCalcRows) {
@@ -1063,7 +1073,8 @@
             if (!max || iso > max) max = iso;
           }
         }
-        return min && max ? { min, max } : null;
+        invoiceDateRangeCache = min && max ? { min, max } : null;
+        return invoiceDateRangeCache;
       }
 
       function daysBetween(isoA, isoB) {
@@ -2654,6 +2665,7 @@
               } else {
                 sessionCalcRows.push(withFile);
                 calcRowKeysAssigned = false;
+                invoiceDateRangeCache = undefined;
               }
             }
           }
@@ -2722,6 +2734,7 @@
       function clearSession() {
         sessionCalcRows = [];
         calcRowKeysAssigned = false;
+        invoiceDateRangeCache = undefined;
         sessionExcludedRowKeys = new Map();
         sessionCalcSummary = [];
         sessionAdjResubRows = [];
@@ -3593,7 +3606,18 @@
         w.document.close();
       });
 
-      document.getElementById("excludeFilter")?.addEventListener("input", renderExcludedRowsTable);
+      // Debounced: each keystroke tears down and rebuilds every row of the
+      // table, and on a large invoice typing a name did that once per
+      // character, lagging the field being typed into. The checkbox beside it
+      // stays immediate — one click, one render.
+      let excludeFilterTimer = null;
+      document.getElementById("excludeFilter")?.addEventListener("input", () => {
+        if (excludeFilterTimer) clearTimeout(excludeFilterTimer);
+        excludeFilterTimer = setTimeout(() => {
+          excludeFilterTimer = null;
+          renderExcludedRowsTable();
+        }, 150);
+      });
       document.getElementById("excludeOnlyHeld")?.addEventListener("change", renderExcludedRowsTable);
 
       document.getElementById("recordLeaveBtn").addEventListener("click", async (ev) => {
