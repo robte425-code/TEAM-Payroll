@@ -1048,6 +1048,61 @@
 
       const EXCLUSIONS_API = "/api/payroll-row-exclusions";
 
+      /** How far after the last service date a period may plausibly end. */
+      const MAX_DAYS_AFTER_LAST_SERVICE = 31;
+
+      /** Earliest and latest service date in the loaded invoice, as YYYY-MM-DD. */
+      function invoiceServiceDateRange() {
+        let min = "";
+        let max = "";
+        for (const row of sessionCalcRows) {
+          for (const raw of [row.dateFrom, row.dateTo]) {
+            const iso = parseDateKey(raw);
+            if (!iso) continue;
+            if (!min || iso < min) min = iso;
+            if (!max || iso > max) max = iso;
+          }
+        }
+        return min && max ? { min, max } : null;
+      }
+
+      function daysBetween(isoA, isoB) {
+        const a = Date.parse(`${isoA}T00:00:00Z`);
+        const b = Date.parse(`${isoB}T00:00:00Z`);
+        if (Number.isNaN(a) || Number.isNaN(b)) return null;
+        return Math.round((b - a) / 86400000);
+      }
+
+      /**
+       * Does the entered period plausibly belong to this invoice?
+       *
+       * Holds are stored against the payroll end date, so typing the previous
+       * period's date loads the previous period's holds and applies them here —
+       * and the resulting summary looks complete either way. Requiring a date
+       * stopped the blank case; this is the one where a date is present and
+       * wrong. Returns a description of the problem, or null.
+       */
+      function payrollEndDateProblem() {
+        const endDate = parseDateKey(getPayrollEndDateInput());
+        const range = invoiceServiceDateRange();
+        if (!endDate || !range) return null;
+
+        if (endDate < range.max) {
+          return (
+            `the invoice contains work up to ${range.max}, which is after the payroll ` +
+            `end date of ${endDate}. A pay period cannot end before work inside it`
+          );
+        }
+        const gap = daysBetween(range.max, endDate);
+        if (gap != null && gap > MAX_DAYS_AFTER_LAST_SERVICE) {
+          return (
+            `the latest work in this invoice is dated ${range.max}, ${gap} days before ` +
+            `the payroll end date of ${endDate}`
+          );
+        }
+        return null;
+      }
+
       /**
        * Which lines are held out of pay for this period.
        *
@@ -1276,9 +1331,11 @@
         const held = sessionExcludedRowKeys.size;
         const summaryEl = document.getElementById("excludeSummary");
         if (summaryEl) {
+          const range = invoiceServiceDateRange();
           summaryEl.textContent =
             `${shown} of ${sessionCalcRows.length} line(s) shown` +
-            (held ? ` — ${held} held out of pay` : "");
+            (held ? ` — ${held} held out of pay` : "") +
+            (range ? ` · invoice covers ${range.min} to ${range.max}` : "");
         }
       }
 
@@ -2602,6 +2659,24 @@
           }
 
           await mergeStoredAdjResubFromDatabase();
+
+          // Before holds are loaded, because it decides which set gets loaded.
+          const datesLookWrong = payrollEndDateProblem();
+          if (datesLookWrong) {
+            const range = invoiceServiceDateRange();
+            const ok = confirm(
+              `Check the payroll end date.\n\n` +
+                `This invoice covers ${range.min} to ${range.max}, but ${datesLookWrong}.\n\n` +
+                `Billing lines held out of pay are saved against the end date, so the wrong ` +
+                `date loads the wrong set of holds — and the totals look complete either way.\n\n` +
+                `Continue with ${parseDateKey(getPayrollEndDateInput())} anyway?`
+            );
+            if (!ok) {
+              throw new Error(
+                "Analysis stopped. Correct the payroll end date and analyze again."
+              );
+            }
+          }
 
           // Both before the first summary is built: a line held out must never
           // appear in a total, not even briefly.
