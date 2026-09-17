@@ -246,7 +246,7 @@
         <input
           id="excludeFilter"
           type="search"
-          placeholder="Filter by employee, claim #, claimant or rate code"
+          placeholder="Filter by employee, date, claim #, claimant, rate code or file"
           style="min-width: 320px"
         />
         <label style="display: inline-flex; align-items: center; gap: 6px">
@@ -1111,7 +1111,18 @@
           const held = sessionExcludedRowKeys.has(row._rowKey);
           if (onlyHeld && !held) continue;
           if (filter) {
-            const hay = [row.employeeName, row.referralNumber, row.claimant, row.rateCode]
+            // Service dates included: a line to hold is usually identified by
+            // when the work happened as much as by the claim it sits under, and
+            // without them the only way to find one is scrolling every line.
+            const hay = [
+              row.employeeName,
+              row.referralNumber,
+              row.claimant,
+              row.rateCode,
+              row.dateFrom,
+              row.dateTo,
+              row.sourceFile,
+            ]
               .map((v) => String(v || "").toLowerCase())
               .join(" ");
             if (!hay.includes(filter)) continue;
