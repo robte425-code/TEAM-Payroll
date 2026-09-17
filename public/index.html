@@ -234,6 +234,47 @@
       </table>
     </div>
 
+    <div class="card" id="excludedRowsCard" hidden>
+      <h3>Billable lines held out of pay</h3>
+      <p class="muted">
+        For work the firm is rebilling that the employee has <strong>already been paid for</strong> — billing moved to a
+        different authorization arrives as ordinary new billing with no Adj/Resub flag, so nothing else takes it out.
+        A line held out here is removed from the employee summary, from Payroll 1.0 and 2.0, and from the pay-period
+        hour check. Set <strong>Payroll end date</strong> first; holds are saved against that period.
+      </p>
+      <div style="margin: 8px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <input
+          id="excludeFilter"
+          type="search"
+          placeholder="Filter by employee, claim #, claimant or rate code"
+          style="min-width: 320px"
+        />
+        <label style="display: inline-flex; align-items: center; gap: 6px">
+          <input id="excludeOnlyHeld" type="checkbox" />
+          Show only lines held out
+        </label>
+        <span id="excludeSummary" class="muted"></span>
+      </div>
+      <div style="max-height: 420px; overflow: auto">
+        <table id="excludedRowsTable">
+          <thead>
+            <tr>
+              <th>Hold</th>
+              <th>Employee</th>
+              <th>Date From</th>
+              <th>Date To</th>
+              <th>Claim #</th>
+              <th>Claimant</th>
+              <th>Rate Code</th>
+              <th class="num">Units</th>
+              <th>Reason held</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card" id="payroll10Card" hidden>
       <h3 id="payroll10Title">
         Payroll 1.0 <span id="payroll10EndDate"></span>
@@ -543,7 +584,7 @@
         const workingDays = Number(lastPayroll10Results?.workingDays);
         return {
           workingDays: Number.isFinite(workingDays) ? workingDays : 0,
-          invoiceRows: sessionCalcRows.map((r) => ({
+          invoiceRows: payableCalcRows().map((r) => ({
             employeeName: r.employeeName,
             providerId: r.providerId,
             dateFrom: r.dateFrom,
@@ -971,8 +1012,221 @@
         };
       }
 
+      /**
+       * Identity of a billing line, matching lib/payroll-row-exclusions.js.
+       *
+       * Units are part of it on purpose: if billing changes the hours, that is a
+       * different line and the exclusion must not carry over silently onto a
+       * figure nobody has looked at.
+       */
+      function buildCalcRowKey(row, occurrence) {
+        const providerId = String(row.providerId || "").trim();
+        const employeeKey = providerId || normalizeEmployeeName(row.employeeName);
+        return [
+          employeeKey,
+          String(row.referralNumber || "").trim(),
+          String(row.rateCode || "").trim().toUpperCase(),
+          String(row.dateFrom || "").trim(),
+          String(row.dateTo || "").trim(),
+          (Number(row.units) || 0).toFixed(4),
+          String(occurrence || 0),
+        ].join("\x1e");
+      }
+
+      /** Stamps each line with its key, numbering otherwise-identical ones. */
+      function assignCalcRowKeys() {
+        const seen = new Map();
+        for (const row of sessionCalcRows) {
+          const base = buildCalcRowKey(row, 0);
+          const n = seen.get(base) || 0;
+          seen.set(base, n + 1);
+          row._rowKey = n === 0 ? base : buildCalcRowKey(row, n);
+        }
+      }
+
+      /**
+       * The lines that actually get paid.
+       *
+       * Every consumer of billing rows goes through this — the employee summary,
+       * the persisted session summary and the pay-period limit check — so a
+       * line held out cannot be paid by one path while being excluded by
+       * another.
+       */
+      function payableCalcRows() {
+        if (!sessionExcludedRowKeys.size) return sessionCalcRows;
+        return sessionCalcRows.filter((r) => !sessionExcludedRowKeys.has(r._rowKey));
+      }
+
+      const EXCLUSIONS_API = "/api/payroll-row-exclusions";
+
+      async function fetchStoredExclusions() {
+        const payrollEndDate = getPayrollEndDateInput();
+        sessionExcludedRowKeys = new Map();
+        if (!payrollEndDate) return;
+        try {
+          const r = await fetch(
+            `${EXCLUSIONS_API}?payrollEndDate=${encodeURIComponent(payrollEndDate)}`,
+            { credentials: "same-origin", cache: "no-store" }
+          );
+          if (!r.ok) return;
+          const data = await r.json().catch(() => ({}));
+          for (const row of data.rows || []) {
+            if (row?.rowKey) sessionExcludedRowKeys.set(row.rowKey, { reason: row.reason || "" });
+          }
+        } catch {
+          // A failed load must not silently pay lines that were held out, so
+          // the table says so rather than rendering an all-clear.
+          const errorEl = document.getElementById("error");
+          if (errorEl) {
+            errorEl.textContent =
+              "Could not load which billing lines are held out of pay. Reload before recording payroll.";
+          }
+        }
+      }
+
+      function renderExcludedRowsTable() {
+        const card = document.getElementById("excludedRowsCard");
+        const tbody = document.querySelector("#excludedRowsTable tbody");
+        if (!card || !tbody) return;
+        card.hidden = sessionCalcRows.length === 0;
+        if (card.hidden) return;
+
+        const filter = String(document.getElementById("excludeFilter")?.value || "")
+          .trim()
+          .toLowerCase();
+        const onlyHeld = Boolean(document.getElementById("excludeOnlyHeld")?.checked);
+
+        tbody.innerHTML = "";
+        let shown = 0;
+        for (const row of sessionCalcRows) {
+          const held = sessionExcludedRowKeys.has(row._rowKey);
+          if (onlyHeld && !held) continue;
+          if (filter) {
+            const hay = [row.employeeName, row.referralNumber, row.claimant, row.rateCode]
+              .map((v) => String(v || "").toLowerCase())
+              .join(" ");
+            if (!hay.includes(filter)) continue;
+          }
+          shown += 1;
+
+          const tr = document.createElement("tr");
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = held;
+          cb.addEventListener("change", () => toggleRowExclusion(row, cb));
+          const cbTd = document.createElement("td");
+          cbTd.appendChild(cb);
+          tr.appendChild(cbTd);
+
+          for (const [text, cls] of [
+            [row.employeeName || "", ""],
+            [row.dateFrom || "", ""],
+            [row.dateTo || "", ""],
+            [row.referralNumber || "", ""],
+            [row.claimant || "", ""],
+            [row.rateCode || "", ""],
+            [String(row.units ?? ""), "num"],
+            [held ? sessionExcludedRowKeys.get(row._rowKey)?.reason || "" : "", ""],
+          ]) {
+            const td = document.createElement("td");
+            td.textContent = text;
+            if (cls) td.className = cls;
+            if (held) td.style.opacity = "0.6";
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+
+        const held = sessionExcludedRowKeys.size;
+        const summaryEl = document.getElementById("excludeSummary");
+        if (summaryEl) {
+          summaryEl.textContent =
+            `${shown} of ${sessionCalcRows.length} line(s) shown` +
+            (held ? ` — ${held} held out of pay` : "");
+        }
+      }
+
+      async function toggleRowExclusion(row, checkboxEl) {
+        const payrollEndDate = getPayrollEndDateInput();
+        const errorEl = document.getElementById("error");
+        if (errorEl) errorEl.textContent = "";
+
+        if (!payrollEndDate) {
+          checkboxEl.checked = !checkboxEl.checked;
+          if (errorEl) {
+            errorEl.textContent = "Enter a payroll end date before holding lines out of pay.";
+          }
+          return;
+        }
+
+        const wantHeld = checkboxEl.checked;
+        let reason = "";
+        if (wantHeld) {
+          // Asked for every hold. These hours are real money, and an unexplained
+          // exclusion is indistinguishable from a mistake when it is reviewed
+          // months later.
+          reason = String(
+            prompt(
+              `Why is this line held out of pay?\n\n` +
+                `${row.employeeName} — ${row.dateFrom} — ${row.rateCode} — ${row.units} unit(s)\n\n` +
+                `e.g. "Rebilled under 810; already paid on the 800."`
+            ) || ""
+          ).trim();
+          if (!reason) {
+            checkboxEl.checked = false;
+            return;
+          }
+        }
+
+        checkboxEl.disabled = true;
+        try {
+          const r = await fetch(EXCLUSIONS_API, {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              payrollEndDate,
+              excluded: wantHeld,
+              reason,
+              row: {
+                rowKey: row._rowKey,
+                sourceFile: row.sourceFile,
+                employeeName: row.employeeName,
+                providerId: row.providerId,
+                claimant: row.claimant,
+                referralNumber: row.referralNumber,
+                rateCode: row.rateCode,
+                dateFrom: row.dateFrom,
+                dateTo: row.dateTo,
+                units: row.units,
+              },
+            }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+
+          if (wantHeld) sessionExcludedRowKeys.set(row._rowKey, { reason });
+          else sessionExcludedRowKeys.delete(row._rowKey);
+
+          // Totals downstream are now stale in both directions.
+          clearPayroll10Results();
+          sessionCalcSummary = summarizeByEmployee(payableCalcRows());
+          renderExcludedRowsTable();
+          const rateMap = await fetchEmployeeRateMap();
+          lastRateMap = rateMap;
+          renderSummary(buildFullSummary(), rateMap);
+        } catch (e) {
+          checkboxEl.checked = !wantHeld;
+          if (errorEl) errorEl.textContent = e.message || "Could not update that billing line.";
+        } finally {
+          checkboxEl.disabled = false;
+        }
+      }
+
       function buildFullSummary() {
-        const base = sessionCalcRows.length ? summarizeByEmployee(sessionCalcRows) : sessionCalcSummary || [];
+        const base = sessionCalcRows.length
+          ? summarizeByEmployee(payableCalcRows())
+          : sessionCalcSummary || [];
         const merged = base.map(cloneSummaryItem);
 
         const getOrCreate = (employeeName, providerId) => {
@@ -1399,6 +1653,8 @@
       let sessionSourceFiles = [];
       /** Excluded adj/resub rows with source file name (session, until Clear). */
       let sessionAdjResubRows = [];
+      /** rowKey -> { reason } for lines held out of pay this period. */
+      let sessionExcludedRowKeys = new Map();
       /** Monotonic id for adj rows (editable units). */
       let nextAdjRowId = 1;
       /** Last rate map from analyze (for summary refresh after unit edits). */
@@ -2195,8 +2451,13 @@
 
           await mergeStoredAdjResubFromDatabase();
 
+          // Both before the first summary is built: a line held out must never
+          // appear in a total, not even briefly.
+          assignCalcRowKeys();
+          await fetchStoredExclusions();
+
           // Used for preserving session across navigation.
-          sessionCalcSummary = summarizeByEmployee(sessionCalcRows);
+          sessionCalcSummary = summarizeByEmployee(payableCalcRows());
           sessionSourceFiles = Array.from(new Set([...(sessionSourceFiles || []), ...runNames]));
           renderSessionFiles();
 
@@ -2209,6 +2470,7 @@
           lastRateMap = rateMap;
           renderSummary(summary, rateMap);
           renderAdjResubTable(sessionAdjResubRows);
+          renderExcludedRowsTable();
 
           const fileList =
             runNames.length <= 3
@@ -3097,6 +3359,9 @@
           </html>`);
         w.document.close();
       });
+
+      document.getElementById("excludeFilter")?.addEventListener("input", renderExcludedRowsTable);
+      document.getElementById("excludeOnlyHeld")?.addEventListener("change", renderExcludedRowsTable);
 
       document.getElementById("recordLeaveBtn").addEventListener("click", async (ev) => {
         const msgEl = document.getElementById("leaveRecordMsg");

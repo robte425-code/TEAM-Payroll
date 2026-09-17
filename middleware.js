@@ -109,6 +109,7 @@ export const config = {
     "/api/payroll-unread",
     "/api/payroll-data",
     "/api/payroll-adj-resub",
+    "/api/payroll-row-exclusions",
     "/api/analyzer-notes",
     "/api/internal/team-access",
   ],
