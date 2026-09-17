@@ -511,6 +511,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="./shared/calc-row-key.js"></script>
     <script>
       const CASE_WORK_RATE_CODES = new Set([
         "0800V", "0801V", "0802V", "0803V",
@@ -1012,36 +1013,16 @@
         };
       }
 
-      /**
-       * Identity of a billing line, matching lib/payroll-row-exclusions.js.
-       *
-       * Units are part of it on purpose: if billing changes the hours, that is a
-       * different line and the exclusion must not carry over silently onto a
-       * figure nobody has looked at.
-       */
-      function buildCalcRowKey(row, occurrence) {
-        const providerId = String(row.providerId || "").trim();
-        const employeeKey = providerId || normalizeEmployeeName(row.employeeName);
-        return [
-          employeeKey,
-          String(row.referralNumber || "").trim(),
-          String(row.rateCode || "").trim().toUpperCase(),
-          String(row.dateFrom || "").trim(),
-          String(row.dateTo || "").trim(),
-          (Number(row.units) || 0).toFixed(4),
-          String(occurrence || 0),
-        ].join("\x1e");
-      }
-
       /** Stamps each line with its key, numbering otherwise-identical ones. */
       function assignCalcRowKeys() {
         const seen = new Map();
         for (const row of sessionCalcRows) {
-          const base = buildCalcRowKey(row, 0);
+          const base = CalcRowKey.buildCalcRowKey(row, 0);
           const n = seen.get(base) || 0;
           seen.set(base, n + 1);
-          row._rowKey = n === 0 ? base : buildCalcRowKey(row, n);
+          row._rowKey = n === 0 ? base : CalcRowKey.buildCalcRowKey(row, n);
         }
+        calcRowKeysAssigned = true;
       }
 
       /**
@@ -1053,34 +1034,62 @@
        * another.
        */
       function payableCalcRows() {
+        // Self-enforcing rather than relying on call order. Without a key every
+        // lookup misses and this would quietly return every line as payable —
+        // a held line paid in full, with no error anywhere.
+        if (sessionCalcRows.length && !calcRowKeysAssigned) assignCalcRowKeys();
         if (!sessionExcludedRowKeys.size) return sessionCalcRows;
         return sessionCalcRows.filter((r) => !sessionExcludedRowKeys.has(r._rowKey));
       }
 
       const EXCLUSIONS_API = "/api/payroll-row-exclusions";
 
+      /**
+       * Which lines are held out of pay for this period.
+       *
+       * Throws rather than returning empty on any failure, and the analyze flow
+       * stops on it. An empty map means "nothing is held", which is what gets
+       * paid — so a session that expired, a 500, or a missing period would
+       * otherwise pay every held line and show a clean, complete-looking
+       * summary. Failing loudly is the only safe direction here: the cost of
+       * stopping is a retry, the cost of continuing is paying someone twice.
+       */
       async function fetchStoredExclusions() {
         const payrollEndDate = getPayrollEndDateInput();
         sessionExcludedRowKeys = new Map();
-        if (!payrollEndDate) return;
+        if (!payrollEndDate) {
+          throw new Error(
+            "Enter the payroll end date before analyzing. Billing lines held out of pay " +
+              "are saved against a period, and without one they cannot be loaded."
+          );
+        }
+        let r;
         try {
-          const r = await fetch(
+          r = await fetch(
             `${EXCLUSIONS_API}?payrollEndDate=${encodeURIComponent(payrollEndDate)}`,
             { credentials: "same-origin", cache: "no-store" }
           );
-          if (!r.ok) return;
-          const data = await r.json().catch(() => ({}));
-          for (const row of data.rows || []) {
-            if (row?.rowKey) sessionExcludedRowKeys.set(row.rowKey, { reason: row.reason || "" });
-          }
-        } catch {
-          // A failed load must not silently pay lines that were held out, so
-          // the table says so rather than rendering an all-clear.
-          const errorEl = document.getElementById("error");
-          if (errorEl) {
-            errorEl.textContent =
-              "Could not load which billing lines are held out of pay. Reload before recording payroll.";
-          }
+        } catch (e) {
+          throw new Error(
+            `Could not load which billing lines are held out of pay (${e.message || "network error"}). ` +
+              "Nothing has been totalled — try again."
+          );
+        }
+        if (!r.ok) {
+          const detail = r.status === 401 ? "your session has expired" : `HTTP ${r.status}`;
+          throw new Error(
+            `Could not load which billing lines are held out of pay (${detail}). ` +
+              "Nothing has been totalled — sign in again and re-analyze."
+          );
+        }
+        const data = await r.json().catch(() => null);
+        if (!data || !Array.isArray(data.rows)) {
+          throw new Error(
+            "The list of billing lines held out of pay could not be read. Nothing has been totalled."
+          );
+        }
+        for (const row of data.rows) {
+          if (row?.rowKey) sessionExcludedRowKeys.set(row.rowKey, { reason: row.reason || "" });
         }
       }
 
@@ -1655,6 +1664,8 @@
       let sessionAdjResubRows = [];
       /** rowKey -> { reason } for lines held out of pay this period. */
       let sessionExcludedRowKeys = new Map();
+      /** False whenever sessionCalcRows has changed since keys were stamped. */
+      let calcRowKeysAssigned = false;
       /** Monotonic id for adj rows (editable units). */
       let nextAdjRowId = 1;
       /** Last rate map from analyze (for summary refresh after unit edits). */
@@ -2445,6 +2456,7 @@
                 });
               } else {
                 sessionCalcRows.push(withFile);
+                calcRowKeysAssigned = false;
               }
             }
           }
@@ -2483,6 +2495,10 @@
           status.textContent = "Analysis complete.";
           saveSessionToStorage();
         } catch (err) {
+          // Totals from a run that did not finish must not be left sitting
+          // there looking complete — they would be recorded as payroll.
+          sessionCalcSummary = [];
+          clearPayroll10Results();
           error.textContent = err.message || "Failed to analyze file.";
           status.textContent = "";
         }
@@ -2490,6 +2506,8 @@
 
       function clearSession() {
         sessionCalcRows = [];
+        calcRowKeysAssigned = false;
+        sessionExcludedRowKeys = new Map();
         sessionCalcSummary = [];
         sessionAdjResubRows = [];
         sessionSourceFiles = [];
