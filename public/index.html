@@ -259,7 +259,7 @@
         <table id="excludedRowsTable">
           <thead>
             <tr>
-              <th>Hold</th>
+              <th id="excludeActionHeader">Hold</th>
               <th>Employee</th>
               <th>Date From</th>
               <th>Date To</th>
@@ -628,6 +628,10 @@
       const endDateInput = document.getElementById("payrollEndDateInput");
       if (endDateInput) {
         endDateInput.addEventListener("change", updatePayrollTitles);
+        // A different period has a different set of holds.
+        endDateInput.addEventListener("change", () => {
+          loadHoldsForDisplay();
+        });
         updatePayrollTitles();
       }
 
@@ -1088,8 +1092,118 @@
             "The list of billing lines held out of pay could not be read. Nothing has been totalled."
           );
         }
+        // The whole row, not just the reason: when the invoice is not loaded
+        // this is the only description of the held line we have.
         for (const row of data.rows) {
-          if (row?.rowKey) sessionExcludedRowKeys.set(row.rowKey, { reason: row.reason || "" });
+          if (row?.rowKey) sessionExcludedRowKeys.set(row.rowKey, row);
+        }
+      }
+
+      /**
+       * Show what is held even when the invoice is not loaded.
+       *
+       * Navigating away drops the billing rows and keeps only the pre-totalled
+       * summary, so the card used to disappear and a hold could only be seen or
+       * released by re-uploading and re-analyzing the file. The holds are stored
+       * against the period, so they can be listed on their own.
+       *
+       * Never runs while billing rows are loaded: fetchStoredExclusions clears
+       * the map before refilling it, and a failure there must not be able to
+       * quietly empty the holds that the totals depend on.
+       */
+      async function loadHoldsForDisplay() {
+        if (sessionCalcRows.length) return;
+        if (!getPayrollEndDateInput()) return;
+        try {
+          await fetchStoredExclusions();
+        } catch {
+          // Display only — nothing is being paid off the back of this, so a
+          // failure is reported in the card rather than stopping the page.
+          sessionExcludedRowKeys = new Map();
+        }
+        renderExcludedRowsTable();
+      }
+
+      /** The stored holds on their own, with no invoice loaded. */
+      function renderHoldsOnly(card, tbody) {
+        card.hidden = sessionExcludedRowKeys.size === 0;
+        if (card.hidden) return;
+        const header = document.getElementById("excludeActionHeader");
+        if (header) header.textContent = "";
+        tbody.innerHTML = "";
+        for (const held of sessionExcludedRowKeys.values()) {
+          const tr = document.createElement("tr");
+          const btnTd = document.createElement("td");
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-secondary";
+          btn.textContent = "Release";
+          btn.addEventListener("click", () => releaseHold(held, btn));
+          btnTd.appendChild(btn);
+          tr.appendChild(btnTd);
+          for (const [text, cls] of [
+            [held.employeeName || "", ""],
+            [held.dateFrom || "", ""],
+            [held.dateTo || "", ""],
+            [held.referralNumber || "", ""],
+            [held.claimant || "", ""],
+            [held.rateCode || "", ""],
+            [String(held.units ?? ""), "num"],
+            [held.reason || "", ""],
+          ]) {
+            const td = document.createElement("td");
+            td.textContent = text;
+            if (cls) td.className = cls;
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+        const summaryEl = document.getElementById("excludeSummary");
+        if (summaryEl) {
+          summaryEl.textContent =
+            `${sessionExcludedRowKeys.size} line(s) held out of pay for this period. ` +
+            `Analyze the invoice to hold more.`;
+        }
+      }
+
+      /**
+       * Release a hold with no invoice loaded.
+       *
+       * The stored totals were calculated with this line held out, so they are
+       * wrong the moment it is released. They are cleared rather than left
+       * looking authoritative — recording them would underpay.
+       */
+      async function releaseHold(held, buttonEl) {
+        const errorEl = document.getElementById("error");
+        if (errorEl) errorEl.textContent = "";
+        buttonEl.disabled = true;
+        try {
+          const r = await fetch(EXCLUSIONS_API, {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              payrollEndDate: getPayrollEndDateInput(),
+              excluded: false,
+              row: { rowKey: held.rowKey },
+            }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          sessionExcludedRowKeys.delete(held.rowKey);
+          sessionCalcSummary = [];
+          clearPayroll10Results();
+          renderExcludedRowsTable();
+          renderSummary(buildFullSummary(), lastRateMap);
+          const statusEl = document.getElementById("status");
+          if (statusEl) {
+            statusEl.textContent =
+              "Hold released. Totals cleared — analyze the invoice again to recalculate.";
+          }
+        } catch (e) {
+          if (errorEl) errorEl.textContent = e.message || "Could not release that hold.";
+        } finally {
+          buttonEl.disabled = false;
         }
       }
 
@@ -1097,8 +1211,10 @@
         const card = document.getElementById("excludedRowsCard");
         const tbody = document.querySelector("#excludedRowsTable tbody");
         if (!card || !tbody) return;
-        card.hidden = sessionCalcRows.length === 0;
-        if (card.hidden) return;
+        if (sessionCalcRows.length === 0) return renderHoldsOnly(card, tbody);
+        card.hidden = false;
+        const header = document.getElementById("excludeActionHeader");
+        if (header) header.textContent = "Hold";
 
         const filter = String(document.getElementById("excludeFilter")?.value || "")
           .trim()
@@ -1225,7 +1341,19 @@
           const data = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
 
-          if (wantHeld) sessionExcludedRowKeys.set(row._rowKey, { reason });
+          if (wantHeld) {
+            sessionExcludedRowKeys.set(row._rowKey, {
+              rowKey: row._rowKey,
+              employeeName: row.employeeName,
+              dateFrom: row.dateFrom,
+              dateTo: row.dateTo,
+              referralNumber: row.referralNumber,
+              claimant: row.claimant,
+              rateCode: row.rateCode,
+              units: row.units,
+              reason,
+            });
+          }
           else sessionExcludedRowKeys.delete(row._rowKey);
 
           // Totals downstream are now stale in both directions.
@@ -2003,6 +2131,7 @@
 
         // Restore analysis tables.
         renderAdjResubTable(sessionAdjResubRows);
+        await loadHoldsForDisplay();
         updatePayroll10Visibility();
 
         try {
