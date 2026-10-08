@@ -1,10 +1,12 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
+const { sendError } = require("../../lib/api-errors");
 const {
   listAdjResubRows,
   upsertAdjResubRow,
   deleteAdjResubRow,
+  parseClearFlag,
 } = require("../../lib/payroll-adj-resub");
 
 async function readJsonBody(req) {
@@ -66,16 +68,9 @@ export default async function handler(req, res) {
       const body = await readJsonBody(req);
       // Clearing is the undo for a value committed by mistake. One endpoint
       // both ways, so the row is removed rather than left behind unlocked and
-      // waiting to be misread.
-      //
-      // Strict on purpose. A clear request carries nothing but the row's key,
-      // so if one ever arrived with clear set to "true" or 1 and fell through
-      // to the save below, it would not remove the value — it would overwrite
-      // it. Anything other than the boolean true is refused.
-      if (body.clear !== undefined && body.clear !== false && body.clear !== true) {
-        return res.status(400).json({ error: "clear must be true or omitted." });
-      }
-      if (body.clear === true) {
+      // waiting to be misread. parseClearFlag refuses anything ambiguous; its
+      // comment says why that matters.
+      if (parseClearFlag(body.clear)) {
         const result = await deleteAdjResubRow(pool, {
           payrollEndDate: body.payrollEndDate,
           rowKey: body.row?.rowKey || body.rowKey,
@@ -94,14 +89,9 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET, PUT, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    // A bad request is the caller's to fix and says so; anything else is ours,
-    // and its internals do not belong in the operator's error bar.
-    if (e?.status === 400) {
-      return res.status(400).json({ error: e.message });
-    }
-    console.error("payroll-adj-resub failed:", e);
-    return res
-      .status(500)
-      .json({ error: "Could not save that adjustment. Please try again." });
+    return sendError(res, e, {
+      label: "payroll-adj-resub",
+      fallback: "Could not save that adjustment. Please try again.",
+    });
   }
 }
