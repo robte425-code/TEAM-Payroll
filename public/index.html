@@ -211,9 +211,12 @@
       <h3>Adjustments &amp; resubmissions (excluded from totals)</h3>
       <p class="muted">
         Rows where <strong>Adj / Resub</strong> is only an <strong>A</strong> and/or <strong>R</strong> flag (e.g. A, R, A/R) are
-        not included in the summary above. For <strong>adjustments</strong> (flag includes <strong>A</strong>), enter the correct
-        <strong>Units</strong> once; that value is added to the employee summary and the field locks. Set
-        <strong>Payroll end date</strong> above so unit edits are saved and previous values are shown when you analyze again for the same period.
+        not included in the summary above. For <strong>adjustments</strong> (flag includes <strong>A</strong>), type the
+        correct <strong>Units</strong> and click away, or click <strong>Confirm</strong> to accept the number already
+        there &mdash; either one adds it to the employee summary and locks the field. Clicking into a box without changing
+        it no longer saves anything. Made a mistake? Click <strong>Clear</strong> next to a saved value to undo it. Set
+        <strong>Payroll end date</strong> above so unit edits are saved and previous values are shown when you analyze
+        again for the same period.
       </p>
       <table id="adjResubTable">
         <thead>
@@ -903,7 +906,12 @@
         }
       }
 
-      function applyStoredAdjResubRows(storedMap) {
+      /**
+       * `period` is recorded on every row this locks. A stored value only
+       * exists under the period it was saved against, so undoing it has to
+       * quote that period rather than whatever the date field says later.
+       */
+      function applyStoredAdjResubRows(storedMap, period) {
         if (!storedMap || !storedMap.size) return;
         for (const row of sessionAdjResubRows) {
           const stored = storedMap.get(buildAdjResubRowKey(row));
@@ -920,6 +928,7 @@
           ) {
             row.resolvedUnits = Number(stored.resolvedUnits);
             row.unitsLocked = true;
+            row.storedPeriod = period;
           }
         }
       }
@@ -927,7 +936,7 @@
       async function mergeStoredAdjResubFromDatabase() {
         const payrollEndDate = getPayrollEndDateInput();
         const storedMap = await fetchStoredAdjResubMap(payrollEndDate);
-        applyStoredAdjResubRows(storedMap);
+        applyStoredAdjResubRows(storedMap, payrollEndDate);
       }
 
       async function saveAdjResubRowToDatabase(row) {
@@ -966,6 +975,7 @@
           if (data.row?.resolvedUnits != null) {
             row.previousResolvedUnits = Number(data.row.resolvedUnits);
           }
+          row.storedPeriod = payrollEndDate;
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e.message || "Failed to save adjustment units." };
@@ -2007,6 +2017,11 @@
       function saveSessionToStorage() {
         try {
           const payload = {
+            // Everything else in here was calculated for this period, so it
+            // has to come back with it. Without it the date field was blank
+            // after any navigation, and every per-period action — clearing an
+            // adjustment, listing holds — silently had nothing to aim at.
+            payrollEndDate: getPayrollEndDateInput(),
             sessionCalcSummary,
             sessionAdjResubRows,
             nextAdjRowId,
@@ -2287,6 +2302,18 @@
         sessionSourceFiles = Array.isArray(payload.sessionSourceFiles) ? payload.sessionSourceFiles : [];
         lastPayroll10Results = payload.lastPayroll10Results || null;
         lastPayroll20Results = payload.lastPayroll20Results || null;
+
+        // Before the stored adjustments and holds are loaded, which both key on
+        // it. The session's own date wins over anything the browser may have
+        // restored into the field, because the totals were computed for it.
+        // Setting .value programmatically does not fire "change", so this does
+        // not trigger a recalculation.
+        const restoredEndDate = String(payload.payrollEndDate || "").trim();
+        if (restoredEndDate) {
+          const endDateEl = document.getElementById("payrollEndDateInput");
+          if (endDateEl) endDateEl.value = restoredEndDate;
+          updatePayrollTitles();
+        }
 
         document.getElementById("error").textContent = "";
         document.getElementById("status").textContent = "";
@@ -2644,41 +2671,70 @@
        * Removes the stored row rather than unlocking it in place: a row left
        * behind with a stale number is the thing that confused everyone the
        * first time, reappearing locked on the next analyze of that period.
+       *
+       * Every way this can fail ends in a refusal, never a success message.
+       * The first version unlocked the row on screen whenever the date field
+       * was blank — which is always, after navigation — and deleted under
+       * whatever period the field showed, so the stored value survived to be
+       * paid again while the screen said it was gone.
        */
       async function clearAdjustmentUnits(adjId) {
         const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
-        if (!row) return;
+        if (!row || !row.unitsLocked) return;
         const errorEl = document.getElementById("error");
-        if (errorEl) errorEl.textContent = "";
+        const fail = (message) => {
+          if (errorEl) errorEl.textContent = message;
+        };
 
-        const payrollEndDate = getPayrollEndDateInput();
-        if (payrollEndDate) {
-          try {
-            const r = await fetch("/api/payroll-adj-resub", {
-              method: "PUT",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                payrollEndDate,
-                clear: true,
-                row: { rowKey: buildAdjResubRowKey(row) },
-              }),
-            });
-            const data = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-          } catch (e) {
-            if (errorEl) {
-              errorEl.textContent =
-                `Could not clear that saved value (${e.message || "unknown error"}). ` +
-                "It will come back the next time you analyze this period.";
-            }
-            return;
+        // The period this value was saved under, not the one the field shows.
+        const period = String(row.storedPeriod || "").trim();
+        if (!period) {
+          fail(
+            `The saved units for ${row.employeeName} (${row.rateCode}) can't be cleared from here ` +
+              "because this page doesn't know which payroll period they were saved under. " +
+              "Set the payroll end date and analyze the invoice again, then clear it."
+          );
+          return;
+        }
+
+        const btn = document.querySelector(`.adj-units-clear[data-adj-id="${adjId}"]`);
+        if (btn) {
+          if (btn.disabled) return;
+          btn.disabled = true;
+        }
+        try {
+          const r = await fetch("/api/payroll-adj-resub", {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              payrollEndDate: period,
+              clear: true,
+              row: { rowKey: buildAdjResubRowKey(row) },
+            }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          // Deleting nothing is not clearing something. This is the only
+          // signal that the value is still stored and will be paid again.
+          if (Number(data.removed) === 0) {
+            throw new Error(
+              `no saved value was found for payroll period ${period}, so nothing was removed`
+            );
           }
+        } catch (e) {
+          if (btn) btn.disabled = false;
+          fail(
+            `Could not clear the saved units for ${row.employeeName} (${row.rateCode}): ` +
+              `${e.message || "unknown error"}. Reload the page and try again.`
+          );
+          return;
         }
 
         row.unitsLocked = false;
         row.resolvedUnits = undefined;
         row.previousResolvedUnits = undefined;
+        row.storedPeriod = undefined;
         clearPayroll10Results();
         renderAdjResubTable(sessionAdjResubRows);
         renderSummary(buildFullSummary(), lastRateMap);
@@ -2689,6 +2745,24 @@
             `Cleared the saved units for ${row.employeeName} (${row.rateCode}). ` +
             `That line is excluded from pay again.`;
         }
+      }
+
+      /**
+       * Accept the units in the box as they are, deliberately.
+       *
+       * Before the blur fix, clicking into a box and leaving it was how a
+       * correct invoice figure got confirmed — the same gesture that also
+       * committed figures nobody meant to confirm. With that gone, an
+       * unconfirmed row hid Payroll 1.0 and nothing on screen said what to do.
+       * This is the visible way to say "this number is right".
+       */
+      function confirmAdjustmentUnits(adjId) {
+        const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
+        // Already committed by the blur that fired on the way to this button.
+        if (!row || row.unitsLocked) return;
+        const input = document.querySelector(`.adj-units-input[data-adj-id="${adjId}"]`);
+        if (!input) return;
+        void commitAdjustmentUnits(adjId, input);
       }
 
       function renderAdjResubTable(adjRows) {
@@ -2721,7 +2795,12 @@
           if (isAdjustmentRow(r.adjResub) && !r.unitsLocked) {
             const id = r._adjId;
             const val = escapeHtml(String(r.units));
-            unitsCell = `<div class="adj-units-cell"><input type="number" class="adj-units-input" data-adj-id="${id}" step="any" value="${val}" aria-label="Units for adjustment" /></div>`;
+            unitsCell =
+              `<div class="adj-units-cell"><input type="number" class="adj-units-input" data-adj-id="${id}" ` +
+              `step="any" value="${val}" aria-label="Units for adjustment" />` +
+              `<button type="button" class="adj-units-confirm" data-adj-id="${id}" ` +
+              `title="Accept these units and add them to this employee's pay" ` +
+              `style="margin-left:6px;font-size:11px;padding:1px 6px;cursor:pointer">Confirm</button></div>`;
           } else if (isAdjustmentRow(r.adjResub) && r.unitsLocked) {
             // Clearable. Committing used to be one-way: the cell became text,
             // so a number entered by accident could not be undone here and
@@ -4055,10 +4134,18 @@
       );
 
       document.body.addEventListener("click", (e) => {
-        const btn = e.target.closest && e.target.closest(".adj-units-clear");
-        if (!btn) return;
-        const id = Number(btn.dataset.adjId);
-        if (Number.isFinite(id)) void clearAdjustmentUnits(id);
+        if (!e.target.closest) return;
+        const clearBtn = e.target.closest(".adj-units-clear");
+        if (clearBtn) {
+          const id = Number(clearBtn.dataset.adjId);
+          if (Number.isFinite(id)) void clearAdjustmentUnits(id);
+          return;
+        }
+        const confirmBtn = e.target.closest(".adj-units-confirm");
+        if (confirmBtn) {
+          const id = Number(confirmBtn.dataset.adjId);
+          if (Number.isFinite(id)) confirmAdjustmentUnits(id);
+        }
       });
     </script>
   </body>
