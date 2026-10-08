@@ -1,6 +1,7 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
+const { sendError } = require("../../lib/api-errors");
 const {
   listExcludedRows,
   excludeRow,
@@ -97,14 +98,9 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET, PUT, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    // A bad request is the caller's to fix and says so; anything else is ours,
-    // and its internals do not belong in the operator's error bar.
-    if (e?.status === 400) {
-      return res.status(400).json({ error: e.message });
-    }
-    console.error("payroll-row-exclusions failed:", e);
-    return res
-      .status(500)
-      .json({ error: "Could not update that billing line. Please try again." });
+    return sendError(res, e, {
+      label: "payroll-row-exclusions",
+      fallback: "Could not update that billing line. Please try again.",
+    });
   }
 }
