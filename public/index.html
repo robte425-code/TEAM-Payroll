@@ -146,7 +146,8 @@
     <h1 class="voc-page-title">TEAM Payroll Analyzer</h1>
     <p class="voc-page-lead">
       Upload one or more LNI invoice spreadsheets (`.xlsx`). Each time you click <strong>Analyze</strong>, the
-      selected files are merged into this session&rsquo;s totals. Use <strong>Clear session</strong> to start over.
+      selected files are merged into this session&rsquo;s totals &mdash; analyzing a file you already analyzed replaces its
+      earlier figures rather than adding to them. Use <strong>Clear session</strong> to start over.
     </p>
 
     <div class="card" id="analyzerNotesCard">
@@ -2862,6 +2863,37 @@
         updatePayroll10Visibility();
       }
 
+      /**
+       * Files whose totals survive only in the restored summary and are not in
+       * this run — or null if nothing would be lost.
+       *
+       * Returns the message to show rather than a list, because the only right
+       * response is to stop and say which files to add.
+       */
+      function filesOnlyInRestoredTotals(selectedNames) {
+        // Rows in memory mean the totals are rebuilt from rows, which is safe.
+        if (sessionCalcRows.length) return null;
+        if (!(sessionCalcSummary || []).length) return null;
+
+        const known = sessionSourceFiles || [];
+        if (!known.length) {
+          return (
+            "This session has totals from an earlier analysis but no record of which files " +
+            "they came from, so they can't be combined with a new file. Click Clear session, " +
+            "then select every invoice file for this payroll and analyze them together."
+          );
+        }
+        const selected = new Set(selectedNames);
+        const missing = known.filter((n) => !selected.has(n));
+        if (!missing.length) return null;
+        return (
+          `Analyzing only the selected file would drop ${missing.join(", ")} from the totals. ` +
+          "Those were analyzed earlier in this session, but after leaving this page only their " +
+          "totals were kept, not their billing lines. Select all of these files together and " +
+          `analyze again: ${[...new Set([...known, ...selectedNames])].join(", ")}.`
+        );
+      }
+
       async function analyzeFiles() {
         const fileInput = document.getElementById("fileInput");
         const status = document.getElementById("status");
@@ -2878,12 +2910,39 @@
           return;
         }
 
+        // After navigating away and back, the billing rows are gone and only
+        // the session's totals survive. Analyzing a further file then rebuilt
+        // the totals from that file alone, silently dropping every file
+        // analyzed earlier — an underpayment that looked like a finished run.
+        // Refused here, before any state is touched, so the restored session
+        // is still intact for the operator to add the missing files to.
+        const selectedNames = Array.from(files).map((f) => f.name);
+        const missingFromRun = filesOnlyInRestoredTotals(selectedNames);
+        if (missingFromRun) {
+          error.textContent = missingFromRun;
+          return;
+        }
+
         status.textContent = "Analyzing...";
 
         try {
           clearPayroll10Results();
           const runNames = [];
           let runRowCount = 0;
+
+          // A file analyzed again replaces what it contributed before. Rows used
+          // to be appended, so clicking Analyze twice with the same invoice
+          // selected counted every billable line on it twice — and locked
+          // adjustments twice over too, since each copy was locked from the
+          // same saved value. Matched by file name, which is also what makes a
+          // corrected re-export of an invoice replace the old one. Done once,
+          // before the loop, so two files in one run never displace each other.
+          const replacing = new Set(selectedNames);
+          const replacedFiles = (sessionSourceFiles || []).filter((n) => replacing.has(n));
+          sessionCalcRows = sessionCalcRows.filter((r) => !replacing.has(r.sourceFile));
+          sessionAdjResubRows = sessionAdjResubRows.filter((r) => !replacing.has(r.sourceFile));
+          calcRowKeysAssigned = false;
+          invoiceDateRangeCache = undefined;
 
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -2957,7 +3016,9 @@
             `This run: ${fileList} (${runRowCount} rows) · ` +
             `Session: ${sessionCalcRows.length} rows in totals · ` +
             `${sessionAdjResubRows.length} adj/resub excluded · Employees: ${summary.length}`;
-          status.textContent = "Analysis complete.";
+          status.textContent = replacedFiles.length
+            ? `Analysis complete. Replaced the earlier analysis of ${replacedFiles.join(", ")} rather than adding to it.`
+            : "Analysis complete.";
           saveSessionToStorage();
         } catch (err) {
           // Totals from a run that did not finish must not be left sitting
