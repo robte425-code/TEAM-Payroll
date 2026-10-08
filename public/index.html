@@ -2638,6 +2638,59 @@
         saveSessionToStorage();
       }
 
+      /**
+       * Undo a committed adjustment value.
+       *
+       * Removes the stored row rather than unlocking it in place: a row left
+       * behind with a stale number is the thing that confused everyone the
+       * first time, reappearing locked on the next analyze of that period.
+       */
+      async function clearAdjustmentUnits(adjId) {
+        const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
+        if (!row) return;
+        const errorEl = document.getElementById("error");
+        if (errorEl) errorEl.textContent = "";
+
+        const payrollEndDate = getPayrollEndDateInput();
+        if (payrollEndDate) {
+          try {
+            const r = await fetch("/api/payroll-adj-resub", {
+              method: "PUT",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                payrollEndDate,
+                clear: true,
+                row: { rowKey: buildAdjResubRowKey(row) },
+              }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+          } catch (e) {
+            if (errorEl) {
+              errorEl.textContent =
+                `Could not clear that saved value (${e.message || "unknown error"}). ` +
+                "It will come back the next time you analyze this period.";
+            }
+            return;
+          }
+        }
+
+        row.unitsLocked = false;
+        row.resolvedUnits = undefined;
+        row.previousResolvedUnits = undefined;
+        clearPayroll10Results();
+        renderAdjResubTable(sessionAdjResubRows);
+        renderSummary(buildFullSummary(), lastRateMap);
+        saveSessionToStorage();
+        const statusEl = document.getElementById("status");
+        if (statusEl) {
+          statusEl.textContent =
+            `Cleared the saved units for ${row.employeeName} (${row.rateCode}). ` +
+            `That line is excluded from pay again.`;
+        }
+      }
+
       function renderAdjResubTable(adjRows) {
         const card = document.getElementById("adjResubCard");
         const tbody = document.querySelector("#adjResubTable tbody");
@@ -2670,7 +2723,14 @@
             const val = escapeHtml(String(r.units));
             unitsCell = `<div class="adj-units-cell"><input type="number" class="adj-units-input" data-adj-id="${id}" step="any" value="${val}" aria-label="Units for adjustment" /></div>`;
           } else if (isAdjustmentRow(r.adjResub) && r.unitsLocked) {
-            unitsCell = `<div class="adj-units-cell">${escapeHtml(String(r.resolvedUnits))}</div>`;
+            // Clearable. Committing used to be one-way: the cell became text,
+            // so a number entered by accident could not be undone here and
+            // came back locked on every analyze of that period.
+            unitsCell =
+              `<div class="adj-units-cell">${escapeHtml(String(r.resolvedUnits))} ` +
+              `<button type="button" class="adj-units-clear" data-adj-id="${r._adjId}" ` +
+              `title="Clear this value and make the field editable again" ` +
+              `style="margin-left:6px;font-size:11px;padding:1px 6px;cursor:pointer">Clear</button></div>`;
           } else {
             unitsCell = `<div class="adj-units-cell">${escapeHtml(String(r.units))}</div>`;
           }
@@ -3951,21 +4011,55 @@
         (e) => {
           if (e.target.classList && e.target.classList.contains("adj-units-input") && e.key === "Enter") {
             e.preventDefault();
+            // Enter is the deliberate way to confirm a value, including one
+            // that already equals the invoice's own figure.
+            e.target.dataset.explicitCommit = "1";
             e.target.blur();
           }
         },
         true
       );
+      // Remembered on the way in, so leaving the field can tell whether
+      // anything was actually typed.
       document.body.addEventListener(
-        "blur",
+        "focus",
         (e) => {
           if (e.target.classList && e.target.classList.contains("adj-units-input")) {
-            const id = Number(e.target.dataset.adjId);
-            if (Number.isFinite(id)) void commitAdjustmentUnits(id, e.target);
+            e.target.dataset.valueOnFocus = String(e.target.value ?? "");
           }
         },
         true
       );
+
+      document.body.addEventListener(
+        "blur",
+        (e) => {
+          if (!(e.target.classList && e.target.classList.contains("adj-units-input"))) return;
+          const el = e.target;
+          const explicit = el.dataset.explicitCommit === "1";
+          delete el.dataset.explicitCommit;
+
+          // Clicking into the box and out again is not a decision. The field
+          // is pre-filled with the invoice's figure, so committing on a blur
+          // that changed nothing silently locked that figure in and added it
+          // to the employee's pay — which is exactly what happened on 8 Oct.
+          const before = el.dataset.valueOnFocus;
+          if (!explicit && before !== undefined && String(el.value ?? "").trim() === before.trim()) {
+            return;
+          }
+
+          const id = Number(el.dataset.adjId);
+          if (Number.isFinite(id)) void commitAdjustmentUnits(id, el);
+        },
+        true
+      );
+
+      document.body.addEventListener("click", (e) => {
+        const btn = e.target.closest && e.target.closest(".adj-units-clear");
+        if (!btn) return;
+        const id = Number(btn.dataset.adjId);
+        if (Number.isFinite(id)) void clearAdjustmentUnits(id);
+      });
     </script>
   </body>
 </html>
