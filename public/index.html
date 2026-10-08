@@ -516,6 +516,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="./shared/calc-row-key.js"></script>
+    <script src="./shared/adj-resub-row-key.js"></script>
     <script>
       const CASE_WORK_RATE_CODES = new Set([
         "0800V", "0801V", "0802V", "0803V",
@@ -868,20 +869,9 @@
         return letters.includes("A");
       }
 
+      /** One copy, shared with the server: public/shared/adj-resub-row-key.js. */
       function buildAdjResubRowKey(row) {
-        const providerId = String(row.providerId || "").trim();
-        const employeeKey = providerId || normalizeEmployeeName(row.employeeName);
-        const adjLetters = String(row.adjResub || "")
-          .replace(/[^a-z]/gi, "")
-          .toUpperCase();
-        return [
-          employeeKey,
-          String(row.referralNumber || "").trim(),
-          String(row.rateCode || "").trim().toUpperCase(),
-          String(row.dateFrom || "").trim(),
-          String(row.dateTo || "").trim(),
-          adjLetters,
-        ].join("\x1e");
+        return AdjResubRowKey.buildAdjResubRowKey(row);
       }
 
       function getPayrollEndDateInput() {
@@ -2639,9 +2629,18 @@
         const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
         if (!row || !isAdjustmentRow(row.adjResub)) return;
         const raw = String(inputEl.value ?? "").trim();
-        const num = parseFloat(raw);
+        // Strict, now that the box is free text: parseFloat would read "12abc"
+        // as 12 and save it. Anything that isn't plainly a number is refused,
+        // the box goes back to what it held, and the operator is told.
+        const num = /^-?(\d+(\.\d*)?|\.\d+)$/.test(raw) ? Number(raw) : NaN;
         if (!Number.isFinite(num)) {
-          inputEl.value = String(row.units);
+          inputEl.value = inputEl.dataset.valueOnFocus ?? String(row.units);
+          const errorEl = document.getElementById("error");
+          if (errorEl) {
+            errorEl.textContent =
+              `"${raw}" isn't a number of units for ${row.employeeName} (${row.rateCode}), ` +
+              "so nothing was saved.";
+          }
           return;
         }
         row.resolvedUnits = num;
@@ -2766,7 +2765,56 @@
         void commitAdjustmentUnits(adjId, input);
       }
 
+      /** True only while renderAdjResubTable is replacing the table body. */
+      let adjTableRebuilding = false;
+
+      /**
+       * Rebuild the table without losing what someone is typing elsewhere.
+       *
+       * Saving or clearing one row rebuilds the whole table once the server
+       * answers. If the operator had meanwhile moved on and was typing into
+       * another row, that box was destroyed mid-edit — and removing a focused
+       * element fires no blur, so the half-typed figure vanished without being
+       * saved or mentioned, leaving the row unconfirmed and Payroll 1.0 hidden
+       * for no visible reason. The edit is carried across to the new box,
+       * focused and with the caret where it was, still counted as unsaved.
+       */
       function renderAdjResubTable(adjRows) {
+        const active = document.activeElement;
+        let pending = null;
+        if (active && active.classList && active.classList.contains("adj-units-input")) {
+          pending = {
+            adjId: active.dataset.adjId,
+            value: active.value,
+            valueOnFocus: active.dataset.valueOnFocus,
+            start: active.selectionStart,
+            end: active.selectionEnd,
+          };
+        }
+
+        adjTableRebuilding = true;
+        try {
+          renderAdjResubTableRows(adjRows);
+        } finally {
+          adjTableRebuilding = false;
+        }
+
+        if (!pending) return;
+        const el = document.querySelector(`.adj-units-input[data-adj-id="${pending.adjId}"]`);
+        if (!el) return;
+        el.value = pending.value;
+        el.focus();
+        // Focusing records the box's current text as its starting point, which
+        // would make the half-typed figure look unchanged and stop it saving.
+        if (pending.valueOnFocus !== undefined) el.dataset.valueOnFocus = pending.valueOnFocus;
+        try {
+          el.setSelectionRange(pending.start, pending.end);
+        } catch {
+          // Selection is a nicety; the value and focus are what matter.
+        }
+      }
+
+      function renderAdjResubTableRows(adjRows) {
         const card = document.getElementById("adjResubCard");
         const tbody = document.querySelector("#adjResubTable tbody");
         tbody.innerHTML = "";
@@ -2797,8 +2845,13 @@
             const id = r._adjId;
             const val = escapeHtml(String(r.units));
             unitsCell =
-              `<div class="adj-units-cell"><input type="number" class="adj-units-input" data-adj-id="${id}" ` +
-              `step="any" value="${val}" aria-label="Units for adjustment" />` +
+              // Text with a decimal keypad, not type="number". A number input
+              // changes its value when the mouse wheel turns over it while it
+              // is focused, and on the arrow keys — so scrolling the page could
+              // alter a figure nobody typed, and leaving the box then saved it.
+              `<div class="adj-units-cell"><input type="text" inputmode="decimal" autocomplete="off" ` +
+              `class="adj-units-input" data-adj-id="${id}" value="${val}" ` +
+              `aria-label="Units for adjustment" style="width:6em" />` +
               `<button type="button" class="adj-units-confirm" data-adj-id="${id}" ` +
               `title="Accept these units and add them to this employee's pay" ` +
               `style="margin-left:6px;font-size:11px;padding:1px 6px;cursor:pointer">Confirm</button></div>`;
@@ -4149,11 +4202,21 @@
       document.body.addEventListener(
         "keydown",
         (e) => {
-          if (e.target.classList && e.target.classList.contains("adj-units-input") && e.key === "Enter") {
+          if (!(e.target.classList && e.target.classList.contains("adj-units-input"))) return;
+          if (e.key === "Enter") {
             e.preventDefault();
             // Enter is the deliberate way to confirm a value, including one
             // that already equals the invoice's own figure.
             e.target.dataset.explicitCommit = "1";
+            e.target.blur();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            // The way out of a mistyped number. Without it, leaving the box
+            // was the only way to stop editing, and leaving saves.
+            if (e.target.dataset.valueOnFocus !== undefined) {
+              e.target.value = e.target.dataset.valueOnFocus;
+            }
+            e.target.dataset.abandon = "1";
             e.target.blur();
           }
         },
@@ -4175,9 +4238,16 @@
         "blur",
         (e) => {
           if (!(e.target.classList && e.target.classList.contains("adj-units-input"))) return;
+          // The table is being rebuilt and this box is being swapped for a new
+          // one carrying the same text; it is not being left.
+          if (adjTableRebuilding) return;
           const el = e.target;
           const explicit = el.dataset.explicitCommit === "1";
           delete el.dataset.explicitCommit;
+          if (el.dataset.abandon === "1") {
+            delete el.dataset.abandon;
+            return;
+          }
 
           // Clicking into the box and out again is not a decision. The field
           // is pre-filled with the invoice's figure, so committing on a blur

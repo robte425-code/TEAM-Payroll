@@ -67,10 +67,19 @@ export default async function handler(req, res) {
       // Clearing is the undo for a value committed by mistake. One endpoint
       // both ways, so the row is removed rather than left behind unlocked and
       // waiting to be misread.
+      //
+      // Strict on purpose. A clear request carries nothing but the row's key,
+      // so if one ever arrived with clear set to "true" or 1 and fell through
+      // to the save below, it would not remove the value — it would overwrite
+      // it. Anything other than the boolean true is refused.
+      if (body.clear !== undefined && body.clear !== false && body.clear !== true) {
+        return res.status(400).json({ error: "clear must be true or omitted." });
+      }
       if (body.clear === true) {
         const result = await deleteAdjResubRow(pool, {
           payrollEndDate: body.payrollEndDate,
           rowKey: body.row?.rowKey || body.rowKey,
+          clearedByEmail: admin.email || admin.name || "",
         });
         return res.status(200).json({ ok: true, cleared: true, ...result });
       }
@@ -85,6 +94,14 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET, PUT, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    return res.status(500).json({ error: e?.message || "Failed to save adjustment row" });
+    // A bad request is the caller's to fix and says so; anything else is ours,
+    // and its internals do not belong in the operator's error bar.
+    if (e?.status === 400) {
+      return res.status(400).json({ error: e.message });
+    }
+    console.error("payroll-adj-resub failed:", e);
+    return res
+      .status(500)
+      .json({ error: "Could not save that adjustment. Please try again." });
   }
 }

@@ -29,24 +29,15 @@ const PERIOD = "2026-09-30";
 // A stand-in for the API, keyed the way the server keys its rows.
 // ---------------------------------------------------------------------------
 
-function adjKey(row) {
-  const providerId = String(row.providerId || "").trim();
-  const employee =
-    providerId || String(row.employeeName || "").trim().replace(/\s+/g, " ").toLowerCase();
-  const letters = String(row.adjResub || "").replace(/[^a-z]/gi, "").toUpperCase();
-  return [
-    employee,
-    String(row.referralNumber || "").trim(),
-    String(row.rateCode || "").trim().toUpperCase(),
-    String(row.dateFrom || "").trim(),
-    String(row.dateTo || "").trim(),
-    letters,
-  ].join("\x1e");
-}
+// The same key the page and the server use — not a copy of it.
+const AdjResubRowKey = require(path.join(ROOT, "public", "shared", "adj-resub-row-key.js"));
+const adjKey = (row) => AdjResubRowKey.buildAdjResubRowKey(row);
 
 function fakeApi() {
   const adj = new Map(); // `${period}|${rowKey}` -> stored adjustment
   const calls = [];
+  let gate = null; // while set, PUTs wait for it: a save held in flight
+
 
   function respond(status, body) {
     return Promise.resolve({
@@ -63,6 +54,14 @@ function fakeApi() {
     const body = opts.body ? JSON.parse(opts.body) : null;
     calls.push({ method, path: u.pathname, body });
 
+    if (u.pathname === "/api/payroll-adj-resub" && method === "PUT" && gate) {
+      const held = gate;
+      return held.then(() => answerAdj(method, u, body));
+    }
+    return answerAdj(method, u, body);
+  }
+
+  function answerAdj(method, u, body) {
     if (u.pathname === "/api/payroll-adj-resub") {
       if (method === "GET") {
         const period = u.searchParams.get("payrollEndDate");
@@ -87,7 +86,21 @@ function fakeApi() {
     return respond(200, {});
   }
 
-  return { fetch, adj, calls, puts: () => calls.filter((c) => c.method === "PUT") };
+  return {
+    fetch,
+    adj,
+    calls,
+    puts: () => calls.filter((c) => c.method === "PUT"),
+    /** Hold every save until the returned function is called. */
+    holdSaves() {
+      let release;
+      gate = new Promise((r) => (release = r));
+      return () => {
+        gate = null;
+        release();
+      };
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +115,7 @@ async function loadPage({ session = null, api = fakeApi() } = {}) {
     beforeParse(window) {
       window.TeamShell = { mount() {} };
       window.CalcRowKey = CalcRowKey;
+      window.AdjResubRowKey = AdjResubRowKey;
       window.XLSX = XLSX;
       window.fetch = api.fetch;
       window.confirm = () => true;
@@ -336,6 +350,89 @@ scenario("double-clicking Clear sends one delete", async () => {
   btn.click();
   await page.settle();
   assert.equal(api.puts().length, 1);
+});
+
+scenario("the Units box is plain text, so the mouse wheel and arrow keys can't change it", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47)], nextAdjRowId: 2 }),
+  });
+  const input = page.q('.adj-units-input[data-adj-id="1"]');
+  assert.equal(input.type, "text", "a number input steps its value on wheel and arrow keys");
+  assert.equal(input.getAttribute("inputmode"), "decimal", "phones should still show a number pad");
+});
+
+scenario("text that isn't a number is refused, with a message, and nothing is saved", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47)], nextAdjRowId: 2 }),
+  });
+  const input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "12abc";
+  input.blur();
+  await page.settle();
+  assert.equal(page.api.puts().length, 0, "parseFloat would have saved this as 12");
+  assert.equal(page.q('.adj-units-input[data-adj-id="1"]').value, "47", "the box goes back to its figure");
+  assert.match(page.error(), /isn't a number of units/);
+});
+
+scenario("zero is accepted, because it is how a line is excluded", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "Melanie Funston", "0811V", 31)], nextAdjRowId: 2 }),
+  });
+  const input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "0";
+  input.blur();
+  await page.settle();
+  assert.equal(page.api.puts().length, 1);
+  assert.equal(page.api.puts()[0].body.row.resolvedUnits, 0);
+});
+
+scenario("Escape abandons an edit instead of saving it", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47)], nextAdjRowId: 2 }),
+  });
+  const input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "470"; // a slip of the finger
+  input.dispatchEvent(new page.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await page.settle();
+  assert.equal(page.api.puts().length, 0);
+  assert.equal(page.q('.adj-units-input[data-adj-id="1"]').value, "47");
+  assert.notEqual(page.adjRow(1).unitsLocked, true);
+});
+
+scenario("a save finishing elsewhere doesn't wipe a figure half-typed in another row", async () => {
+  const page = await loadPage({
+    session: savedSession({
+      sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47), adjRow(2, "Richelle Dickens", "0840V", 52)],
+      nextAdjRowId: 3,
+    }),
+  });
+  const release = page.api.holdSaves();
+
+  const first = page.q('.adj-units-input[data-adj-id="1"]');
+  first.focus();
+  first.value = "20";
+  first.blur(); // row 1's save is now in flight
+
+  const second = page.q('.adj-units-input[data-adj-id="2"]');
+  second.focus();
+  second.value = "15"; // still typing in row 2 when row 1's save lands
+
+  release();
+  await page.settle();
+
+  const after = page.q('.adj-units-input[data-adj-id="2"]');
+  assert.ok(after, "row 2 must still be editable");
+  assert.equal(after.value, "15", "the half-typed figure must survive the table being rebuilt");
+  assert.equal(page.window.document.activeElement, after, "and the cursor must still be in it");
+  assert.equal(page.api.puts().length, 1, "only row 1 has been saved; row 2 is still being typed");
+
+  after.blur();
+  await page.settle();
+  assert.equal(page.api.puts().length, 2, "leaving row 2 saves it, so it still counts as changed");
+  assert.equal(page.api.puts()[1].body.row.resolvedUnits, 15);
 });
 
 // --- Re-analyzing: an invoice must count exactly once --------------------
