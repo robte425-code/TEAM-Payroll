@@ -16,12 +16,11 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { JSDOM } = require("jsdom");
+const { JSDOM, ResourceLoader, VirtualConsole } = require("jsdom");
 const XLSX = require("xlsx");
 
 const ROOT = path.join(__dirname, "..");
 const HTML = fs.readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
-const CalcRowKey = require(path.join(ROOT, "public", "shared", "calc-row-key.js"));
 const SESSION_KEY = "TEAM_PAYROLL_SESSION_V1";
 const PERIOD = "2026-09-30";
 
@@ -107,15 +106,64 @@ function fakeApi() {
 // The page.
 // ---------------------------------------------------------------------------
 
+/**
+ * Serves the page's own ./shared/ scripts from public/shared, exactly as its
+ * <script src> tags ask for them.
+ *
+ * Injecting these as globals would let the test pass with a script tag
+ * missing or mis-spelled — the one way they break that only production would
+ * notice. Loaded through the tags, a broken tag fails every scenario.
+ * Everything else the page references (SheetJS from the CDN, the shell) is
+ * provided in beforeParse, so an empty response stands in for it.
+ */
+/**
+ * Exceptions the page throws, charged to the scenario running at the time.
+ *
+ * A page error has to fail the scenario rather than end the run: an error in
+ * page code surfaces in Node as an unhandled rejection, which kills the
+ * process, hides every scenario after it, and can look like a pass.
+ */
+let pageErrors = null;
+function recordPageError(e) {
+  if (pageErrors) pageErrors.push(e);
+  else throw e;
+}
+process.on("unhandledRejection", recordPageError);
+process.on("uncaughtException", recordPageError);
+
+class PageScripts extends ResourceLoader {
+  fetch(url) {
+    const u = new URL(url);
+    let body = Buffer.from("");
+    if (u.origin === "https://payroll.test" && u.pathname.startsWith("/shared/")) {
+      const file = path.join(ROOT, "public", u.pathname);
+      if (!fs.existsSync(file)) {
+        const p = Promise.reject(new Error(`the page asks for ${u.pathname}, which does not exist`));
+        p.abort = () => {};
+        return p;
+      }
+      body = fs.readFileSync(file);
+    }
+    const p = Promise.resolve(body);
+    p.abort = () => {};
+    return p;
+  }
+}
+
 async function loadPage({ session = null, api = fakeApi() } = {}) {
   const dom = new JSDOM(HTML, {
     url: "https://payroll.test/index.html",
     runScripts: "dangerously",
+    resources: new PageScripts(),
+    virtualConsole: (() => {
+      // Uncaught page exceptions and scripts that fail to load arrive here.
+      const vc = new VirtualConsole();
+      vc.on("jsdomError", recordPageError);
+      return vc;
+    })(),
     pretendToBeVisual: true,
     beforeParse(window) {
       window.TeamShell = { mount() {} };
-      window.CalcRowKey = CalcRowKey;
-      window.AdjResubRowKey = AdjResubRowKey;
       window.XLSX = XLSX;
       window.fetch = api.fetch;
       window.confirm = () => true;
@@ -125,6 +173,8 @@ async function loadPage({ session = null, api = fakeApi() } = {}) {
       if (session) window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
     },
   });
+  // External scripts load asynchronously; wait for the page to finish.
+  await new Promise((resolve) => dom.window.addEventListener("load", resolve));
   const page = makeDriver(dom.window, api);
   await page.settle(60);
   return page;
@@ -435,6 +485,87 @@ scenario("a save finishing elsewhere doesn't wipe a figure half-typed in another
   assert.equal(page.api.puts()[1].body.row.resolvedUnits, 15);
 });
 
+scenario("a row being saved can't be edited until the save lands", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47)], nextAdjRowId: 2 }),
+  });
+  const release = page.api.holdSaves();
+  const input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "20";
+  input.dispatchEvent(new page.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await page.settle();
+
+  assert.equal(input.disabled, true, "a figure typed now would be thrown away when the save lands");
+  assert.equal(page.q('.adj-units-confirm[data-adj-id="1"]').disabled, true);
+
+  release();
+  await page.settle();
+  assert.equal(page.adjRow(1).unitsLocked, true);
+  assert.equal(page.api.puts().length, 1);
+  assert.equal(page.api.puts()[0].body.row.resolvedUnits, 20);
+});
+
+scenario("fixing a figure that wasn't a number clears the message about it", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47)], nextAdjRowId: 2 }),
+  });
+  let input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "12abc";
+  input.blur();
+  await page.settle();
+  assert.match(page.error(), /isn't a number of units/);
+
+  input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "12";
+  input.blur();
+  await page.settle();
+  assert.equal(page.api.puts().length, 1);
+  assert.equal(page.error(), "", "a stale error beside a value that saved reads as a failed save");
+});
+
+scenario("someone else's error is left alone when an adjustment saves", async () => {
+  const page = await loadPage({
+    session: savedSession({ sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47)], nextAdjRowId: 2 }),
+  });
+  page.q("#error").textContent = "Could not load which billing lines are held out of pay.";
+  const input = page.q('.adj-units-input[data-adj-id="1"]');
+  input.focus();
+  input.value = "12";
+  input.blur();
+  await page.settle();
+  assert.match(page.error(), /held out of pay/, "only messages this code wrote may be cleared by it");
+});
+
+scenario("a blur from a box that has been replaced can't save", async () => {
+  // Why the rebuild needs no extra guard: a box removed from the page is no
+  // longer under document.body, so a blur it receives later cannot reach the
+  // listener there. This pins that down in case the listener ever moves.
+  const page = await loadPage({
+    session: savedSession({
+      sessionAdjResubRows: [adjRow(1, "MarLee Clyborne", "0830V", 47), adjRow(2, "Richelle Dickens", "0840V", 52)],
+      nextAdjRowId: 3,
+    }),
+  });
+  const release = page.api.holdSaves();
+  const first = page.q('.adj-units-input[data-adj-id="1"]');
+  first.focus();
+  first.value = "20";
+  first.blur();
+  const old = page.q('.adj-units-input[data-adj-id="2"]');
+  old.focus();
+  old.value = "15";
+  release();
+  await page.settle();
+
+  assert.equal(old.isConnected, false, "the rebuild replaced the box");
+  old.dispatchEvent(new page.window.FocusEvent("blur"));
+  await page.settle();
+  assert.equal(page.api.puts().length, 1, "only row 1 may have been saved");
+});
+
 // --- Re-analyzing: an invoice must count exactly once --------------------
 
 const INVOICE = [
@@ -530,8 +661,12 @@ scenario("after navigation, re-selecting every file is allowed", async () => {
 (async () => {
   let failed = 0;
   for (const { name, fn } of scenarios) {
+    pageErrors = [];
     try {
       await fn();
+      if (pageErrors.length) {
+        throw new Error(`the page threw: ${pageErrors[0]?.message || pageErrors[0]}`);
+      }
       console.log(`  ✓ ${name}`);
     } catch (e) {
       failed += 1;
