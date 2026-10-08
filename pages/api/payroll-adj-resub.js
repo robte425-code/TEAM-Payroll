@@ -1,7 +1,11 @@
 const { buffer } = require("node:stream/consumers");
 const { getPool } = require("../../lib/db");
 const { requireRealAdmin } = require("../../lib/apiAuth");
-const { listAdjResubRows, upsertAdjResubRow } = require("../../lib/payroll-adj-resub");
+const {
+  listAdjResubRows,
+  upsertAdjResubRow,
+  deleteAdjResubRow,
+} = require("../../lib/payroll-adj-resub");
 
 async function readJsonBody(req) {
   if (req.body != null) {
@@ -60,6 +64,16 @@ export default async function handler(req, res) {
 
     if (req.method === "PUT") {
       const body = await readJsonBody(req);
+      // Clearing is the undo for a value committed by mistake. One endpoint
+      // both ways, so the row is removed rather than left behind unlocked and
+      // waiting to be misread.
+      if (body.clear === true) {
+        const result = await deleteAdjResubRow(pool, {
+          payrollEndDate: body.payrollEndDate,
+          rowKey: body.row?.rowKey || body.rowKey,
+        });
+        return res.status(200).json({ ok: true, cleared: true, ...result });
+      }
       const row = await upsertAdjResubRow(pool, {
         payrollEndDate: body.payrollEndDate,
         row: body.row,
