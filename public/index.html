@@ -2625,6 +2625,30 @@
         }
       }
 
+      /**
+       * Show a message about an adjustment, remembering that it was ours.
+       *
+       * The success path used to clear the error bar whenever its text
+       * contained "adjustment units" — so a message worded any other way,
+       * like the one for a figure that isn't a number, stayed on screen after
+       * the next save succeeded, reading as though that save had failed.
+       * Remembering the exact text clears what this code wrote and nothing
+       * written by anyone else since.
+       */
+      function showAdjustmentError(message) {
+        const el = document.getElementById("error");
+        if (!el) return;
+        el.textContent = message;
+        el.dataset.adjMessage = message;
+      }
+
+      function clearAdjustmentError() {
+        const el = document.getElementById("error");
+        if (!el) return;
+        if (el.dataset.adjMessage && el.textContent === el.dataset.adjMessage) el.textContent = "";
+        delete el.dataset.adjMessage;
+      }
+
       async function commitAdjustmentUnits(adjId, inputEl) {
         const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
         if (!row || !isAdjustmentRow(row.adjResub)) return;
@@ -2635,24 +2659,31 @@
         const num = /^-?(\d+(\.\d*)?|\.\d+)$/.test(raw) ? Number(raw) : NaN;
         if (!Number.isFinite(num)) {
           inputEl.value = inputEl.dataset.valueOnFocus ?? String(row.units);
-          const errorEl = document.getElementById("error");
-          if (errorEl) {
-            errorEl.textContent =
-              `"${raw}" isn't a number of units for ${row.employeeName} (${row.rateCode}), ` +
-              "so nothing was saved.";
-          }
+          showAdjustmentError(
+            `"${raw}" isn't a number of units for ${row.employeeName} (${row.rateCode}), ` +
+              "so nothing was saved."
+          );
           return;
         }
         row.resolvedUnits = num;
         row.unitsLocked = true;
         row.previousResolvedUnits = num;
         clearPayroll10Results();
+
+        // Locked on screen from the moment the save starts. The row is already
+        // committed in the data, but the table is only rebuilt once the server
+        // answers, so on a slow connection the box stayed editable — and a
+        // figure typed into it then was thrown away when the rebuild found the
+        // row locked, while the earlier figure was the one saved and paid.
+        inputEl.disabled = true;
+        const confirmBtn = document.querySelector(`.adj-units-confirm[data-adj-id="${adjId}"]`);
+        if (confirmBtn) confirmBtn.disabled = true;
+
         const saveResult = await saveAdjResubRowToDatabase(row);
-        const errorEl = document.getElementById("error");
-        if (!saveResult.ok && errorEl) {
-          errorEl.textContent = saveResult.error || "Failed to save adjustment units to the database.";
-        } else if (errorEl && errorEl.textContent && errorEl.textContent.includes("adjustment units")) {
-          errorEl.textContent = "";
+        if (!saveResult.ok) {
+          showAdjustmentError(saveResult.error || "Failed to save adjustment units to the database.");
+        } else {
+          clearAdjustmentError();
         }
         renderAdjResubTable(sessionAdjResubRows);
         try {
@@ -2681,10 +2712,7 @@
       async function clearAdjustmentUnits(adjId) {
         const row = sessionAdjResubRows.find((r) => r._adjId === adjId);
         if (!row || !row.unitsLocked) return;
-        const errorEl = document.getElementById("error");
-        const fail = (message) => {
-          if (errorEl) errorEl.textContent = message;
-        };
+        const fail = showAdjustmentError;
 
         // The period this value was saved under, not the one the field shows.
         const period = String(row.storedPeriod || "").trim();
@@ -2731,6 +2759,7 @@
           return;
         }
 
+        clearAdjustmentError();
         row.unitsLocked = false;
         row.resolvedUnits = undefined;
         row.previousResolvedUnits = undefined;
